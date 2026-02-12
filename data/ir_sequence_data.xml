@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Séquence pour les enregistrements de scan -->
+        <record id="seq_invoice_scan_record" model="ir.sequence">
+            <field name="name">Scan Facture QR</field>
+            <field name="code">invoice.scan.record</field>
+            <field name="prefix">SCAN/%(year)s/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

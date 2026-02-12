@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Action Tableau de bord (client action OWL) -->
+        <record id="action_invoice_scanner_dashboard_improved" model="ir.actions.client">
+            <field name="name">Tableau de Bord</field>
+            <field name="tag">invoice_scanner_dashboard_improved</field>
+            <field name="target">main</field>
+        </record>
+
+        <!-- Menu principal -->
+        <menuitem id="menu_invoice_qr_scanner_root"
+                  name="Scanner Factures"
+                  web_icon="invoice_qr_scanner,static/description/icon.png"
+                  sequence="45"
+                  groups="group_invoice_scanner_user"/>
+
+        <!-- Menu Tableau de bord (première position) -->
+        <menuitem id="menu_invoice_scanner_dashboard"
+                  name="Tableau de Bord"
+                  parent="menu_invoice_qr_scanner_root"
+                  action="action_invoice_scanner_dashboard_improved"
+                  sequence="1"
+                  groups="group_invoice_scanner_manager"/>
+
+        <!-- Sous-menu Scans -->
+        <menuitem id="menu_invoice_qr_scanner_scans"
+                  name="Scans"
+                  parent="menu_invoice_qr_scanner_root"
+                  sequence="10"/>
+
+        <!-- Action Tous les scans -->
+        <menuitem id="menu_invoice_scan_record_all"
+                  name="Tous les scans"
+                  parent="menu_invoice_qr_scanner_scans"
+                  action="action_invoice_scan_record"
+                  sequence="10"/>
+
+        <!-- Action Scans réussis -->
+        <record id="action_invoice_scan_record_done" model="ir.actions.act_window">
+            <field name="name">Factures créées</field>
+            <field name="res_model">invoice.scan.record</field>
+            <field name="view_mode">tree,kanban,form</field>
+            <field name="domain">[('state', '=', 'done')]</field>
+            <field name="context">{}</field>
+        </record>
+        <menuitem id="menu_invoice_scan_record_done"
+                  name="Factures créées"
+                  parent="menu_invoice_qr_scanner_scans"
+                  action="action_invoice_scan_record_done"
+                  sequence="20"/>
+
+        <!-- Action Erreurs -->
+        <record id="action_invoice_scan_record_errors" model="ir.actions.act_window">
+            <field name="name">Erreurs</field>
+            <field name="res_model">invoice.scan.record</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('state', '=', 'error')]</field>
+            <field name="context">{}</field>
+        </record>
+        <menuitem id="menu_invoice_scan_record_errors"
+                  name="Erreurs"
+                  parent="menu_invoice_qr_scanner_scans"
+                  action="action_invoice_scan_record_errors"
+                  sequence="30"/>
+
+        <!-- Sous-menu Configuration -->
+        <menuitem id="menu_invoice_qr_scanner_config"
+                  name="Configuration"
+                  parent="menu_invoice_qr_scanner_root"
+                  sequence="99"
+                  groups="group_invoice_scanner_manager"/>
+
+        <!-- Lien vers les paramètres -->
+        <record id="action_invoice_qr_scanner_config" model="ir.actions.act_window">
+            <field name="name">Paramètres</field>
+            <field name="res_model">res.config.settings</field>
+            <field name="view_mode">form</field>
+            <field name="target">inline</field>
+            <field name="context">{'module': 'invoice_qr_scanner', 'bin_size': False}</field>
+        </record>
+        <menuitem id="menu_invoice_qr_scanner_settings"
+                  name="Paramètres"
+                  parent="menu_invoice_qr_scanner_config"
+                  action="action_invoice_qr_scanner_config"
+                  sequence="10"/>
+
+    </data>
+</odoo>

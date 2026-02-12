@@ -1,0 +1,43 @@
+name: facture_scanner
+description: "Scanner de factures DGI pour Odoo - ICP"
+publish_to: 'none'
+version: 2.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # QR Scanner
+  mobile_scanner: ^5.1.1
+  # HTTP client
+  http: ^1.2.0
+  # Local storage
+  shared_preferences: ^2.2.2
+  # SQLite for offline storage
+  sqflite: ^2.3.2
+  path: ^1.9.0
+  # State management
+  provider: ^6.1.1
+  # Permissions
+  permission_handler: ^11.3.0
+  # Connectivity check
+  connectivity_plus: ^5.0.2
+  # Intl for date formatting
+  intl: ^0.19.0
+  # UI packages
+  flutter_spinkit: ^5.2.1
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/

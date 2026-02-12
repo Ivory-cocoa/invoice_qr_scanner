@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        
+        <!-- Ajouter l'administrateur système au groupe Manager du scanner -->
+        <record id="base.user_admin" model="res.users">
+            <field name="groups_id" eval="[(4, ref('invoice_qr_scanner.group_invoice_scanner_manager'))]"/>
+        </record>
+        
+    </data>
+</odoo>

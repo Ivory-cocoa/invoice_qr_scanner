@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="invoice_qr_scanner.DashboardImproved" owl="1">
+        <div class="scanner-dash">
+            <!-- Header -->
+            <div class="scanner-dash__header">
+                <div class="scanner-dash__title">
+                    <i class="fa fa-qrcode"/>
+                    <span>Scanner QR Factures</span>
+                </div>
+                <div class="scanner-dash__controls">
+                    <select class="scanner-dash__select" t-on-change="onPeriodChange">
+                        <option value="day" t-att-selected="state.period === 'day'">Aujourd'hui</option>
+                        <option value="week" t-att-selected="state.period === 'week'">Cette semaine</option>
+                        <option value="month" t-att-selected="state.period === 'month'">Ce mois</option>
+                        <option value="year" t-att-selected="state.period === 'year'">Cette année</option>
+                    </select>
+                    <button class="scanner-dash__btn" t-on-click="loadDashboardData" t-att-disabled="state.loading">
+                        <i t-attf-class="fa fa-refresh #{state.loading ? 'fa-spin' : ''}"/>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content scrollable -->
+            <div class="scanner-dash__body">
+                <!-- KPIs - Mêmes que l'application mobile (cliquables) -->
+                <div class="scanner-dash__kpis">
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewTotalScans" title="Cliquez pour voir tous les scans">
+                        <div class="kpi-card__icon kpi-card__icon--primary">
+                            <i class="fa fa-qrcode"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.total_scans)"/>
+                            <span class="kpi-card__label">Total scans</span>
+                            <span class="kpi-card__sub">Réussis + Doublons + Erreurs</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewSuccessfulScans" title="Cliquez pour voir les scans réussis">
+                        <div class="kpi-card__icon kpi-card__icon--success">
+                            <i class="fa fa-check-circle"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.successful_scans)"/>
+                            <span class="kpi-card__label">Réussis</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewDuplicateScans" title="Cliquez pour voir les scans avec doublons">
+                        <div class="kpi-card__icon kpi-card__icon--warning">
+                            <i class="fa fa-clone"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.duplicate_attempts)"/>
+                            <span class="kpi-card__label">Tentatives doublons</span>
+                            <span class="kpi-card__sub" t-if="state.stats.records_with_duplicates > 0">
+                                (<t t-esc="state.stats.records_with_duplicates"/> factures)
+                            </span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewErrorScans" title="Cliquez pour voir les scans en erreur">
+                        <div class="kpi-card__icon kpi-card__icon--danger">
+                            <i class="fa fa-exclamation-circle"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.error_scans)"/>
+                            <span class="kpi-card__label">Erreurs</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                </div>
+
+                <!-- Montant total -->
+                <div class="scanner-dash__amount">
+                    <span class="scanner-dash__amount-label">Montant total TTC (période)</span>
+                    <span class="scanner-dash__amount-value" t-esc="formatCurrency(state.stats.total_amount)"/>
+                </div>
+
+                <!-- Totaux globaux (All-time) - Correspondance avec l'application mobile (cliquables) -->
+                <div class="scanner-dash__alltime">
+                    <div class="scanner-dash__alltime-header">
+                        <i class="fa fa-mobile"/> Totaux globaux (Application mobile)
+                    </div>
+                    <div class="scanner-dash__alltime-kpis">
+                        <div class="alltime-kpi alltime-kpi--clickable" t-on-click="viewAllTimeTotalScans" title="Cliquez pour voir tous les scans">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.total_scans)"/>
+                            <span class="alltime-kpi__label">Total scans</span>
+                        </div>
+                        <div class="alltime-kpi alltime-kpi--success alltime-kpi--clickable" t-on-click="viewAllTimeSuccessfulScans" title="Cliquez pour voir les scans réussis">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.successful_scans)"/>
+                            <span class="alltime-kpi__label">Réussis</span>
+                        </div>
+                        <div class="alltime-kpi alltime-kpi--warning alltime-kpi--clickable" t-on-click="viewAllTimeDuplicateScans" title="Cliquez pour voir les scans avec doublons">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.duplicate_attempts)"/>
+                            <span class="alltime-kpi__label">Doublons</span>
+                        </div>
+                        <div class="alltime-kpi alltime-kpi--danger alltime-kpi--clickable" t-on-click="viewAllTimeErrorScans" title="Cliquez pour voir les scans en erreur">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.error_scans)"/>
+                            <span class="alltime-kpi__label">Erreurs</span>
+                        </div>
+                        <div class="alltime-kpi alltime-kpi--info alltime-kpi--clickable" t-on-click="viewAllTimeAmount" title="Cliquez pour voir le détail des montants">
+                            <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.total_amount)"/>
+                            <span class="alltime-kpi__label">Montant TTC</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="scanner-dash__charts">
+                    <div class="chart-box">
+                        <div class="chart-box__header">
+                            <span>Évolution des scans</span>
+                        </div>
+                        <div class="chart-box__body">
+                            <canvas id="evolutionChart"/>
+                        </div>
+                    </div>
+                    <div class="chart-box chart-box--small">
+                        <div class="chart-box__header">
+                            <span>Répartition</span>
+                        </div>
+                        <div class="chart-box__body">
+                            <canvas id="statusChart"/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tables Row -->
+                <div class="scanner-dash__tables">
+                    <!-- Recent Scans -->
+                    <div class="data-box">
+                        <div class="data-box__header">
+                            <span>Derniers scans</span>
+                            <button class="data-box__link" t-on-click="viewAllRecords">
+                                Voir tout <i class="fa fa-arrow-right"/>
+                            </button>
+                        </div>
+                        <div class="data-box__body">
+                            <table class="simple-table">
+                                <thead>
+                                    <tr>
+                                        <th>Référence</th>
+                                        <th>Fournisseur</th>
+                                        <th>Montant</th>
+                                        <th>Statut</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.recent_scans" t-as="scan" t-key="scan.id" 
+                                        class="simple-table__row" t-on-click="() => this.openRecord(scan.id)">
+                                        <td class="simple-table__ref" t-esc="scan.reference || scan.numero_facture || '-'"/>
+                                        <td t-esc="truncate(scan.nom_fournisseur, 18)"/>
+                                        <td class="simple-table__amount" t-esc="formatCurrency(scan.montant_ttc)"/>
+                                        <td>
+                                            <span t-attf-class="status-dot status-dot--#{scan.state}"/>
+                                        </td>
+                                    </tr>
+                                    <tr t-if="!state.recent_scans.length">
+                                        <td colspan="4" class="simple-table__empty">Aucun scan</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Top Suppliers -->
+                    <div class="data-box">
+                        <div class="data-box__header">
+                            <span>Top fournisseurs</span>
+                        </div>
+                        <div class="data-box__body">
+                            <div class="supplier-list">
+                                <div t-foreach="state.top_suppliers" t-as="supplier" t-key="supplier_index" 
+                                     class="supplier-item">
+                                    <span class="supplier-item__rank" t-esc="supplier_index + 1"/>
+                                    <span class="supplier-item__name" t-esc="truncate(supplier.name, 20)"/>
+                                    <span class="supplier-item__count" t-esc="supplier.count + ' scans'"/>
+                                </div>
+                                <div t-if="!state.top_suppliers.length" class="supplier-list__empty">
+                                    Aucune donnée
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="scanner-dash__actions">
+                    <button class="action-btn" t-on-click="createNewScan">
+                        <i class="fa fa-plus"/> Nouveau scan
+                    </button>
+                    <button class="action-btn action-btn--outline" t-on-click="viewAllRecords">
+                        <i class="fa fa-list"/> Tous les scans
+                    </button>
+                    <button class="action-btn action-btn--outline" t-on-click="viewReports">
+                        <i class="fa fa-bar-chart"/> Rapports
+                    </button>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============================================================ -->
+        <!-- TREE VIEW -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_tree" model="ir.ui.view">
+            <field name="name">invoice.scan.record.tree</field>
+            <field name="model">invoice.scan.record</field>
+            <field name="arch" type="xml">
+                <tree string="Scans de factures" decoration-success="state=='done'" 
+                      decoration-danger="state=='error'" decoration-muted="state=='draft'">
+                    <field name="reference"/>
+                    <field name="scan_date"/>
+                    <field name="supplier_name"/>
+                    <field name="invoice_number_dgi"/>
+                    <field name="invoice_date"/>
+                    <field name="amount_ttc" sum="Total"/>
+                    <field name="currency_id" column_invisible="1"/>
+                    <field name="state" widget="badge" 
+                           decoration-success="state == 'done'"
+                           decoration-danger="state == 'error'"
+                           decoration-info="state == 'draft'"/>
+                    <field name="duplicate_count" string="Doublons" 
+                           decoration-warning="duplicate_count > 0"
+                           optional="show"/>
+                    <field name="invoice_id"/>
+                    <field name="scanned_by"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
+        <!-- FORM VIEW -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_form" model="ir.ui.view">
+            <field name="name">invoice.scan.record.form</field>
+            <field name="model">invoice.scan.record</field>
+            <field name="arch" type="xml">
+                <form string="Scan de facture QR">
+                    <header>
+                        <button name="action_retry_create_invoice" string="Réessayer création facture"
+                                type="object" class="btn-primary"
+                                invisible="state != 'error' or invoice_id"/>
+                        <button name="action_view_invoice" string="Voir la facture"
+                                type="object" class="btn-secondary"
+                                invisible="not invoice_id"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_view_invoice" type="object" class="oe_stat_button"
+                                    icon="fa-file-text-o" invisible="not invoice_id">
+                                <field name="invoice_id" widget="statinfo" string="Facture"/>
+                            </button>
+                        </div>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="reference" readonly="1"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <group string="Informations du scan">
+                                <field name="qr_uuid" readonly="1"/>
+                                <field name="qr_url" readonly="1" widget="url"/>
+                                <field name="scan_date" readonly="1"/>
+                                <field name="scanned_by" readonly="1"/>
+                            </group>
+                            <group string="Données DGI">
+                                <field name="supplier_name" readonly="1"/>
+                                <field name="supplier_code_dgi" readonly="1"/>
+                                <field name="customer_name" readonly="1"/>
+                                <field name="customer_code_dgi" readonly="1"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group string="Facture">
+                                <field name="invoice_number_dgi" readonly="1"/>
+                                <field name="invoice_date" readonly="1"/>
+                                <field name="verification_id" readonly="1"/>
+                                <field name="amount_ttc" readonly="1"/>
+                                <field name="currency_id" readonly="1"/>
+                            </group>
+                            <group string="Résultat">
+                                <field name="partner_id" readonly="1"/>
+                                <field name="invoice_id" readonly="1"/>
+                                <field name="company_id" groups="base.group_multi_company" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="Tentatives de doublons" invisible="duplicate_count == 0">
+                            <group>
+                                <field name="duplicate_count" readonly="1"/>
+                                <field name="last_duplicate_attempt" readonly="1"/>
+                                <field name="last_duplicate_user_id" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="Erreur" invisible="state != 'error'">
+                            <field name="error_message" readonly="1" nolabel="1" colspan="2"/>
+                        </group>
+                        <notebook groups="base.group_no_one">
+                            <page string="Données brutes">
+                                <field name="raw_html" readonly="1"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="activity_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
+        <!-- SEARCH VIEW -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_search" model="ir.ui.view">
+            <field name="name">invoice.scan.record.search</field>
+            <field name="model">invoice.scan.record</field>
+            <field name="arch" type="xml">
+                <search string="Rechercher un scan">
+                    <field name="reference"/>
+                    <field name="supplier_name"/>
+                    <field name="invoice_number_dgi"/>
+                    <field name="qr_uuid"/>
+                    <field name="scanned_by"/>
+                    <separator/>
+                    <filter string="Factures créées" name="filter_done" domain="[('state', '=', 'done')]"/>
+                    <filter string="Erreurs" name="filter_error" domain="[('state', '=', 'error')]"/>
+                    <filter string="Avec doublons" name="filter_duplicate" domain="[('duplicate_count', '>', 0)]"/>
+                    <separator/>
+                    <filter string="Aujourd'hui" name="filter_today" 
+                            domain="[('scan_date', '>=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                    <filter string="Cette semaine" name="filter_week"
+                            domain="[('scan_date', '>=', (context_today() - datetime.timedelta(days=7)))]"/>
+                    <filter string="Ce mois" name="filter_month"
+                            domain="[('scan_date', '>=', datetime.datetime(context_today().year, context_today().month, 1))]"/>
+                    <separator/>
+                    <filter string="Mes scans" name="filter_mine" domain="[('scanned_by', '=', uid)]"/>
+                    <group expand="0" string="Regrouper par">
+                        <filter string="État" name="group_state" context="{'group_by': 'state'}"/>
+                        <filter string="Fournisseur" name="group_supplier" context="{'group_by': 'supplier_name'}"/>
+                        <filter string="Date du scan" name="group_date" context="{'group_by': 'scan_date:day'}"/>
+                        <filter string="Scanné par" name="group_user" context="{'group_by': 'scanned_by'}"/>
+                    </group>
+                    <!-- Search Panel -->
+                    <searchpanel>
+                        <field name="state" icon="fa-tasks" select="one" enable_counters="1"/>
+                        <field name="scanned_by" icon="fa-user" select="multi" enable_counters="1"/>
+                        <field name="partner_id" string="Fournisseur" icon="fa-building" select="multi" enable_counters="1"/>
+                    </searchpanel>
+                </search>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
+        <!-- KANBAN VIEW -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_kanban" model="ir.ui.view">
+            <field name="name">invoice.scan.record.kanban</field>
+            <field name="model">invoice.scan.record</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile" sample="1">
+                    <field name="id"/>
+                    <field name="reference"/>
+                    <field name="supplier_name"/>
+                    <field name="amount_ttc"/>
+                    <field name="currency_id"/>
+                    <field name="state"/>
+                    <field name="scan_date"/>
+                    <field name="duplicate_count"/>
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div class="oe_kanban_global_click">
+                                <div class="o_kanban_record_top mb-2">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="reference"/>
+                                        </strong>
+                                    </div>
+                                    <field name="state" widget="label_selection" 
+                                           options="{'classes': {'draft': 'info', 'done': 'success', 'error': 'danger'}}"/>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <field name="supplier_name"/>
+                                    <div class="text-muted">
+                                        <field name="amount_ttc" widget="monetary"/> 
+                                        <field name="currency_id"/>
+                                    </div>
+                                    <div t-if="record.duplicate_count.raw_value > 0" class="text-warning">
+                                        <i class="fa fa-copy"/> <field name="duplicate_count"/> doublons
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left text-muted">
+                                        <field name="scan_date" widget="date"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
+        <!-- ACTION -->
+        <!-- ============================================================ -->
+        <record id="action_invoice_scan_record" model="ir.actions.act_window">
+            <field name="name">Scans de factures</field>
+            <field name="res_model">invoice.scan.record</field>
+            <field name="view_mode">tree,kanban,form</field>
+            <field name="search_view_id" ref="view_invoice_scan_record_search"/>
+            <field name="context">{'search_default_filter_today': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Aucun scan de facture pour le moment
+                </p>
+                <p>
+                    Utilisez l'application mobile pour scanner des QR-codes de factures DGI
+                    et créer automatiquement les factures fournisseur.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>

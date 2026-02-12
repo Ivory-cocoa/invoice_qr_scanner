@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Extension de la vue form de account.move pour afficher les infos QR -->
+        <record id="view_move_form_inherit_qr_scanner" model="ir.ui.view">
+            <field name="name">account.move.form.inherit.qr.scanner</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_move_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//page[@id='other_tab']" position="after">
+                    <page string="Scan QR" invisible="not is_from_qr_scan">
+                        <group>
+                            <group string="Informations du scan">
+                                <field name="qr_scan_uuid" readonly="1"/>
+                                <field name="is_from_qr_scan" invisible="1"/>
+                                <field name="qr_scan_record_id" readonly="1"/>
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Extension de la vue tree pour montrer l'icône QR -->
+        <record id="view_move_tree_inherit_qr_scanner" model="ir.ui.view">
+            <field name="name">account.move.tree.inherit.qr.scanner</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_in_invoice_bill_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="is_from_qr_scan" column_invisible="1"/>
+                    <field name="qr_scan_uuid" string="QR" optional="hide"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Extension de la vue search pour filtrer les factures scannées -->
+        <record id="view_account_invoice_filter_inherit_qr" model="ir.ui.view">
+            <field name="name">account.move.search.inherit.qr.scanner</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_account_invoice_filter"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='late']" position="after">
+                    <separator/>
+                    <filter string="Factures scannées (QR)" name="filter_qr_scan" 
+                            domain="[('is_from_qr_scan', '=', True)]"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Extension res.partner pour le code DGI -->
+        <record id="view_partner_form_inherit_dgi" model="ir.ui.view">
+            <field name="name">res.partner.form.inherit.dgi</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='vat']" position="after">
+                    <field name="dgi_code" placeholder="Ex: 2502298K"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

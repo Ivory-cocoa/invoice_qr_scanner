@@ -1,0 +1,5 @@
+# Keystore files - NE PAS VERSIONNER
+app/keystore/
+app/key.properties
+*.jks
+*.keystore

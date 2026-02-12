@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Inherit res.config.settings form view -->
+        <record id="res_config_settings_view_form_inherit_qr_scanner" model="ir.ui.view">
+            <field name="name">res.config.settings.view.form.inherit.qr.scanner</field>
+            <field name="model">res.config.settings</field>
+            <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//form" position="inside">
+                    <app data-string="Scanner QR Factures" string="Scanner QR Factures" name="invoice_qr_scanner">
+                        
+                        <block title="Configuration des factures scannées" name="invoice_qr_scanner_settings">
+                            <setting id="invoice_qr_auto_validate" 
+                                     title="Valider automatiquement les factures créées par scan QR"
+                                     help="Si activé, les factures créées par scan QR seront automatiquement validées. Sinon, elles resteront en brouillon pour validation manuelle.">
+                                <div class="content-group">
+                                    <div class="row mt-2">
+                                        <field name="invoice_qr_auto_validate"/>
+                                        <label for="invoice_qr_auto_validate" string="Valider automatiquement les factures"/>
+                                    </div>
+                                </div>
+                            </setting>
+                            
+                            <setting id="invoice_qr_auto_create_supplier"
+                                     title="Créer automatiquement le fournisseur"
+                                     help="Si activé, un nouveau fournisseur sera créé si non trouvé dans Odoo.">
+                                <div class="content-group">
+                                    <div class="row mt-2">
+                                        <field name="invoice_qr_auto_create_supplier"/>
+                                        <label for="invoice_qr_auto_create_supplier" string="Créer automatiquement le fournisseur"/>
+                                    </div>
+                                </div>
+                            </setting>
+                            
+                            <setting id="invoice_qr_default_expense_account"
+                                     string="Compte de dépense par défaut"
+                                     help="Compte comptable utilisé pour les lignes de factures scannées.">
+                                <div class="content-group">
+                                    <div class="row mt-2">
+                                        <label string="Compte" for="invoice_qr_default_expense_account_id" class="col-lg-3 o_light_label"/>
+                                        <field name="invoice_qr_default_expense_account_id" 
+                                               class="col-lg-6"
+                                               options="{'no_create': True}"/>
+                                    </div>
+                                </div>
+                            </setting>
+                        </block>
+                        
+                    </app>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

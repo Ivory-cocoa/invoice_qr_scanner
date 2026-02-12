@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Template QWeb pour le Guide Utilisateur PDF -->
+    <template id="report_invoice_scanner_user_guide">
+        <t t-call="web.html_container">
+            <t t-call="web.external_layout">
+                <div class="page" style="font-family: 'Roboto', Arial, sans-serif;">
+                    
+                    <!-- Page de Couverture -->
+                    <div style="text-align: center; padding: 60px 0; page-break-after: always;">
+                        <div style="margin-bottom: 40px;">
+                            <img src="/web/static/img/logo.png" style="max-width: 200px;" alt="Logo"/>
+                        </div>
+                        <h1 style="font-size: 36px; color: #1565C0; margin-bottom: 20px; font-weight: 700;">
+                            Scanner Factures DGI
+                        </h1>
+                        <h2 style="font-size: 24px; color: #424242; margin-bottom: 40px; font-weight: 400;">
+                            Guide Utilisateur Complet
+                        </h2>
+                        <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 30px; border-radius: 12px; margin: 40px auto; max-width: 500px;">
+                            <p style="font-size: 16px; margin: 0;">
+                                <strong>Version:</strong> 1.0<br/>
+                                <strong>Module:</strong> invoice_qr_scanner<br/>
+                                <strong>Odoo:</strong> 17.0
+                            </p>
+                        </div>
+                        <p style="color: #757575; font-size: 14px; margin-top: 60px;">
+                            Document généré le <t t-esc="time.strftime('%d/%m/%Y à %H:%M')"/>
+                        </p>
+                    </div>
+                    
+                    <!-- Table des Matières -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            📋 Table des Matières
+                        </h2>
+                        <div style="margin: 30px 0; line-height: 2.2;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px 0;"><strong>1.</strong> Introduction</td>
+                                    <td style="text-align: right;">Page 3</td>
+                                </tr>
+                                <tr style="background: #f5f5f5;">
+                                    <td style="padding: 8px 0;"><strong>2.</strong> Installation et Configuration</td>
+                                    <td style="text-align: right;">Page 4</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0;"><strong>3.</strong> Utilisation Backend Odoo</td>
+                                    <td style="text-align: right;">Page 5</td>
+                                </tr>
+                                <tr style="background: #f5f5f5;">
+                                    <td style="padding: 8px 0;"><strong>4.</strong> Application Mobile</td>
+                                    <td style="text-align: right;">Page 8</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0;"><strong>5.</strong> Tableau de Bord</td>
+                                    <td style="text-align: right;">Page 11</td>
+                                </tr>
+                                <tr style="background: #f5f5f5;">
+                                    <td style="padding: 8px 0;"><strong>6.</strong> Dépannage</td>
+                                    <td style="text-align: right;">Page 13</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0;"><strong>7.</strong> FAQ</td>
+                                    <td style="text-align: right;">Page 15</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Section 1: Introduction -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            1. 📖 Introduction
+                        </h2>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">1.1 Présentation du Module</h3>
+                        <p style="text-align: justify; line-height: 1.8;">
+                            Le module <strong>Scanner Factures DGI</strong> permet de créer automatiquement des factures 
+                            fournisseur dans Odoo en scannant les QR codes présents sur les factures normalisées de la 
+                            DGI (Direction Générale des Impôts) de Côte d'Ivoire.
+                        </p>
+                        
+                        <div style="background: #E3F2FD; border-left: 4px solid #1565C0; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                            <strong style="color: #1565C0;">💡 Avantages clés :</strong>
+                            <ul style="margin: 10px 0 0 20px;">
+                                <li>Réduction des erreurs de saisie manuelle</li>
+                                <li>Gain de temps considérable</li>
+                                <li>Conformité automatique avec les normes DGI</li>
+                                <li>Traçabilité complète des opérations</li>
+                            </ul>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">1.2 Fonctionnalités Principales</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <tr style="background: #1565C0; color: white;">
+                                <th style="padding: 12px; text-align: left; border-radius: 8px 0 0 0;">Fonctionnalité</th>
+                                <th style="padding: 12px; text-align: left; border-radius: 0 8px 0 0;">Description</th>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Scan QR Code</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Lecture automatique des codes QR sur factures DGI</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Extraction Automatique</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Récupération des données depuis le portail DGI</td>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Création Facture</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Génération automatique de la facture fournisseur</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Détection Doublons</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Prévention des enregistrements en double</td>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px;">Mode Hors Ligne</td>
+                                <td style="padding: 12px;">Synchronisation automatique quand connexion rétablie</td>
+                            </tr>
+                        </table>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">1.3 Prérequis Techniques</h3>
+                        <ul style="line-height: 2;">
+                            <li>Odoo 17.0 Enterprise ou Community</li>
+                            <li>Python 3.10+ avec Playwright installé</li>
+                            <li>Connexion Internet pour l'extraction DGI</li>
+                            <li>Appareil mobile Android ou iOS (pour l'app)</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Section 2: Installation -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            2. ⚙️ Installation et Configuration
+                        </h2>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">2.1 Installation du Module</h3>
+                        <div style="background: #263238; color: #fff; padding: 15px 20px; border-radius: 8px; font-family: 'Courier New', monospace; margin: 15px 0;">
+                            <code>
+                                # Copier le module dans addons/<br/>
+                                cp -r invoice_qr_scanner /odoo/addons/<br/><br/>
+                                # Installer les dépendances Python<br/>
+                                pip install playwright<br/>
+                                playwright install chromium<br/><br/>
+                                # Redémarrer Odoo et installer le module<br/>
+                                ./odoo.sh install invoice_qr_scanner
+                            </code>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">2.2 Configuration Initiale</h3>
+                        <ol style="line-height: 2;">
+                            <li>Aller dans <strong>Facturation → Configuration → Paramètres</strong></li>
+                            <li>Activer l'option <strong>"Scanner Factures DGI"</strong></li>
+                            <li>Configurer le journal d'achat par défaut</li>
+                            <li>Définir les groupes d'utilisateurs autorisés</li>
+                        </ol>
+                        
+                        <div style="background: #FFF3E0; border-left: 4px solid #EF6C00; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                            <strong style="color: #EF6C00;">⚠️ Important :</strong>
+                            <p style="margin: 10px 0 0 0;">
+                                Les identifiants DGI doivent être configurés dans les paramètres système pour permettre 
+                                l'extraction automatique des données de facture.
+                            </p>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">2.3 Groupes de Sécurité</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <tr style="background: #1565C0; color: white;">
+                                <th style="padding: 12px; text-align: left;">Groupe</th>
+                                <th style="padding: 12px; text-align: left;">Droits</th>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><strong>Utilisateur</strong></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Scanner, consulter ses propres scans</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><strong>Validateur</strong></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">+ Valider/rejeter les scans, voir tous les scans</td>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px;"><strong>Manager</strong></td>
+                                <td style="padding: 12px;">+ Configurer, supprimer, accès aux statistiques</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Section 3: Backend Odoo -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            3. 🖥️ Utilisation Backend Odoo
+                        </h2>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">3.1 Accès au Module</h3>
+                        <p>
+                            Accédez au module via le menu : <strong>Facturation → Scanner Factures → Scans</strong>
+                        </p>
+                        
+                        <div style="border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; background: #fafafa;">
+                            <p style="color: #757575; font-style: italic;">[Capture d'écran: Menu principal]</p>
+                            <p style="font-size: 12px; color: #9e9e9e;">Emplacement: Facturation → Scanner Factures</p>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">3.2 Scanner une Facture</h3>
+                        <div style="background: #E8F5E9; border-radius: 8px; padding: 20px; margin: 15px 0;">
+                            <h4 style="color: #2E7D32; margin-top: 0;">Étapes de scan :</h4>
+                            <ol style="line-height: 2; margin-bottom: 0;">
+                                <li>Cliquer sur le bouton <strong>"Scanner"</strong></li>
+                                <li>Saisir ou coller l'URL du QR code DGI</li>
+                                <li>Valider pour lancer l'extraction</li>
+                                <li>Vérifier les données extraites</li>
+                                <li>Confirmer la création de la facture</li>
+                            </ol>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">3.3 États d'un Scan</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <tr style="background: #1565C0; color: white;">
+                                <th style="padding: 12px; text-align: left;">État</th>
+                                <th style="padding: 12px; text-align: left;">Couleur</th>
+                                <th style="padding: 12px; text-align: left;">Signification</th>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Brouillon</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><span style="background: #9e9e9e; color: white; padding: 2px 8px; border-radius: 4px;">Gris</span></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Scan en attente de traitement</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">En cours</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><span style="background: #1565C0; color: white; padding: 2px 8px; border-radius: 4px;">Bleu</span></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Extraction des données DGI en cours</td>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Validé</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><span style="background: #2E7D32; color: white; padding: 2px 8px; border-radius: 4px;">Vert</span></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Facture créée avec succès</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Doublon</td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><span style="background: #EF6C00; color: white; padding: 2px 8px; border-radius: 4px;">Orange</span></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Cette facture existe déjà</td>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px;">Erreur</td>
+                                <td style="padding: 12px;"><span style="background: #C62828; color: white; padding: 2px 8px; border-radius: 4px;">Rouge</span></td>
+                                <td style="padding: 12px;">Échec de l'extraction ou création</td>
+                            </tr>
+                        </table>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">3.4 Gestion des Doublons</h3>
+                        <p style="line-height: 1.8;">
+                            Le système détecte automatiquement les doublons basé sur l'UUID unique de chaque facture DGI. 
+                            Quand un doublon est détecté, le scan est marqué en orange et un lien vers la facture existante est fourni.
+                        </p>
+                    </div>
+                    
+                    <!-- Section 4: Application Mobile -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            4. 📱 Application Mobile
+                        </h2>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">4.1 Installation</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <tr>
+                                <td style="width: 50%; padding: 20px; vertical-align: top; border: 1px solid #e0e0e0; border-radius: 8px;">
+                                    <h4 style="color: #2E7D32; margin-top: 0;">Android</h4>
+                                    <ol style="line-height: 1.8; padding-left: 20px;">
+                                        <li>Télécharger l'APK depuis le lien fourni</li>
+                                        <li>Autoriser l'installation depuis sources inconnues</li>
+                                        <li>Installer l'application</li>
+                                        <li>Ouvrir et configurer le serveur</li>
+                                    </ol>
+                                </td>
+                                <td style="width: 50%; padding: 20px; vertical-align: top; border: 1px solid #e0e0e0; border-radius: 8px; margin-left: 10px;">
+                                    <h4 style="color: #424242; margin-top: 0;">iOS</h4>
+                                    <ol style="line-height: 1.8; padding-left: 20px;">
+                                        <li>Télécharger depuis l'App Store (Enterprise)</li>
+                                        <li>Ou installer via TestFlight</li>
+                                        <li>Faire confiance au certificat développeur</li>
+                                        <li>Configurer le serveur Odoo</li>
+                                    </ol>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">4.2 Connexion</h3>
+                        <ol style="line-height: 2;">
+                            <li>Lancer l'application</li>
+                            <li>Saisir l'URL du serveur Odoo (ex: https://odoo.example.com)</li>
+                            <li>Entrer vos identifiants Odoo</li>
+                            <li>Valider la connexion</li>
+                        </ol>
+                        
+                        <div style="background: #E3F2FD; border-left: 4px solid #1565C0; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                            <strong style="color: #1565C0;">💡 Astuce :</strong>
+                            <p style="margin: 10px 0 0 0;">
+                                L'application retient vos identifiants. Vous n'aurez plus besoin de les saisir 
+                                à chaque connexion.
+                            </p>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">4.3 Scanner avec le Mobile</h3>
+                        <div style="display: flex; margin: 20px 0;">
+                            <div style="flex: 1; padding: 15px; background: #f5f5f5; border-radius: 8px; margin-right: 10px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Étape 1</h4>
+                                <p>Appuyer sur le bouton "Scanner" au centre de l'écran</p>
+                            </div>
+                            <div style="flex: 1; padding: 15px; background: #f5f5f5; border-radius: 8px; margin-right: 10px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Étape 2</h4>
+                                <p>Cadrer le QR code dans le viseur</p>
+                            </div>
+                            <div style="flex: 1; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Étape 3</h4>
+                                <p>Le scan est automatique dès détection</p>
+                            </div>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">4.4 Mode Hors Ligne</h3>
+                        <p style="line-height: 1.8;">
+                            L'application fonctionne même sans connexion internet :
+                        </p>
+                        <ul style="line-height: 2;">
+                            <li>Les scans sont stockés localement</li>
+                            <li>Un badge indique le nombre de scans en attente</li>
+                            <li>La synchronisation est automatique au retour du réseau</li>
+                            <li>Une notification confirme chaque sync réussie</li>
+                        </ul>
+                        
+                        <div style="background: #FFF3E0; border-left: 4px solid #EF6C00; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                            <strong style="color: #EF6C00;">⚠️ Attention :</strong>
+                            <p style="margin: 10px 0 0 0;">
+                                En mode hors ligne, la détection des doublons est limitée aux scans déjà présents 
+                                dans le cache local de l'application.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Section 5: Tableau de Bord -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            5. 📊 Tableau de Bord
+                        </h2>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">5.1 Accès au Dashboard</h3>
+                        <p>
+                            Accédez au tableau de bord via : <strong>Facturation → Scanner Factures → Tableau de Bord</strong>
+                        </p>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">5.2 Indicateurs Clés (KPIs)</h3>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <tr style="background: #1565C0; color: white;">
+                                <th style="padding: 12px; text-align: left;">Indicateur</th>
+                                <th style="padding: 12px; text-align: left;">Description</th>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><strong>Total Scans</strong></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Nombre total de QR codes scannés</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><strong>Taux de Réussite</strong></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Pourcentage de factures créées avec succès</td>
+                            </tr>
+                            <tr style="background: #f5f5f5;">
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;"><strong>Doublons Évités</strong></td>
+                                <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">Nombre de scans en double détectés</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px;"><strong>Montant Total</strong></td>
+                                <td style="padding: 12px;">Somme des montants TTC des factures créées</td>
+                            </tr>
+                        </table>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">5.3 Graphiques Disponibles</h3>
+                        <ul style="line-height: 2;">
+                            <li><strong>Évolution journalière :</strong> Barres montrant les scans par jour</li>
+                            <li><strong>Répartition par état :</strong> Diagramme circulaire des statuts</li>
+                            <li><strong>Top Fournisseurs :</strong> Classement des fournisseurs les plus scannés</li>
+                            <li><strong>Top Utilisateurs :</strong> Classement des utilisateurs les plus actifs</li>
+                        </ul>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">5.4 Filtres et Périodes</h3>
+                        <p style="line-height: 1.8;">
+                            Le dashboard permet de filtrer les données par période :
+                        </p>
+                        <ul style="line-height: 2;">
+                            <li><strong>Aujourd'hui :</strong> Scans du jour uniquement</li>
+                            <li><strong>Cette semaine :</strong> 7 derniers jours</li>
+                            <li><strong>Ce mois :</strong> Mois en cours</li>
+                            <li><strong>Ce trimestre :</strong> 3 derniers mois</li>
+                            <li><strong>Cette année :</strong> Année en cours</li>
+                            <li><strong>Personnalisé :</strong> Dates au choix</li>
+                        </ul>
+                        
+                        <div style="background: #E8F5E9; border-left: 4px solid #2E7D32; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                            <strong style="color: #2E7D32;">✨ Fonctionnalité :</strong>
+                            <p style="margin: 10px 0 0 0;">
+                                Activez le rafraîchissement automatique pour voir les nouvelles données 
+                                en temps réel toutes les 30 secondes.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Section 6: Dépannage -->
+                    <div style="page-break-after: always;">
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            6. 🔧 Dépannage
+                        </h2>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">6.1 Problèmes Courants</h3>
+                        
+                        <div style="background: #FFEBEE; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                            <h4 style="color: #C62828; margin-top: 0;">❌ "Erreur d'extraction DGI"</h4>
+                            <p style="margin: 10px 0;"><strong>Causes possibles :</strong></p>
+                            <ul style="margin-bottom: 0;">
+                                <li>Le site DGI est temporairement indisponible</li>
+                                <li>Le QR code est invalide ou expiré</li>
+                                <li>Problème de connexion internet</li>
+                            </ul>
+                            <p style="margin: 10px 0 0 0;"><strong>Solution :</strong> Réessayer après quelques minutes. Si le problème persiste, contacter le support.</p>
+                        </div>
+                        
+                        <div style="background: #FFF3E0; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                            <h4 style="color: #EF6C00; margin-top: 0;">⚠️ "QR code non reconnu"</h4>
+                            <p style="margin: 10px 0;"><strong>Causes possibles :</strong></p>
+                            <ul style="margin-bottom: 0;">
+                                <li>QR code non standard DGI</li>
+                                <li>Qualité d'image insuffisante</li>
+                                <li>QR code endommagé</li>
+                            </ul>
+                            <p style="margin: 10px 0 0 0;"><strong>Solution :</strong> Vérifier que le QR code provient bien d'une facture DGI normalisée.</p>
+                        </div>
+                        
+                        <div style="background: #E3F2FD; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                            <h4 style="color: #1565C0; margin-top: 0;">ℹ️ "Connexion au serveur impossible"</h4>
+                            <p style="margin: 10px 0;"><strong>Causes possibles :</strong></p>
+                            <ul style="margin-bottom: 0;">
+                                <li>URL du serveur incorrecte</li>
+                                <li>Serveur Odoo arrêté</li>
+                                <li>Problème réseau/firewall</li>
+                            </ul>
+                            <p style="margin: 10px 0 0 0;"><strong>Solution :</strong> Vérifier l'URL et la connectivité réseau. Contacter l'administrateur système.</p>
+                        </div>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">6.2 Vérifications de Base</h3>
+                        <ol style="line-height: 2;">
+                            <li>Vérifier la connexion internet</li>
+                            <li>S'assurer que l'application est à jour</li>
+                            <li>Vider le cache de l'application si nécessaire</li>
+                            <li>Redémarrer l'application</li>
+                            <li>Vérifier les logs Odoo pour plus de détails</li>
+                        </ol>
+                        
+                        <h3 style="color: #424242; margin-top: 25px;">6.3 Contact Support</h3>
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-top: 15px;">
+                            <p style="margin: 0;"><strong>Email :</strong> support@icp.ci</p>
+                            <p style="margin: 10px 0;"><strong>Téléphone :</strong> +225 XX XX XX XX</p>
+                            <p style="margin: 0;"><strong>Horaires :</strong> Lun-Ven, 8h00-18h00</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Section 7: FAQ -->
+                    <div>
+                        <h2 style="color: #1565C0; border-bottom: 3px solid #1565C0; padding-bottom: 10px; font-size: 22px;">
+                            7. ❓ Foire Aux Questions
+                        </h2>
+                        
+                        <div style="margin-top: 25px;">
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Q: Combien de temps sont conservés les scans ?</h4>
+                                <p style="margin-bottom: 0;"><strong>R:</strong> Les scans sont conservés indéfiniment dans Odoo. L'historique local de l'app conserve les 1000 derniers scans.</p>
+                            </div>
+                            
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Q: Peut-on modifier une facture créée par scan ?</h4>
+                                <p style="margin-bottom: 0;"><strong>R:</strong> Oui, la facture créée est une facture fournisseur standard Odoo, entièrement modifiable avant validation.</p>
+                            </div>
+                            
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Q: Comment gérer un fournisseur non reconnu ?</h4>
+                                <p style="margin-bottom: 0;"><strong>R:</strong> Le système crée automatiquement le fournisseur avec les informations DGI. Vous pouvez ensuite compléter sa fiche.</p>
+                            </div>
+                            
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Q: Les scans sont-ils sécurisés ?</h4>
+                                <p style="margin-bottom: 0;"><strong>R:</strong> Oui, toutes les communications utilisent HTTPS. Les tokens d'API ont une durée de vie limitée.</p>
+                            </div>
+                            
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Q: Peut-on annuler un scan validé ?</h4>
+                                <p style="margin-bottom: 0;"><strong>R:</strong> Le scan lui-même ne peut pas être annulé, mais la facture créée peut être annulée via les processus standard Odoo.</p>
+                            </div>
+                            
+                            <div style="background: #f5f5f5; padding: 15px; border-radius: 8px;">
+                                <h4 style="color: #1565C0; margin-top: 0;">Q: L'app fonctionne-t-elle sur tablette ?</h4>
+                                <p style="margin-bottom: 0;"><strong>R:</strong> Oui, l'application est responsive et fonctionne sur tablettes Android et iPad.</p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e0e0e0; text-align: center;">
+                            <p style="color: #757575; font-size: 14px;">
+                                © <t t-esc="time.strftime('%Y')"/> ICP - Tous droits réservés<br/>
+                                Module Scanner Factures DGI v1.0
+                            </p>
+                        </div>
+                    </div>
+                    
+                </div>
+            </t>
+        </t>
+    </template>
+
+    <!-- Action pour le rapport -->
+    <record id="action_report_invoice_scanner_user_guide" model="ir.actions.report">
+        <field name="name">Guide Utilisateur Scanner</field>
+        <field name="model">invoice.scan.record</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">invoice_qr_scanner.report_invoice_scanner_user_guide</field>
+        <field name="report_file">invoice_qr_scanner.report_invoice_scanner_user_guide</field>
+        <field name="print_report_name">'Guide_Utilisateur_Scanner_Factures_DGI'</field>
+        <field name="binding_model_id" ref="model_invoice_scan_record"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <!-- Menu pour accéder au guide -->
+    <menuitem id="menu_invoice_scanner_user_guide"
+              name="Guide Utilisateur (PDF)"
+              parent="menu_invoice_qr_scanner_root"
+              action="action_report_invoice_scanner_user_guide"
+              sequence="50"/>
+              
+</odoo>
