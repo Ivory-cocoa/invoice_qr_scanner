@@ -126,11 +126,35 @@ class InvoiceScanRecord(models.Model):
     state = fields.Selection([
         ('draft', 'Brouillon'),
         ('done', 'Facture créée'),
+        ('processed', 'Traité'),
         ('error', 'Erreur'),
     ], string="État", default='draft', tracking=True, index=True)
     
     error_message = fields.Text(
         string="Message d'erreur"
+    )
+    
+    # Champs de traitement (marquage traité par le scanner)
+    processed_by = fields.Many2one(
+        'res.users',
+        string="Traité par",
+        readonly=True,
+        tracking=True,
+        help="Utilisateur ayant marqué ce scan comme traité"
+    )
+    
+    processed_date = fields.Datetime(
+        string="Date de traitement",
+        readonly=True,
+        tracking=True,
+        help="Date/heure à laquelle le scan a été marqué comme traité"
+    )
+    
+    is_processed = fields.Boolean(
+        string="Traité",
+        compute='_compute_is_processed',
+        store=True,
+        help="Indique si le scan a été marqué comme traité/enregistré"
     )
     
     # Compteur de doublons (au lieu de créer des enregistrements multiples)
@@ -182,12 +206,57 @@ class InvoiceScanRecord(models.Model):
          'Ce QR-code a déjà été scanné pour cette société!')
     ]
 
+    @api.depends('state')
+    def _compute_is_processed(self):
+        for record in self:
+            record.is_processed = record.state == 'processed'
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get('reference', '/') == '/':
                 vals['reference'] = self.env['ir.sequence'].next_by_code('invoice.scan.record') or '/'
         return super().create(vals_list)
+
+    def action_mark_processed(self):
+        """Marquer le(s) scan(s) comme traité(s)/enregistré(s)."""
+        records = self.filtered(lambda r: r.state == 'done')
+        if not records:
+            raise UserError(_("Seuls les scans avec facture créée peuvent être marqués comme traités."))
+        
+        records.write({
+            'state': 'processed',
+            'processed_by': self.env.user.id,
+            'processed_date': fields.Datetime.now(),
+        })
+        
+        for record in records:
+            record.message_post(
+                body=_("Scan marqué comme traité par %s") % self.env.user.name,
+                message_type='notification'
+            )
+        
+        return True
+
+    def action_mark_unprocessed(self):
+        """Remettre le(s) scan(s) à l'état 'Facture créée' (non traité)."""
+        records = self.filtered(lambda r: r.state == 'processed')
+        if not records:
+            raise UserError(_("Seuls les scans traités peuvent être remis à l'état 'Facture créée'."))
+        
+        records.write({
+            'state': 'done',
+            'processed_by': False,
+            'processed_date': False,
+        })
+        
+        for record in records:
+            record.message_post(
+                body=_("Scan remis à 'Facture créée' par %s") % self.env.user.name,
+                message_type='notification'
+            )
+        
+        return True
 
     @api.model
     def extract_uuid_from_url(self, url):
@@ -337,15 +406,15 @@ class InvoiceScanRecord(models.Model):
     def check_duplicate(self, qr_uuid):
         """Vérifier si ce QR-code a déjà été scanné avec succès (facture créée).
         
-        Ne considère que les scans réussis (state='done') pour détecter les doublons.
-        Les enregistrements de type 'duplicate' ou 'error' ne sont pas considérés.
+        Ne considère que les scans réussis (state='done' ou 'processed') pour détecter les doublons.
+        Les enregistrements de type 'error' ne sont pas considérés.
         
         Returns:
-            record: Enregistrement existant (done) ou False
+            record: Enregistrement existant (done/processed) ou False
         """
         return self.search([
             ('qr_uuid', '=', qr_uuid),
-            ('state', '=', 'done'),  # Seulement les scans réussis
+            ('state', 'in', ['done', 'processed']),
             ('company_id', '=', self.env.company.id)
         ], limit=1)
 
@@ -714,7 +783,8 @@ class InvoiceScanRecord(models.Model):
             
             # Statistiques globales
             total_scans = self.search_count(period_domain)
-            successful_scans = self.search_count(period_domain + [('state', '=', 'done')])
+            successful_scans = self.search_count(period_domain + [('state', 'in', ['done', 'processed'])])
+            processed_scans = self.search_count(period_domain + [('state', '=', 'processed')])
             error_scans = self.search_count(period_domain + [('state', '=', 'error')])
             
             # Comptage des doublons (somme des duplicate_count)
@@ -722,7 +792,7 @@ class InvoiceScanRecord(models.Model):
             duplicate_attempts = sum(r.duplicate_count for r in records_with_duplicates)
             
             # Montant total des factures réussies
-            successful_records = self.search(period_domain + [('state', '=', 'done')])
+            successful_records = self.search(period_domain + [('state', 'in', ['done', 'processed'])])
             total_amount = sum(r.amount_ttc for r in successful_records)
             
             # Statistiques temporelles
@@ -796,6 +866,7 @@ class InvoiceScanRecord(models.Model):
                 'stats': {
                     'totalScans': total_scans,
                     'successfulScans': successful_scans,
+                    'processedScans': processed_scans,
                     'duplicateAttempts': duplicate_attempts,
                     'recordsWithDuplicates': len(records_with_duplicates),
                     'errorScans': error_scans,
@@ -875,7 +946,8 @@ class InvoiceScanRecord(models.Model):
             period_domain = base_domain + [('scan_date', '>=', fields.Datetime.to_string(date_from_dt))]
             
             # Statistiques de la période
-            done_scans = self.search_count(period_domain + [('state', '=', 'done')])
+            done_scans = self.search_count(period_domain + [('state', 'in', ['done', 'processed'])])
+            processed_scans = self.search_count(period_domain + [('state', '=', 'processed')])
             pending_scans = self.search_count(period_domain + [('state', 'in', ['draft', 'pending'])])
             error_scans = self.search_count(period_domain + [('state', '=', 'error')])
             
@@ -887,17 +959,18 @@ class InvoiceScanRecord(models.Model):
             total_scans = done_scans + duplicate_attempts + error_scans
             
             # === TOTAUX GLOBAUX (ALL-TIME) pour correspondre à l'application mobile ===
-            all_time_done = self.search_count(base_domain + [('state', '=', 'done')])
+            all_time_done = self.search_count(base_domain + [('state', 'in', ['done', 'processed'])])
+            all_time_processed = self.search_count(base_domain + [('state', '=', 'processed')])
             all_time_error = self.search_count(base_domain + [('state', '=', 'error')])
             all_time_records_with_dup = self.search(base_domain + [('duplicate_count', '>', 0)])
             all_time_duplicates = sum(r.duplicate_count for r in all_time_records_with_dup)
             # Total scans = Réussis + Doublons + Erreurs
             all_time_total = all_time_done + all_time_duplicates + all_time_error
-            all_time_records = self.search(base_domain + [('state', '=', 'done')])
+            all_time_records = self.search(base_domain + [('state', 'in', ['done', 'processed'])])
             all_time_amount = sum(r.amount_ttc for r in all_time_records)
             
             # Montant total des factures réussies
-            successful_records = self.search(period_domain + [('state', '=', 'done')])
+            successful_records = self.search(period_domain + [('state', 'in', ['done', 'processed'])])
             total_amount = sum(r.amount_ttc for r in successful_records)
             
             # Scans récents (5 derniers)
@@ -907,7 +980,7 @@ class InvoiceScanRecord(models.Model):
                 'reference': r.reference or '',
                 'nom_fournisseur': r.supplier_name or 'N/A',
                 'montant_ttc': r.amount_ttc or 0,
-                'state': 'verified' if r.state == 'done' else ('error' if r.state == 'error' else 'pending'),
+                'state': 'processed' if r.state == 'processed' else ('verified' if r.state == 'done' else ('error' if r.state == 'error' else 'pending')),
                 'duplicate_count': r.duplicate_count,
             } for r in recent_scans]
             
@@ -966,6 +1039,7 @@ class InvoiceScanRecord(models.Model):
                 'stats': {
                     'total_scans': total_scans,
                     'successful_scans': done_scans,
+                    'processed_scans': processed_scans,
                     'duplicate_attempts': duplicate_attempts,
                     'records_with_duplicates': len(records_with_duplicates),
                     'error_scans': error_scans,
@@ -975,6 +1049,7 @@ class InvoiceScanRecord(models.Model):
                 'all_time_stats': {
                     'total_scans': all_time_total,
                     'successful_scans': all_time_done,
+                    'processed_scans': all_time_processed,
                     'duplicate_attempts': all_time_duplicates,
                     'records_with_duplicates': len(all_time_records_with_dup),
                     'error_scans': all_time_error,
@@ -994,6 +1069,7 @@ class InvoiceScanRecord(models.Model):
             empty_stats = {
                 'total_scans': 0,
                 'successful_scans': 0,
+                'processed_scans': 0,
                 'duplicate_attempts': 0,
                 'records_with_duplicates': 0,
                 'error_scans': 0,

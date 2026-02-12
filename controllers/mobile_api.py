@@ -186,13 +186,17 @@ class InvoiceScannerMobileAPI(http.Controller):
             'currency': record.currency_id.name if record.currency_id else 'XOF',
             'state': record.state,
             'state_label': dict(record._fields['state'].selection).get(record.state, ''),
+            'is_processed': record.state == 'processed',
+            'processed_by': record.processed_by.name if record.processed_by else None,
+            'processed_by_id': record.processed_by.id if record.processed_by else None,
+            'processed_date': record.processed_date.isoformat() if record.processed_date else None,
             'invoice_id': record.invoice_id.id if record.invoice_id else None,
             'invoice_name': record.invoice_id.name if record.invoice_id else None,
             'invoice_state': record.invoice_id.state if record.invoice_id else None,
             'scan_date': record.scan_date.isoformat() if record.scan_date else None,
             'scanned_by': record.scanned_by.name if record.scanned_by else '',
             'error_message': record.error_message or '',
-            # Nouveaux champs pour le compteur de doublons
+            # Champs pour le suivi des doublons
             'duplicate_count': record.duplicate_count,
             'last_duplicate_attempt': record.last_duplicate_attempt.isoformat() if record.last_duplicate_attempt else None,
             'last_duplicate_user': record.last_duplicate_user_id.name if record.last_duplicate_user_id else '',
@@ -478,6 +482,169 @@ class InvoiceScannerMobileAPI(http.Controller):
             }
         })
 
+    # ==================== ENDPOINTS TRAITEMENT (MARQUAGE TRAITÉ) ====================
+
+    @http.route('/api/v1/invoice-scanner/mark-processed/<int:record_id>', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def mark_processed(self, record_id, user=None, **kw):
+        """Marquer un scan comme traité/enregistré.
+        
+        Returns:
+        - success: Boolean
+        - record: Enregistrement mis à jour
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+            
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        record = ScanRecord.browse(record_id)
+        
+        if not record.exists():
+            return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
+        
+        if record.state not in ('done',):
+            return api_error(
+                'INVALID_STATE',
+                f"Seuls les scans avec facture créée peuvent être marqués comme traités (état actuel: {record.state})",
+                status=400
+            )
+        
+        record.write({
+            'state': 'processed',
+            'processed_by': user.id,
+            'processed_date': fields.Datetime.now(),
+        })
+        
+        record.message_post(
+            body=f"Scan marqué comme traité par {user.name} (depuis l'application mobile)",
+            message_type='notification'
+        )
+        
+        return api_response({
+            'success': True,
+            'message': 'Scan marqué comme traité',
+            'record': self._format_scan_record(record),
+        })
+
+    @http.route('/api/v1/invoice-scanner/mark-unprocessed/<int:record_id>', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def mark_unprocessed(self, record_id, user=None, **kw):
+        """Remettre un scan à l'état 'Facture créée' (non traité).
+        
+        Returns:
+        - success: Boolean
+        - record: Enregistrement mis à jour
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+            
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        record = ScanRecord.browse(record_id)
+        
+        if not record.exists():
+            return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
+        
+        if record.state != 'processed':
+            return api_error(
+                'INVALID_STATE',
+                f"Seuls les scans traités peuvent être remis à 'Facture créée' (état actuel: {record.state})",
+                status=400
+            )
+        
+        record.write({
+            'state': 'done',
+            'processed_by': False,
+            'processed_date': False,
+        })
+        
+        record.message_post(
+            body=f"Scan remis à 'Facture créée' par {user.name} (depuis l'application mobile)",
+            message_type='notification'
+        )
+        
+        return api_response({
+            'success': True,
+            'message': 'Scan remis à l\'état non traité',
+            'record': self._format_scan_record(record),
+        })
+
+    @http.route('/api/v1/invoice-scanner/bulk-mark-processed', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def bulk_mark_processed(self, user=None, **kw):
+        """Marquer plusieurs scans comme traités en masse.
+        
+        Body JSON:
+        - record_ids: Liste des IDs à marquer (optionnel, sinon tous les 'done' éligibles)
+        - max_records: Nombre maximum à traiter (défaut: 50, max: 200)
+        
+        Returns:
+        - results: Résultat pour chaque enregistrement
+        - summary: Résumé des résultats
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+            
+        data = get_json_body()
+        record_ids = data.get('record_ids', [])
+        max_records = min(200, max(1, int(data.get('max_records', 50))))
+        
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        
+        # Construire le domaine
+        domain = [
+            ('company_id', '=', request.env.company.id),
+            ('state', '=', 'done'),
+        ]
+        
+        if record_ids:
+            domain.append(('id', 'in', record_ids))
+        
+        records = ScanRecord.search(domain, limit=max_records, order='scan_date asc')
+        
+        results = []
+        now = fields.Datetime.now()
+        
+        for record in records:
+            try:
+                record.write({
+                    'state': 'processed',
+                    'processed_by': user.id,
+                    'processed_date': now,
+                })
+                record.message_post(
+                    body=f"Scan marqué comme traité par {user.name} (marquage en masse depuis l'application mobile)",
+                    message_type='notification'
+                )
+                results.append({
+                    'record_id': record.id,
+                    'reference': record.reference,
+                    'success': True,
+                })
+            except Exception as e:
+                results.append({
+                    'record_id': record.id,
+                    'reference': record.reference,
+                    'success': False,
+                    'error': str(e),
+                })
+        
+        successful = sum(1 for r in results if r.get('success'))
+        
+        return api_response({
+            'results': results,
+            'summary': {
+                'total_processed': len(results),
+                'successful': successful,
+                'failed': len(results) - successful,
+            }
+        })
+
     # ==================== ENDPOINTS HISTORIQUE ====================
 
     @http.route('/api/v1/invoice-scanner/history', type='http', auth='none',
@@ -612,6 +779,14 @@ class InvoiceScannerMobileAPI(http.Controller):
         # Statistiques des enregistrements
         successful_scans = ScanRecord.search_count([
             ('company_id', '=', company_id),
+            ('state', 'in', ['done', 'processed'])
+        ])
+        processed_scans = ScanRecord.search_count([
+            ('company_id', '=', company_id),
+            ('state', '=', 'processed')
+        ])
+        unprocessed_scans = ScanRecord.search_count([
+            ('company_id', '=', company_id),
             ('state', '=', 'done')
         ])
         error_scans = ScanRecord.search_count([
@@ -632,16 +807,18 @@ class InvoiceScannerMobileAPI(http.Controller):
         # Montant total des factures scannées
         records = ScanRecord.search([
             ('company_id', '=', company_id),
-            ('state', '=', 'done')
+            ('state', 'in', ['done', 'processed'])
         ])
         total_amount = sum(r.amount_ttc for r in records)
         
         return api_response({
             'total_scans': total_scans,
             'successful_scans': successful_scans,
+            'processed_scans': processed_scans,
+            'unprocessed_scans': unprocessed_scans,
             'error_scans': error_scans,
-            'duplicate_attempts': total_duplicate_attempts,  # Nombre total de tentatives de doublons
-            'records_with_duplicates': len(records_with_duplicates),  # Nombre d'enregistrements ayant eu des doublons
+            'duplicate_attempts': total_duplicate_attempts,
+            'records_with_duplicates': len(records_with_duplicates),
             'total_amount': total_amount,
             'currency': 'XOF',
         })

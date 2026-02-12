@@ -180,6 +180,27 @@ class ApiService {
     });
   }
 
+  /// Mark a scan record as processed (traité)
+  Future<ApiResponse<Map<String, dynamic>>> markProcessed(int recordId) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/mark-processed/$recordId', {});
+  }
+
+  /// Mark a scan record as unprocessed (non traité)
+  Future<ApiResponse<Map<String, dynamic>>> markUnprocessed(int recordId) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/mark-unprocessed/$recordId', {});
+  }
+
+  /// Bulk mark scan records as processed (traités en masse)
+  Future<ApiResponse<Map<String, dynamic>>> bulkMarkProcessed({
+    List<int>? recordIds,
+    int maxRecords = 50,
+  }) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/bulk-mark-processed', {
+      if (recordIds != null) 'record_ids': recordIds,
+      'max_records': maxRecords,
+    });
+  }
+
   /// Health check
   Future<bool> healthCheck() async {
     try {

@@ -183,6 +183,40 @@ class HistoryList extends StatelessWidget {
                           ),
                         ),
                         const Spacer(),
+                        if (record.isProcessed)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6C63FF).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF6C63FF).withOpacity(0.3),
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.verified_rounded,
+                                  size: 12,
+                                  color: Color(0xFF6C63FF),
+                                ),
+                                SizedBox(width: 3),
+                                Text(
+                                  'Traité',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF6C63FF),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (record.invoiceName != null)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -234,6 +268,10 @@ class HistoryList extends StatelessWidget {
         icon = Icons.check_circle_rounded;
         color = AppTheme.successColor;
         break;
+      case 'processed':
+        icon = Icons.verified_rounded;
+        color = const Color(0xFF6C63FF);
+        break;
       case 'error':
         icon = Icons.error_rounded;
         color = AppTheme.errorColor;
@@ -277,6 +315,10 @@ class HistoryList extends StatelessWidget {
       case 'done':
         color = AppTheme.successColor;
         bgColor = AppTheme.successColor.withOpacity(0.1);
+        break;
+      case 'processed':
+        color = const Color(0xFF6C63FF);
+        bgColor = const Color(0xFF6C63FF).withOpacity(0.1);
         break;
       case 'error':
         color = AppTheme.errorColor;
@@ -569,6 +611,10 @@ class _RecordDetailsSheet extends StatelessWidget {
                   _buildDetailRow('Facture Odoo', record.invoiceName!, Icons.link_rounded),
                 if (record.scanDate != null)
                   _buildDetailRow('Date du scan', dateFormat.format(record.scanDate!), Icons.schedule_rounded),
+                if (record.isProcessed && record.processedBy != null)
+                  _buildDetailRow('Traité par', record.processedBy!, Icons.verified_rounded),
+                if (record.isProcessed && record.processedDate != null)
+                  _buildDetailRow('Date de traitement', dateFormat.format(record.processedDate!), Icons.event_available_rounded),
               ],
             ),
           ),
@@ -576,24 +622,37 @@ class _RecordDetailsSheet extends StatelessWidget {
           // Actions
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            child: Column(
+              children: [
+                // Bouton marquer comme traité / non traité
+                if (record.state == 'done' || record.state == 'processed')
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: _ProcessToggleButton(record: record),
+                    ),
+                  ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text(
+                      'Fermer',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
-                icon: const Icon(Icons.check_rounded),
-                label: const Text(
-                  'Fermer',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
+              ],
             ),
           ),
         ],
@@ -609,6 +668,10 @@ class _RecordDetailsSheet extends StatelessWidget {
       case 'done':
         icon = Icons.check_circle_rounded;
         color = AppTheme.successColor;
+        break;
+      case 'processed':
+        icon = Icons.verified_rounded;
+        color = const Color(0xFF6C63FF);
         break;
       case 'error':
         icon = Icons.error_rounded;
@@ -641,6 +704,7 @@ class _RecordDetailsSheet extends StatelessWidget {
   Color _getStateColor(String state) {
     switch (state) {
       case 'done': return AppTheme.successColor;
+      case 'processed': return const Color(0xFF6C63FF);
       case 'error': return AppTheme.errorColor;
       case 'duplicate': return AppTheme.warningColor;
       default: return Colors.grey;
@@ -691,6 +755,128 @@ class _RecordDetailsSheet extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bouton toggle pour marquer un scan comme traité / non traité
+class _ProcessToggleButton extends StatefulWidget {
+  final ScanRecord record;
+  
+  const _ProcessToggleButton({required this.record});
+  
+  @override
+  State<_ProcessToggleButton> createState() => _ProcessToggleButtonState();
+}
+
+class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
+  bool _isLoading = false;
+  
+  Future<void> _toggleProcessed() async {
+    setState(() => _isLoading = true);
+    
+    final scan = context.read<ScanProvider>();
+    bool success;
+    
+    if (widget.record.state == 'done') {
+      success = await scan.markAsProcessed(widget.record.id);
+    } else {
+      success = await scan.markAsUnprocessed(widget.record.id);
+    }
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+      
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  widget.record.state == 'done' 
+                      ? Icons.verified_rounded 
+                      : Icons.undo_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  widget.record.state == 'done'
+                      ? 'Scan marqué comme traité'
+                      : 'Scan remis à non traité',
+                ),
+              ],
+            ),
+            backgroundColor: widget.record.state == 'done' 
+                ? const Color(0xFF6C63FF) 
+                : AppTheme.warningColor,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.error_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Text('Erreur lors du changement de statut'),
+              ],
+            ),
+            backgroundColor: AppTheme.errorColor,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final isProcessed = widget.record.state == 'processed';
+    
+    return ElevatedButton.icon(
+      onPressed: _isLoading ? null : _toggleProcessed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isProcessed 
+            ? Colors.orange.shade50 
+            : const Color(0xFF6C63FF).withOpacity(0.1),
+        foregroundColor: isProcessed 
+            ? Colors.orange.shade700 
+            : const Color(0xFF6C63FF),
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isProcessed 
+                ? Colors.orange.shade300 
+                : const Color(0xFF6C63FF).withOpacity(0.3),
+          ),
+        ),
+      ),
+      icon: _isLoading
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: isProcessed ? Colors.orange.shade700 : const Color(0xFF6C63FF),
+              ),
+            )
+          : Icon(isProcessed ? Icons.undo_rounded : Icons.verified_rounded),
+      label: Text(
+        _isLoading
+            ? 'Traitement...'
+            : (isProcessed ? 'Remettre non traité' : 'Marquer comme traité'),
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
       ),
     );
   }

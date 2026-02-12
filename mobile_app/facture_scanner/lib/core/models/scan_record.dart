@@ -23,6 +23,12 @@ class ScanRecord {
   final DateTime? lastDuplicateAttempt;
   final String? lastDuplicateUser;
   
+  // Champs pour le marquage traité
+  final bool isProcessed;
+  final String? processedBy;
+  final int? processedById;
+  final DateTime? processedDate;
+  
   ScanRecord({
     required this.id,
     required this.reference,
@@ -44,6 +50,10 @@ class ScanRecord {
     this.duplicateCount = 0,
     this.lastDuplicateAttempt,
     this.lastDuplicateUser,
+    this.isProcessed = false,
+    this.processedBy,
+    this.processedById,
+    this.processedDate,
   });
   
   factory ScanRecord.fromJson(Map<String, dynamic> json) {
@@ -74,6 +84,12 @@ class ScanRecord {
           ? DateTime.tryParse(json['last_duplicate_attempt'])
           : null,
       lastDuplicateUser: json['last_duplicate_user'] as String?,
+      isProcessed: json['is_processed'] as bool? ?? (json['state'] == 'processed'),
+      processedBy: json['processed_by'] as String?,
+      processedById: json['processed_by_id'] as int?,
+      processedDate: json['processed_date'] != null
+          ? DateTime.tryParse(json['processed_date'])
+          : null,
     );
   }
   
@@ -105,6 +121,12 @@ class ScanRecord {
           ? DateTime.tryParse(map['last_duplicate_attempt'])
           : null,
       lastDuplicateUser: map['last_duplicate_user'] as String?,
+      isProcessed: map['is_processed'] as bool? ?? (map['state'] == 'processed'),
+      processedBy: map['processed_by'] as String?,
+      processedById: map['processed_by_id'] as int?,
+      processedDate: map['processed_date'] != null
+          ? DateTime.tryParse(map['processed_date'])
+          : null,
     );
   }
   
@@ -130,10 +152,14 @@ class ScanRecord {
       'duplicate_count': duplicateCount,
       'last_duplicate_attempt': lastDuplicateAttempt?.toIso8601String(),
       'last_duplicate_user': lastDuplicateUser,
+      'is_processed': isProcessed,
+      'processed_by': processedBy,
+      'processed_by_id': processedById,
+      'processed_date': processedDate?.toIso8601String(),
     };
   }
   
-  bool get isSuccess => state == 'done';
+  bool get isSuccess => state == 'done' || state == 'processed';
   bool get isError => state == 'error';
   bool get hasDuplicates => duplicateCount > 0;
   

@@ -260,6 +260,105 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
     }
   }
+
+  Future<void> _markAllProcessed() async {
+    final connectivity = context.read<ConnectivityProvider>();
+    
+    if (!connectivity.isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 12),
+              Text('Connexion requise pour cette action'),
+            ],
+          ),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_rounded, color: Color(0xFF6C63FF)),
+            SizedBox(width: 12),
+            Text('Tout marquer traité', style: AppTheme.headingSmall),
+          ],
+        ),
+        content: const Text(
+          'Marquer tous les scans en état "Facture créée" comme traités ?\n\nCette action est réversible.',
+          style: AppTheme.bodyLarge,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C63FF),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Tout marquer'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed == true && mounted) {
+      final scan = context.read<ScanProvider>();
+      final result = await scan.bulkMarkAsProcessed();
+      
+      if (mounted) {
+        if (result != null) {
+          final count = result['successful'] ?? 0;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 12),
+                  Text('$count scan(s) marqué(s) comme traité(s)'),
+                ],
+              ),
+              backgroundColor: const Color(0xFF6C63FF),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.error_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Text('Erreur lors du marquage en masse'),
+                ],
+              ),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      }
+    }
+  }
   
   Future<void> _logout() async {
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
@@ -434,6 +533,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               onSelected: (value) {
                 if (value == 'logout') _logout();
                 if (value == 'clear_offline') _clearOfflineData();
+                if (value == 'mark_all_processed') _markAllProcessed();
               },
               itemBuilder: (context) => [
                 PopupMenuItem(
@@ -461,6 +561,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ),
                 const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'mark_all_processed',
+                  child: Row(
+                    children: [
+                      Icon(Icons.verified_rounded, color: Color(0xFF6C63FF), size: 20),
+                      SizedBox(width: 12),
+                      Text(
+                        'Tout marquer traité',
+                        style: TextStyle(
+                          color: AppTheme.textDark,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const PopupMenuItem(
                   value: 'clear_offline',
                   child: Row(

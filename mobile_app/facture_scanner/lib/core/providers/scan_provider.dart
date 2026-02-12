@@ -392,4 +392,71 @@ class ScanProvider extends ChangeNotifier {
     _localSuccessCount = 0;
     notifyListeners();
   }
+
+  /// Mark a scan record as processed (traité)
+  Future<bool> markAsProcessed(int recordId) async {
+    try {
+      final response = await _api.markProcessed(recordId);
+      if (response.success && response.data != null) {
+        // Update the record in local history
+        final recordData = response.data!['record'];
+        if (recordData != null) {
+          final updatedRecord = ScanRecord.fromJson(recordData);
+          _updateRecordInHistory(updatedRecord);
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Mark a scan record as unprocessed (non traité)
+  Future<bool> markAsUnprocessed(int recordId) async {
+    try {
+      final response = await _api.markUnprocessed(recordId);
+      if (response.success && response.data != null) {
+        // Update the record in local history
+        final recordData = response.data!['record'];
+        if (recordData != null) {
+          final updatedRecord = ScanRecord.fromJson(recordData);
+          _updateRecordInHistory(updatedRecord);
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Bulk mark scan records as processed (traités en masse)
+  Future<Map<String, dynamic>?> bulkMarkAsProcessed({List<int>? recordIds, int maxRecords = 50}) async {
+    try {
+      final response = await _api.bulkMarkProcessed(
+        recordIds: recordIds,
+        maxRecords: maxRecords,
+      );
+      if (response.success && response.data != null) {
+        // Refresh history after bulk operation
+        await loadHistory();
+        await loadStats();
+        return response.data!['summary'];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Update a single record in the local history list
+  void _updateRecordInHistory(ScanRecord updatedRecord) {
+    final index = _history.indexWhere((r) => r.id == updatedRecord.id);
+    if (index != -1) {
+      _history[index] = updatedRecord;
+    }
+  }
 }

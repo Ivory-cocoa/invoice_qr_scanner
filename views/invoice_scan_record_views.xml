@@ -10,7 +10,8 @@
             <field name="model">invoice.scan.record</field>
             <field name="arch" type="xml">
                 <tree string="Scans de factures" decoration-success="state=='done'" 
-                      decoration-danger="state=='error'" decoration-muted="state=='draft'">
+                      decoration-danger="state=='error'" decoration-muted="state=='draft'"
+                      decoration-bf="state=='processed'">
                     <field name="reference"/>
                     <field name="scan_date"/>
                     <field name="supplier_name"/>
@@ -21,7 +22,11 @@
                     <field name="state" widget="badge" 
                            decoration-success="state == 'done'"
                            decoration-danger="state == 'error'"
-                           decoration-info="state == 'draft'"/>
+                           decoration-info="state == 'draft'"
+                           decoration-warning="state == 'processed'"/>
+                    <field name="is_processed" column_invisible="1"/>
+                    <field name="processed_by" optional="show"/>
+                    <field name="processed_date" optional="hide"/>
                     <field name="duplicate_count" string="Doublons" 
                            decoration-warning="duplicate_count > 0"
                            optional="show"/>
@@ -40,13 +45,21 @@
             <field name="arch" type="xml">
                 <form string="Scan de facture QR">
                     <header>
+                        <button name="action_mark_processed" string="✅ Marquer comme traité"
+                                type="object" class="btn-primary"
+                                invisible="state != 'done'"
+                                confirm="Marquer ce scan comme traité/enregistré ?"/>
+                        <button name="action_mark_unprocessed" string="↩ Remettre non traité"
+                                type="object" class="btn-warning"
+                                invisible="state != 'processed'"
+                                confirm="Remettre ce scan à l'état 'Facture créée' ?"/>
                         <button name="action_retry_create_invoice" string="Réessayer création facture"
                                 type="object" class="btn-primary"
                                 invisible="state != 'error' or invoice_id"/>
                         <button name="action_view_invoice" string="Voir la facture"
                                 type="object" class="btn-secondary"
                                 invisible="not invoice_id"/>
-                        <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,done,processed"/>
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
@@ -95,6 +108,13 @@
                                 <field name="last_duplicate_user_id" readonly="1"/>
                             </group>
                         </group>
+                        <group string="Traitement" invisible="state not in ('done', 'processed')">
+                            <group>
+                                <field name="is_processed" readonly="1" widget="boolean_toggle"/>
+                                <field name="processed_by" readonly="1" invisible="not processed_by"/>
+                                <field name="processed_date" readonly="1" invisible="not processed_date"/>
+                            </group>
+                        </group>
                         <group string="Erreur" invisible="state != 'error'">
                             <field name="error_message" readonly="1" nolabel="1" colspan="2"/>
                         </group>
@@ -128,6 +148,8 @@
                     <field name="scanned_by"/>
                     <separator/>
                     <filter string="Factures créées" name="filter_done" domain="[('state', '=', 'done')]"/>
+                    <filter string="Traités" name="filter_processed" domain="[('state', '=', 'processed')]"/>
+                    <filter string="Non traités" name="filter_not_processed" domain="[('state', '=', 'done')]"/>
                     <filter string="Erreurs" name="filter_error" domain="[('state', '=', 'error')]"/>
                     <filter string="Avec doublons" name="filter_duplicate" domain="[('duplicate_count', '>', 0)]"/>
                     <separator/>
@@ -171,6 +193,7 @@
                     <field name="state"/>
                     <field name="scan_date"/>
                     <field name="duplicate_count"/>
+                    <field name="is_processed"/>
                     <templates>
                         <t t-name="kanban-box">
                             <div class="oe_kanban_global_click">
@@ -181,7 +204,7 @@
                                         </strong>
                                     </div>
                                     <field name="state" widget="label_selection" 
-                                           options="{'classes': {'draft': 'info', 'done': 'success', 'error': 'danger'}}"/>
+                                           options="{'classes': {'draft': 'info', 'done': 'success', 'processed': 'warning', 'error': 'danger'}}"/>
                                 </div>
                                 <div class="o_kanban_record_body">
                                     <field name="supplier_name"/>
@@ -223,6 +246,27 @@
                     et créer automatiquement les factures fournisseur.
                 </p>
             </field>
+        </record>
+
+        <!-- ============================================================ -->
+        <!-- SERVER ACTIONS (Mass actions) -->
+        <!-- ============================================================ -->
+        <record id="action_mark_processed_mass" model="ir.actions.server">
+            <field name="name">Marquer comme traité(s)</field>
+            <field name="model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">records.action_mark_processed()</field>
+        </record>
+
+        <record id="action_mark_unprocessed_mass" model="ir.actions.server">
+            <field name="name">Remettre non traité(s)</field>
+            <field name="model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">records.action_mark_unprocessed()</field>
         </record>
 
     </data>
