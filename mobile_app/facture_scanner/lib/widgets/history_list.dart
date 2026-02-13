@@ -19,11 +19,11 @@ class HistoryList extends StatelessWidget {
     return Consumer2<ScanProvider, ConnectivityProvider>(
       builder: (context, scan, connectivity, _) {
         if (scan.isLoadingHistory) {
-          return _buildLoadingList();
+          return _buildLoadingList(context);
         }
         
         if (scan.history.isEmpty) {
-          return _buildEmptyState();
+          return _buildEmptyState(context);
         }
         
         return RefreshIndicator(
@@ -31,8 +31,8 @@ class HistoryList extends StatelessWidget {
             forceRefresh: true,
             isOnline: connectivity.isOnline,
           ),
-          color: AppTheme.primaryColor,
-          backgroundColor: Colors.white,
+          color: AppTheme.getPrimary(context),
+          backgroundColor: AppTheme.getSurfaceElevated(context),
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: scan.history.length,
@@ -74,7 +74,7 @@ class HistoryList extends StatelessWidget {
                   // Header row
                   Row(
                     children: [
-                      _buildStateIcon(record.state),
+                      _buildStateIcon(context, record.state),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -82,8 +82,8 @@ class HistoryList extends StatelessWidget {
                           children: [
                             Text(
                               record.reference,
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
+                              style: TextStyle(
+                                color: AppTheme.getTextPrimary(context),
                                 fontWeight: FontWeight.w700,
                                 fontSize: 17,
                               ),
@@ -94,7 +94,7 @@ class HistoryList extends StatelessWidget {
                                 child: Text(
                                   record.supplierName,
                                   style: TextStyle(
-                                    color: AppTheme.textSecondary,
+                                    color: AppTheme.getTextSecondary(context),
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -105,7 +105,7 @@ class HistoryList extends StatelessWidget {
                           ],
                         ),
                       ),
-                      _buildStateBadge(record.state, record.stateLabel),
+                      _buildStateBadge(context, record.state, record.stateLabel),
                     ],
                   ),
                   
@@ -115,13 +115,7 @@ class HistoryList extends StatelessWidget {
                   Container(
                     height: 1,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.grey.shade200,
-                          Colors.grey.shade300,
-                          Colors.grey.shade200,
-                        ],
-                      ),
+                      color: AppTheme.getDivider(context),
                     ),
                   ),
                   
@@ -132,6 +126,7 @@ class HistoryList extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _buildDetailColumn(
+                          context,
                           'N° Facture DGI',
                           record.invoiceNumberDgi.isNotEmpty 
                               ? record.invoiceNumberDgi 
@@ -142,10 +137,11 @@ class HistoryList extends StatelessWidget {
                       Container(
                         width: 1,
                         height: 40,
-                        color: Colors.grey.shade200,
+                        color: AppTheme.getDivider(context),
                       ),
                       Expanded(
                         child: _buildDetailColumn(
+                          context,
                           'Montant',
                           record.formattedAmount,
                           Icons.payments_rounded,
@@ -161,7 +157,7 @@ class HistoryList extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
+                      color: AppTheme.getSurfaceLight(context),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
@@ -169,7 +165,7 @@ class HistoryList extends StatelessWidget {
                         Icon(
                           Icons.schedule_rounded,
                           size: 16,
-                          color: AppTheme.textMuted,
+                          color: AppTheme.getTextMuted(context),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -179,7 +175,7 @@ class HistoryList extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
-                            color: AppTheme.textMuted,
+                            color: AppTheme.getTextMuted(context),
                           ),
                         ),
                         const Spacer(),
@@ -191,26 +187,26 @@ class HistoryList extends StatelessWidget {
                             ),
                             margin: const EdgeInsets.only(right: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF6C63FF).withOpacity(0.1),
+                              color: AppTheme.getPrimary(context).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                color: const Color(0xFF6C63FF).withOpacity(0.3),
+                                color: AppTheme.getPrimary(context).withOpacity(0.3),
                               ),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   Icons.verified_rounded,
                                   size: 12,
-                                  color: Color(0xFF6C63FF),
+                                  color: AppTheme.getPrimary(context),
                                 ),
-                                SizedBox(width: 3),
+                                const SizedBox(width: 3),
                                 Text(
                                   'Traité',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Color(0xFF6C63FF),
+                                    color: AppTheme.getPrimary(context),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -224,7 +220,7 @@ class HistoryList extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              color: AppTheme.getPrimary(context).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -233,14 +229,14 @@ class HistoryList extends StatelessWidget {
                                 Icon(
                                   Icons.link_rounded,
                                   size: 14,
-                                  color: AppTheme.primaryColor,
+                                  color: AppTheme.getPrimary(context),
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   record.invoiceName!,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
-                                    color: AppTheme.primaryColor,
+                                    color: AppTheme.getPrimary(context),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -259,30 +255,30 @@ class HistoryList extends StatelessWidget {
     );
   }
   
-  Widget _buildStateIcon(String state) {
+  Widget _buildStateIcon(BuildContext context, String state) {
     IconData icon;
     Color color;
     
     switch (state) {
       case 'done':
         icon = Icons.check_circle_rounded;
-        color = AppTheme.successColor;
+        color = AppTheme.getSuccess(context);
         break;
       case 'processed':
         icon = Icons.verified_rounded;
-        color = const Color(0xFF6C63FF);
+        color = AppTheme.getPrimary(context);
         break;
       case 'error':
         icon = Icons.error_rounded;
-        color = AppTheme.errorColor;
+        color = AppTheme.getError(context);
         break;
       case 'duplicate':
         icon = Icons.content_copy_rounded;
-        color = AppTheme.warningColor;
+        color = AppTheme.getWarning(context);
         break;
       default:
         icon = Icons.pending_rounded;
-        color = Colors.grey;
+        color = AppTheme.getTextMuted(context);
     }
     
     return Container(
@@ -307,30 +303,30 @@ class HistoryList extends StatelessWidget {
     );
   }
   
-  Widget _buildStateBadge(String state, String label) {
+  Widget _buildStateBadge(BuildContext context, String state, String label) {
     Color color;
     Color bgColor;
     
     switch (state) {
       case 'done':
-        color = AppTheme.successColor;
-        bgColor = AppTheme.successColor.withOpacity(0.1);
+        color = AppTheme.getSuccess(context);
+        bgColor = AppTheme.getSuccess(context).withOpacity(0.1);
         break;
       case 'processed':
-        color = const Color(0xFF6C63FF);
-        bgColor = const Color(0xFF6C63FF).withOpacity(0.1);
+        color = AppTheme.getPrimary(context);
+        bgColor = AppTheme.getPrimary(context).withOpacity(0.1);
         break;
       case 'error':
-        color = AppTheme.errorColor;
-        bgColor = AppTheme.errorColor.withOpacity(0.1);
+        color = AppTheme.getError(context);
+        bgColor = AppTheme.getError(context).withOpacity(0.1);
         break;
       case 'duplicate':
-        color = AppTheme.warningColor;
-        bgColor = AppTheme.warningColor.withOpacity(0.1);
+        color = AppTheme.getWarning(context);
+        bgColor = AppTheme.getWarning(context).withOpacity(0.1);
         break;
       default:
-        color = Colors.grey;
-        bgColor = Colors.grey.withOpacity(0.1);
+        color = AppTheme.getTextMuted(context);
+        bgColor = AppTheme.getTextMuted(context).withOpacity(0.1);
     }
     
     return Container(
@@ -351,7 +347,7 @@ class HistoryList extends StatelessWidget {
     );
   }
   
-  Widget _buildDetailColumn(String label, String value, IconData icon, {bool isAmount = false}) {
+  Widget _buildDetailColumn(BuildContext context, String label, String value, IconData icon, {bool isAmount = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
@@ -359,12 +355,12 @@ class HistoryList extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: AppTheme.textMuted),
+              Icon(icon, size: 14, color: AppTheme.getTextMuted(context)),
               const SizedBox(width: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: AppTheme.textMuted,
+                  color: AppTheme.getTextMuted(context),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -375,7 +371,7 @@ class HistoryList extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: isAmount ? AppTheme.successColor : AppTheme.textPrimary,
+              color: isAmount ? AppTheme.getSuccess(context) : AppTheme.getTextPrimary(context),
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -396,7 +392,7 @@ class HistoryList extends StatelessWidget {
     );
   }
 
-  Widget _buildLoadingList() {
+  Widget _buildLoadingList(BuildContext context) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: 5,
@@ -405,8 +401,8 @@ class HistoryList extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 12),
           decoration: AppTheme.cardDecoration,
           child: Shimmer.fromColors(
-            baseColor: Colors.grey.shade300,
-            highlightColor: Colors.grey.shade100,
+            baseColor: AppTheme.isDark(context) ? const Color(0xFF3A3A3A) : Colors.grey.shade300,
+            highlightColor: AppTheme.isDark(context) ? const Color(0xFF4A4A4A) : Colors.grey.shade100,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -479,7 +475,7 @@ class HistoryList extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -489,22 +485,22 @@ class HistoryList extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.1),
+                color: AppTheme.getPrimary(context).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.history_rounded,
                 size: 64,
-                color: AppTheme.primaryColor,
+                color: AppTheme.getPrimary(context),
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Aucun scan pour le moment',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textPrimary,
+                color: AppTheme.getTextPrimary(context),
               ),
             ),
             const SizedBox(height: 12),
@@ -513,7 +509,7 @@ class HistoryList extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
-                color: AppTheme.textMuted,
+                color: AppTheme.getTextMuted(context),
                 height: 1.5,
               ),
             ),
@@ -535,9 +531,9 @@ class _RecordDetailsSheet extends StatelessWidget {
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
     
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: AppTheme.getSurfaceElevated(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -548,7 +544,7 @@ class _RecordDetailsSheet extends StatelessWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: AppTheme.getDivider(context),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -558,7 +554,7 @@ class _RecordDetailsSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                _buildStateIcon(record.state),
+                _buildStateIcon(context, record.state),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -566,10 +562,10 @@ class _RecordDetailsSheet extends StatelessWidget {
                     children: [
                       Text(
                         'Détails du scan',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
+                          color: AppTheme.getTextPrimary(context),
                         ),
                       ),
                       Text(
@@ -577,7 +573,7 @@ class _RecordDetailsSheet extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: _getStateColor(record.state),
+                          color: _getStateColor(context, record.state),
                         ),
                       ),
                     ],
@@ -587,7 +583,7 @@ class _RecordDetailsSheet extends StatelessWidget {
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close_rounded),
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.grey.shade100,
+                    backgroundColor: AppTheme.getSurfaceLight(context),
                   ),
                 ),
               ],
@@ -601,20 +597,20 @@ class _RecordDetailsSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _buildDetailRow('Référence', record.reference, Icons.tag_rounded),
+                _buildDetailRow(context, 'Référence', record.reference, Icons.tag_rounded),
                 if (record.supplierName.isNotEmpty)
-                  _buildDetailRow('Fournisseur', record.supplierName, Icons.business_rounded),
+                  _buildDetailRow(context, 'Fournisseur', record.supplierName, Icons.business_rounded),
                 if (record.invoiceNumberDgi.isNotEmpty)
-                  _buildDetailRow('N° Facture DGI', record.invoiceNumberDgi, Icons.receipt_long_rounded),
-                _buildDetailRow('Montant', record.formattedAmount, Icons.payments_rounded, highlight: true),
+                  _buildDetailRow(context, 'N° Facture DGI', record.invoiceNumberDgi, Icons.receipt_long_rounded),
+                _buildDetailRow(context, 'Montant', record.formattedAmount, Icons.payments_rounded, highlight: true),
                 if (record.invoiceName != null)
-                  _buildDetailRow('Facture Odoo', record.invoiceName!, Icons.link_rounded),
+                  _buildDetailRow(context, 'Facture Odoo', record.invoiceName!, Icons.link_rounded),
                 if (record.scanDate != null)
-                  _buildDetailRow('Date du scan', dateFormat.format(record.scanDate!), Icons.schedule_rounded),
+                  _buildDetailRow(context, 'Date du scan', dateFormat.format(record.scanDate!), Icons.schedule_rounded),
                 if (record.isProcessed && record.processedBy != null)
-                  _buildDetailRow('Traité par', record.processedBy!, Icons.verified_rounded),
+                  _buildDetailRow(context, 'Traité par', record.processedBy!, Icons.verified_rounded),
                 if (record.isProcessed && record.processedDate != null)
-                  _buildDetailRow('Date de traitement', dateFormat.format(record.processedDate!), Icons.event_available_rounded),
+                  _buildDetailRow(context, 'Date de traitement', dateFormat.format(record.processedDate!), Icons.event_available_rounded),
               ],
             ),
           ),
@@ -638,7 +634,7 @@ class _RecordDetailsSheet extends StatelessWidget {
                   child: ElevatedButton.icon(
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryColor,
+                      backgroundColor: AppTheme.getPrimary(context),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
@@ -660,30 +656,30 @@ class _RecordDetailsSheet extends StatelessWidget {
     );
   }
   
-  Widget _buildStateIcon(String state) {
+  Widget _buildStateIcon(BuildContext context, String state) {
     IconData icon;
     Color color;
     
     switch (state) {
       case 'done':
         icon = Icons.check_circle_rounded;
-        color = AppTheme.successColor;
+        color = AppTheme.getSuccess(context);
         break;
       case 'processed':
         icon = Icons.verified_rounded;
-        color = const Color(0xFF6C63FF);
+        color = AppTheme.getPrimary(context);
         break;
       case 'error':
         icon = Icons.error_rounded;
-        color = AppTheme.errorColor;
+        color = AppTheme.getError(context);
         break;
       case 'duplicate':
         icon = Icons.content_copy_rounded;
-        color = AppTheme.warningColor;
+        color = AppTheme.getWarning(context);
         break;
       default:
         icon = Icons.pending_rounded;
-        color = Colors.grey;
+        color = AppTheme.getTextMuted(context);
     }
     
     return Container(
@@ -701,17 +697,17 @@ class _RecordDetailsSheet extends StatelessWidget {
     );
   }
   
-  Color _getStateColor(String state) {
+  Color _getStateColor(BuildContext context, String state) {
     switch (state) {
-      case 'done': return AppTheme.successColor;
-      case 'processed': return const Color(0xFF6C63FF);
-      case 'error': return AppTheme.errorColor;
-      case 'duplicate': return AppTheme.warningColor;
-      default: return Colors.grey;
+      case 'done': return AppTheme.getSuccess(context);
+      case 'processed': return AppTheme.getPrimary(context);
+      case 'error': return AppTheme.getError(context);
+      case 'duplicate': return AppTheme.getWarning(context);
+      default: return AppTheme.getTextMuted(context);
     }
   }
   
-  Widget _buildDetailRow(String label, String value, IconData icon, {bool highlight = false}) {
+  Widget _buildDetailRow(BuildContext context, String label, String value, IconData icon, {bool highlight = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -720,13 +716,13 @@ class _RecordDetailsSheet extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: (highlight ? AppTheme.successColor : AppTheme.primaryColor).withOpacity(0.1),
+              color: (highlight ? AppTheme.getSuccess(context) : AppTheme.getPrimary(context)).withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               size: 20,
-              color: highlight ? AppTheme.successColor : AppTheme.primaryColor,
+              color: highlight ? AppTheme.getSuccess(context) : AppTheme.getPrimary(context),
             ),
           ),
           const SizedBox(width: 14),
@@ -737,7 +733,7 @@ class _RecordDetailsSheet extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    color: AppTheme.textMuted,
+                    color: AppTheme.getTextMuted(context),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -746,7 +742,7 @@ class _RecordDetailsSheet extends StatelessWidget {
                 Text(
                   value,
                   style: TextStyle(
-                    color: highlight ? AppTheme.successColor : AppTheme.textPrimary,
+                    color: highlight ? AppTheme.getSuccess(context) : AppTheme.getTextPrimary(context),
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -810,8 +806,8 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
               ],
             ),
             backgroundColor: widget.record.state == 'done' 
-                ? const Color(0xFF6C63FF) 
-                : AppTheme.warningColor,
+                ? AppTheme.getPrimary(context) 
+                : AppTheme.getWarning(context),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -828,7 +824,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
                 Text('Erreur lors du changement de statut'),
               ],
             ),
-            backgroundColor: AppTheme.errorColor,
+            backgroundColor: AppTheme.getError(context),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -847,10 +843,10 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
       style: ElevatedButton.styleFrom(
         backgroundColor: isProcessed 
             ? Colors.orange.shade50 
-            : const Color(0xFF6C63FF).withOpacity(0.1),
+            : AppTheme.getPrimary(context).withOpacity(0.1),
         foregroundColor: isProcessed 
             ? Colors.orange.shade700 
-            : const Color(0xFF6C63FF),
+            : AppTheme.getPrimary(context),
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(
@@ -858,7 +854,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
           side: BorderSide(
             color: isProcessed 
                 ? Colors.orange.shade300 
-                : const Color(0xFF6C63FF).withOpacity(0.3),
+                : AppTheme.getPrimary(context).withOpacity(0.3),
           ),
         ),
       ),
@@ -868,7 +864,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
               height: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: isProcessed ? Colors.orange.shade700 : const Color(0xFF6C63FF),
+                color: isProcessed ? Colors.orange.shade700 : AppTheme.getPrimary(context),
               ),
             )
           : Icon(isProcessed ? Icons.undo_rounded : Icons.verified_rounded),

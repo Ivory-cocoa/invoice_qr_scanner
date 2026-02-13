@@ -194,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Widget _buildLoginCard() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.getSurfaceElevated(context),
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
         boxShadow: [
           BoxShadow(
@@ -212,23 +212,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Titre de la carte
-              const Text(
+              Text(
                 'Connexion',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textDark,
+                  color: AppTheme.getTextPrimary(context),
                 ),
                 textAlign: TextAlign.center,
               ),
               
               const SizedBox(height: 8),
               
-              const Text(
+              Text(
                 'Connectez-vous à votre compte Odoo',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppTheme.textMedium,
+                  color: AppTheme.getTextSecondary(context),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -243,19 +243,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       margin: const EdgeInsets.only(bottom: 20),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AppTheme.errorLight,
+                        color: AppTheme.getErrorLight(context),
                         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                        border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
+                        border: Border.all(color: AppTheme.getError(context).withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline, color: AppTheme.errorColor, size: 22),
+                          Icon(Icons.error_outline, color: AppTheme.getError(context), size: 22),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               auth.errorMessage!,
-                              style: const TextStyle(
-                                color: AppTheme.errorColor,
+                              style: TextStyle(
+                                color: AppTheme.getError(context),
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -299,7 +299,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 suffixIcon: IconButton(
                   icon: Icon(
                     _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: AppTheme.textMedium,
+                    color: AppTheme.getTextSecondary(context),
                   ),
                   onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                 ),
@@ -374,21 +374,21 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: AppTheme.primaryColor),
+        prefixIcon: Icon(icon, color: AppTheme.getPrimary(context)),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: AppTheme.surfaceLight,
-        labelStyle: const TextStyle(
-          color: AppTheme.textMedium,
+        fillColor: AppTheme.getSurfaceLight(context),
+        labelStyle: TextStyle(
+          color: AppTheme.getTextSecondary(context),
           fontSize: 15,
           fontWeight: FontWeight.w500,
         ),
         hintStyle: TextStyle(
-          color: AppTheme.textLight.withOpacity(0.6),
+          color: AppTheme.getTextMuted(context).withOpacity(0.6),
           fontSize: 14,
         ),
-        floatingLabelStyle: const TextStyle(
-          color: AppTheme.primaryColor,
+        floatingLabelStyle: TextStyle(
+          color: AppTheme.getPrimary(context),
           fontWeight: FontWeight.w600,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -402,15 +402,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
+          borderSide: BorderSide(color: AppTheme.getPrimary(context), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          borderSide: const BorderSide(color: AppTheme.errorColor, width: 1.5),
+          borderSide: BorderSide(color: AppTheme.getError(context), width: 1.5),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          borderSide: const BorderSide(color: AppTheme.errorColor, width: 2),
+          borderSide: BorderSide(color: AppTheme.getError(context), width: 2),
         ),
       ),
     );
@@ -428,13 +428,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             Icon(
               Icons.settings_outlined,
               size: 18,
-              color: AppTheme.textMedium.withOpacity(0.8),
+              color: AppTheme.getTextSecondary(context).withOpacity(0.8),
             ),
             const SizedBox(width: 8),
             Text(
               'Configuration serveur',
               style: TextStyle(
-                color: AppTheme.textMedium.withOpacity(0.8),
+                color: AppTheme.getTextSecondary(context).withOpacity(0.8),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -443,7 +443,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             Icon(
               _showServerConfig ? Icons.expand_less : Icons.expand_more,
               size: 20,
-              color: AppTheme.textMedium.withOpacity(0.8),
+              color: AppTheme.getTextSecondary(context).withOpacity(0.8),
             ),
           ],
         ),
@@ -459,11 +459,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           child: ElevatedButton(
             onPressed: auth.isLoading ? null : _login,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryColor,
+              backgroundColor: AppTheme.getPrimary(context),
               foregroundColor: Colors.white,
-              disabledBackgroundColor: AppTheme.primaryColor.withOpacity(0.6),
+              disabledBackgroundColor: AppTheme.getPrimary(context).withOpacity(0.6),
               elevation: auth.isLoading ? 0 : 4,
-              shadowColor: AppTheme.primaryColor.withOpacity(0.4),
+              shadowColor: AppTheme.getPrimary(context).withOpacity(0.4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
               ),

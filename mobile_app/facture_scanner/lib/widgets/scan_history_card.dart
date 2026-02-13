@@ -83,7 +83,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
             curve: Curves.easeInOut,
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppTheme.getSurfaceElevated(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _getBorderColor(),
@@ -234,15 +234,15 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
 
     switch (record.state) {
       case 'validated':
-        color = AppTheme.successColor;
+        color = AppTheme.getSuccess(context);
         icon = Icons.check_circle_rounded;
         break;
       case 'duplicate':
-        color = AppTheme.warningColor;
+        color = AppTheme.getWarning(context);
         icon = Icons.content_copy_rounded;
         break;
       case 'error':
-        color = AppTheme.errorColor;
+        color = AppTheme.getError(context);
         icon = Icons.error_rounded;
         break;
       default:
@@ -268,16 +268,16 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
 
     switch (record.state) {
       case 'validated':
-        bgColor = AppTheme.successLight;
-        textColor = AppTheme.successColor;
+        bgColor = AppTheme.getSuccessLight(context);
+        textColor = AppTheme.getSuccess(context);
         break;
       case 'duplicate':
-        bgColor = AppTheme.warningLight;
-        textColor = AppTheme.warningColor;
+        bgColor = AppTheme.getWarningLight(context);
+        textColor = AppTheme.getWarning(context);
         break;
       case 'error':
-        bgColor = AppTheme.errorLight;
-        textColor = AppTheme.errorColor;
+        bgColor = AppTheme.getErrorLight(context);
+        textColor = AppTheme.getError(context);
         break;
       default:
         bgColor = AppTheme.infoLight;
@@ -348,23 +348,23 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
               margin: const EdgeInsets.only(top: 12),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.errorLight,
+                color: AppTheme.getErrorLight(context),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
+                border: Border.all(color: AppTheme.getError(context).withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.error_outline_rounded,
-                    color: AppTheme.errorColor,
+                    color: AppTheme.getError(context),
                     size: 20,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       record.errorMessage!,
-                      style: const TextStyle(
-                        color: AppTheme.errorColor,
+                      style: TextStyle(
+                        color: AppTheme.getError(context),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -391,7 +391,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
       constraints: const BoxConstraints(minWidth: 140),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: AppTheme.getSurfaceLight(context),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -476,7 +476,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
           decoration: BoxDecoration(
             gradient: isPrimary ? AppTheme.primaryGradient : null,
-            color: isPrimary ? null : Colors.grey.shade100,
+            color: isPrimary ? null : AppTheme.getSurfaceLight(context),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -507,32 +507,32 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
     if (_isExpanded) {
       switch (widget.record.state) {
         case 'validated':
-          return AppTheme.successColor.withOpacity(0.3);
+          return AppTheme.getSuccess(context).withOpacity(0.3);
         case 'duplicate':
-          return AppTheme.warningColor.withOpacity(0.3);
+          return AppTheme.getWarning(context).withOpacity(0.3);
         case 'error':
-          return AppTheme.errorColor.withOpacity(0.3);
+          return AppTheme.getError(context).withOpacity(0.3);
         default:
-          return AppTheme.primaryColor.withOpacity(0.3);
+          return AppTheme.getPrimary(context).withOpacity(0.3);
       }
     }
-    return Colors.grey.shade200;
+    return AppTheme.getDivider(context);
   }
 
   Color _getShadowColor() {
     return _isExpanded
-        ? AppTheme.primaryColor.withOpacity(0.1)
+        ? AppTheme.getPrimary(context).withOpacity(0.1)
         : Colors.black.withOpacity(0.05);
   }
 
   Color _getAmountColor() {
     switch (widget.record.state) {
       case 'validated':
-        return AppTheme.successColor;
+        return AppTheme.getSuccess(context);
       case 'duplicate':
-        return AppTheme.warningColor;
+        return AppTheme.getWarning(context);
       case 'error':
-        return AppTheme.errorColor;
+        return AppTheme.getError(context);
       default:
         return AppTheme.textPrimary;
     }

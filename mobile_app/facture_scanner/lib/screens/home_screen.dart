@@ -184,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Clear Data',
-      barrierColor: Colors.white.withOpacity(0.85),
+      barrierColor: AppTheme.isDark(context) ? Colors.black.withOpacity(0.85) : Colors.white.withOpacity(0.85),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -196,11 +196,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                 ),
-                title: const Row(
+                title: Row(
                   children: [
-                    Icon(Icons.delete_sweep, color: AppTheme.warningColor),
-                    SizedBox(width: 12),
-                    Text('Vider les données', style: AppTheme.headingSmall),
+                    Icon(Icons.delete_sweep, color: AppTheme.getWarning(context)),
+                    const SizedBox(width: 12),
+                    const Text('Vider les données', style: AppTheme.headingSmall),
                   ],
                 ),
                 content: const Text(
@@ -289,11 +289,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
         ),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.verified_rounded, color: Color(0xFF6C63FF)),
-            SizedBox(width: 12),
-            Text('Tout marquer traité', style: AppTheme.headingSmall),
+            Icon(Icons.verified_rounded, color: AppTheme.getPrimary(context)),
+            const SizedBox(width: 12),
+            const Text('Tout marquer traité', style: AppTheme.headingSmall),
           ],
         ),
         content: const Text(
@@ -367,7 +367,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Logout',
-      barrierColor: Colors.white.withOpacity(0.85),
+      barrierColor: AppTheme.isDark(context) ? Colors.black.withOpacity(0.85) : Colors.white.withOpacity(0.85),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -379,11 +379,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                 ),
-                title: const Row(
+                title: Row(
                   children: [
-                    Icon(Icons.logout, color: AppTheme.errorColor),
-                    SizedBox(width: 12),
-                    Text('Déconnexion', style: AppTheme.headingSmall),
+                    Icon(Icons.logout, color: AppTheme.getError(context)),
+                    const SizedBox(width: 12),
+                    const Text('Déconnexion', style: AppTheme.headingSmall),
                   ],
                 ),
                 content: const Text(
@@ -543,66 +543,66 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     children: [
                       Text(
                         auth.user?.name ?? 'Utilisateur',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
-                          color: AppTheme.textDark,
+                          color: AppTheme.getTextPrimary(context),
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         auth.user?.email ?? '',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: AppTheme.textMedium,
+                          color: AppTheme.getTextSecondary(context),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const PopupMenuDivider(),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'mark_all_processed',
                   child: Row(
                     children: [
-                      Icon(Icons.verified_rounded, color: Color(0xFF6C63FF), size: 20),
-                      SizedBox(width: 12),
+                      Icon(Icons.verified_rounded, color: AppTheme.getPrimary(context), size: 20),
+                      const SizedBox(width: 12),
                       Text(
                         'Tout marquer traité',
                         style: TextStyle(
-                          color: AppTheme.textDark,
+                          color: AppTheme.getTextPrimary(context),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'clear_offline',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_sweep_rounded, color: AppTheme.warningColor, size: 20),
-                      SizedBox(width: 12),
+                      Icon(Icons.delete_sweep_rounded, color: AppTheme.getWarning(context), size: 20),
+                      const SizedBox(width: 12),
                       Text(
                         'Vider données hors ligne',
                         style: TextStyle(
-                          color: AppTheme.textDark,
+                          color: AppTheme.getTextPrimary(context),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'logout',
                   child: Row(
                     children: [
-                      Icon(Icons.logout_rounded, color: AppTheme.errorColor, size: 20),
-                      SizedBox(width: 12),
+                      Icon(Icons.logout_rounded, color: AppTheme.getError(context), size: 20),
+                      const SizedBox(width: 12),
                       Text(
                         'Déconnexion',
                         style: TextStyle(
-                          color: AppTheme.textDark,
+                          color: AppTheme.getTextPrimary(context),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -638,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildHomeTab() {
     return RefreshIndicator(
       onRefresh: _loadData,
-      color: AppTheme.primaryColor,
+      color: AppTheme.getPrimary(context),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),

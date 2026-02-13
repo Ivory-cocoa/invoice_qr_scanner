@@ -16,6 +16,7 @@ import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/traiteur_home_screen.dart';
+import 'screens/manager_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,11 +72,10 @@ class RoleBasedHomeScreen extends StatelessWidget {
     switch (role) {
       case 'traiteur':
         return const TraiteurHomeScreen();
-      case 'verificateur':
       case 'manager':
+        return const ManagerHomeScreen();
+      case 'verificateur':
       default:
-        // Manager and Vérificateur use the existing home screen
-        // (Manager has all capabilities, Vérificateur = default scanner flow)
         return const HomeScreen();
     }
   }
