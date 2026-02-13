@@ -114,13 +114,13 @@
 /* ===== KPIs Grid ===== */
 .scanner-dash__kpis {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 16px;
 }
 
 @media (max-width: 1024px) {
     .scanner-dash__kpis {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
@@ -205,6 +205,11 @@
 .kpi-card__icon--danger {
     background: #FFEBEE;  /* errorLight */
     color: #C62828;       /* errorColor */
+}
+
+.kpi-card__icon--processed {
+    background: #E8EAF6;  /* indigoLight */
+    color: #5C6BC0;       /* indigo */
 }
 
 .kpi-card__data {
@@ -320,6 +325,10 @@
 
 .alltime-kpi--danger {
     border-left-color: #C62828;
+}
+
+.alltime-kpi--processed {
+    border-left-color: #5C6BC0;
 }
 
 .alltime-kpi--info {
@@ -504,6 +513,7 @@
 .status-dot--draft { background: #94a3b8; }
 .status-dot--pending { background: #f59e0b; }
 .status-dot--verified { background: #22c55e; }
+.status-dot--processed { background: #5C6BC0; }
 .status-dot--error { background: #ef4444; }
 
 /* Supplier List */

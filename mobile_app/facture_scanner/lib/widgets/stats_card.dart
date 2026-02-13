@@ -105,6 +105,30 @@ class StatsCard extends StatelessWidget {
                         Expanded(
                           child: _buildStatItem(
                             context: context,
+                            label: 'Traités',
+                            value: '${stats['processed_scans'] ?? 0}',
+                            icon: Icons.verified_rounded,
+                            color: const Color(0xFF5C6BC0),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatItem(
+                            context: context,
+                            label: 'Non traités',
+                            value: '${stats['unprocessed_scans'] ?? 0}',
+                            icon: Icons.pending_actions_rounded,
+                            color: const Color(0xFFFF8F00),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatItem(
+                            context: context,
                             label: 'Doublons',
                             value: '${stats['duplicate_attempts'] ?? stats['duplicate_scans'] ?? 0}',
                             icon: Icons.content_copy_rounded,

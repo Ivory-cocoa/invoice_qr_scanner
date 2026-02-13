@@ -201,6 +201,31 @@ class ApiService {
     });
   }
 
+  // ============ Traiteur-specific endpoints ============
+
+  /// Scan QR to find and process an existing invoice (Traiteur flow)
+  Future<ApiResponse<Map<String, dynamic>>> scanToProcess(String qrUrl) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/scan-to-process', {
+      'qr_url': qrUrl,
+    });
+  }
+
+  /// Get pending invoices for Traiteur
+  Future<ApiResponse<Map<String, dynamic>>> getTraiteurPending({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/traiteur/pending', {
+      'page': page,
+      'limit': limit,
+    });
+  }
+
+  /// Get Traiteur statistics
+  Future<ApiResponse<Map<String, dynamic>>> getTraiteurStats() async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/traiteur/stats', {});
+  }
+
   /// Health check
   Future<bool> healthCheck() async {
     try {

@@ -47,6 +47,19 @@
                         </div>
                         <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
                     </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewProcessedScans" title="Cliquez pour voir les scans traités">
+                        <div class="kpi-card__icon kpi-card__icon--processed">
+                            <i class="fa fa-check-square-o"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.processed_scans || 0)"/>
+                            <span class="kpi-card__label">Traités</span>
+                            <span class="kpi-card__sub" t-if="state.stats.successful_scans > 0">
+                                <t t-esc="Math.round(((state.stats.processed_scans || 0) / state.stats.successful_scans) * 100)"/>% des réussis
+                            </span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
                     <div class="kpi-card kpi-card--clickable" t-on-click="viewDuplicateScans" title="Cliquez pour voir les scans avec doublons">
                         <div class="kpi-card__icon kpi-card__icon--warning">
                             <i class="fa fa-clone"/>
@@ -91,6 +104,10 @@
                         <div class="alltime-kpi alltime-kpi--success alltime-kpi--clickable" t-on-click="viewAllTimeSuccessfulScans" title="Cliquez pour voir les scans réussis">
                             <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.successful_scans)"/>
                             <span class="alltime-kpi__label">Réussis</span>
+                        </div>
+                        <div class="alltime-kpi alltime-kpi--processed alltime-kpi--clickable" t-on-click="viewAllTimeProcessedScans" title="Cliquez pour voir les scans traités">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.processed_scans || 0)"/>
+                            <span class="alltime-kpi__label">Traités</span>
                         </div>
                         <div class="alltime-kpi alltime-kpi--warning alltime-kpi--clickable" t-on-click="viewAllTimeDuplicateScans" title="Cliquez pour voir les scans avec doublons">
                             <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.duplicate_attempts)"/>

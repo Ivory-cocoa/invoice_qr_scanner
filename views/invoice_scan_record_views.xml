@@ -12,26 +12,50 @@
                 <tree string="Scans de factures" decoration-success="state=='done'" 
                       decoration-danger="state=='error'" decoration-muted="state=='draft'"
                       decoration-bf="state=='processed'">
+                    <header>
+                        <button name="action_mark_processed" type="object"
+                                string="✅ Marquer traité(s)"
+                                class="btn-primary"/>
+                        <button name="action_mark_unprocessed" type="object"
+                                string="↩ Remettre non traité(s)"
+                                class="btn-secondary"/>
+                    </header>
+                    <!-- Identification -->
                     <field name="reference"/>
-                    <field name="scan_date"/>
-                    <field name="supplier_name"/>
-                    <field name="invoice_number_dgi"/>
-                    <field name="invoice_date"/>
-                    <field name="amount_ttc" sum="Total"/>
+                    <field name="scan_date" string="Date scan" widget="date"/>
+                    <!-- Fournisseur & Facture -->
+                    <field name="supplier_name" string="Fournisseur"/>
+                    <field name="invoice_number_dgi" string="N° Facture DGI" optional="show"/>
+                    <field name="invoice_date" optional="hide"/>
+                    <!-- Financier -->
+                    <field name="amount_ttc" string="Montant TTC" sum="Total"/>
                     <field name="currency_id" column_invisible="1"/>
+                    <!-- Statut & Traitement -->
                     <field name="state" widget="badge" 
                            decoration-success="state == 'done'"
                            decoration-danger="state == 'error'"
                            decoration-info="state == 'draft'"
                            decoration-warning="state == 'processed'"/>
                     <field name="is_processed" column_invisible="1"/>
-                    <field name="processed_by" optional="show"/>
-                    <field name="processed_date" optional="hide"/>
+                    <field name="processed_by" string="Traité par" optional="show"/>
+                    <field name="processed_date" string="Traité le" widget="date" optional="hide"/>
+                    <!-- Liens & Infos complémentaires -->
+                    <field name="invoice_id" string="Facture Odoo" optional="show"/>
                     <field name="duplicate_count" string="Doublons" 
                            decoration-warning="duplicate_count > 0"
-                           optional="show"/>
-                    <field name="invoice_id"/>
-                    <field name="scanned_by"/>
+                           optional="hide"/>
+                    <field name="scanned_by" string="Scanné par" optional="hide"/>
+                    <!-- Actions par ligne -->
+                    <button name="action_mark_processed" type="object"
+                            string="✅ Traiter" title="Marquer comme traité"
+                            icon="fa-check-circle"
+                            invisible="state != 'done'"
+                            class="btn-link text-success"/>
+                    <button name="action_mark_unprocessed" type="object"
+                            string="↩ Annuler" title="Remettre non traité"
+                            icon="fa-undo"
+                            invisible="state != 'processed'"
+                            class="btn-link text-warning"/>
                 </tree>
             </field>
         </record>

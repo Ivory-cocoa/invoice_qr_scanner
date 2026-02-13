@@ -19,6 +19,7 @@ export class InvoiceScannerDashboardImproved extends Component {
             stats: {
                 total_scans: 0,
                 successful_scans: 0,
+                processed_scans: 0,
                 duplicate_attempts: 0,
                 records_with_duplicates: 0,
                 error_scans: 0,
@@ -28,6 +29,7 @@ export class InvoiceScannerDashboardImproved extends Component {
             all_time_stats: {
                 total_scans: 0,
                 successful_scans: 0,
+                processed_scans: 0,
                 duplicate_attempts: 0,
                 records_with_duplicates: 0,
                 error_scans: 0,
@@ -70,6 +72,7 @@ export class InvoiceScannerDashboardImproved extends Component {
             const emptyStats = {
                 total_scans: 0,
                 successful_scans: 0,
+                processed_scans: 0,
                 duplicate_attempts: 0,
                 records_with_duplicates: 0,
                 error_scans: 0,
@@ -169,15 +172,16 @@ export class InvoiceScannerDashboardImproved extends Component {
         
         if (this.statusChart) this.statusChart.destroy();
         
-        const { successful_scans, duplicate_attempts, error_scans } = this.state.stats;
+        const { successful_scans, processed_scans, duplicate_attempts, error_scans } = this.state.stats;
+        const unprocessed = Math.max(0, successful_scans - (processed_scans || 0));
         
         this.statusChart = new Chart(ctx, {
             type: "doughnut",
             data: {
-                labels: ["Réussis", "Tentatives doublons", "Erreurs"],
+                labels: ["Traités", "Non traités", "Tentatives doublons", "Erreurs"],
                 datasets: [{
-                    data: [successful_scans, duplicate_attempts, error_scans],
-                    backgroundColor: ["#2E7D32", "#EF6C00", "#C62828"],
+                    data: [processed_scans || 0, unprocessed, duplicate_attempts, error_scans],
+                    backgroundColor: ["#5C6BC0", "#2E7D32", "#EF6C00", "#C62828"],
                     borderWidth: 0,
                 }],
             },
@@ -284,6 +288,32 @@ export class InvoiceScannerDashboardImproved extends Component {
             res_model: "invoice.scan.record",
             views: [[false, "list"], [false, "kanban"], [false, "form"]],
             target: "current",
+            domain: [...this._getPeriodDomain(), ["state", "in", ["done", "processed"]]],
+            context: context,
+        });
+    }
+
+    viewProcessedScans() {
+        const context = this._getPeriodContext();
+        this.action.doAction({
+            type: "ir.actions.act_window",
+            name: "Scans traités",
+            res_model: "invoice.scan.record",
+            views: [[false, "list"], [false, "kanban"], [false, "form"]],
+            target: "current",
+            domain: [...this._getPeriodDomain(), ["state", "=", "processed"]],
+            context: context,
+        });
+    }
+
+    viewUnprocessedScans() {
+        const context = this._getPeriodContext();
+        this.action.doAction({
+            type: "ir.actions.act_window",
+            name: "Scans non traités",
+            res_model: "invoice.scan.record",
+            views: [[false, "list"], [false, "kanban"], [false, "form"]],
+            target: "current",
             domain: [...this._getPeriodDomain(), ["state", "=", "done"]],
             context: context,
         });
@@ -333,6 +363,28 @@ export class InvoiceScannerDashboardImproved extends Component {
             res_model: "invoice.scan.record",
             views: [[false, "list"], [false, "kanban"], [false, "form"]],
             target: "current",
+            domain: [["state", "in", ["done", "processed"]]],
+        });
+    }
+
+    viewAllTimeProcessedScans() {
+        this.action.doAction({
+            type: "ir.actions.act_window",
+            name: "Scans traités (global)",
+            res_model: "invoice.scan.record",
+            views: [[false, "list"], [false, "kanban"], [false, "form"]],
+            target: "current",
+            domain: [["state", "=", "processed"]],
+        });
+    }
+
+    viewAllTimeUnprocessedScans() {
+        this.action.doAction({
+            type: "ir.actions.act_window",
+            name: "Scans non traités (global)",
+            res_model: "invoice.scan.record",
+            views: [[false, "list"], [false, "kanban"], [false, "form"]],
+            target: "current",
             domain: [["state", "=", "done"]],
         });
     }
@@ -366,7 +418,7 @@ export class InvoiceScannerDashboardImproved extends Component {
             res_model: "invoice.scan.record",
             views: [[false, "list"], [false, "kanban"], [false, "form"]],
             target: "current",
-            domain: [["state", "=", "done"]],
+            domain: [["state", "in", ["done", "processed"]]],
         });
     }
 

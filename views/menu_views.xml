@@ -2,10 +2,24 @@
 <odoo>
     <data>
 
-        <!-- Action Tableau de bord (client action OWL) -->
+        <!-- Action Tableau de bord Responsable (client action OWL) -->
         <record id="action_invoice_scanner_dashboard_improved" model="ir.actions.client">
-            <field name="name">Tableau de Bord</field>
+            <field name="name">Tableau de Bord Responsable</field>
             <field name="tag">invoice_scanner_dashboard_improved</field>
+            <field name="target">main</field>
+        </record>
+
+        <!-- Action Tableau de bord Vérificateur -->
+        <record id="action_verificateur_dashboard" model="ir.actions.client">
+            <field name="name">Tableau de Bord Vérificateur</field>
+            <field name="tag">verificateur_dashboard</field>
+            <field name="target">main</field>
+        </record>
+
+        <!-- Action Tableau de bord Traiteur -->
+        <record id="action_traiteur_dashboard" model="ir.actions.client">
+            <field name="name">Tableau de Bord Traiteur</field>
+            <field name="tag">traiteur_dashboard</field>
             <field name="target">main</field>
         </record>
 
@@ -16,13 +30,37 @@
                   sequence="45"
                   groups="group_invoice_scanner_user"/>
 
-        <!-- Menu Tableau de bord (première position) -->
+        <!-- ============================================================ -->
+        <!-- TABLEAUX DE BORD -->
+        <!-- ============================================================ -->
+
+        <!-- Menu Tableau de bord Responsable -->
         <menuitem id="menu_invoice_scanner_dashboard"
                   name="Tableau de Bord"
                   parent="menu_invoice_qr_scanner_root"
                   action="action_invoice_scanner_dashboard_improved"
                   sequence="1"
                   groups="group_invoice_scanner_manager"/>
+
+        <!-- Menu Tableau de bord Vérificateur -->
+        <menuitem id="menu_verificateur_dashboard"
+                  name="Mon Tableau de Bord"
+                  parent="menu_invoice_qr_scanner_root"
+                  action="action_verificateur_dashboard"
+                  sequence="2"
+                  groups="group_invoice_scanner_verificateur"/>
+
+        <!-- Menu Tableau de bord Traiteur -->
+        <menuitem id="menu_traiteur_dashboard"
+                  name="Mon Tableau de Bord"
+                  parent="menu_invoice_qr_scanner_root"
+                  action="action_traiteur_dashboard"
+                  sequence="3"
+                  groups="group_invoice_scanner_traiteur"/>
+
+        <!-- ============================================================ -->
+        <!-- SOUS-MENUS SCANS -->
+        <!-- ============================================================ -->
 
         <!-- Sous-menu Scans -->
         <menuitem id="menu_invoice_qr_scanner_scans"
@@ -51,6 +89,35 @@
                   action="action_invoice_scan_record_done"
                   sequence="20"/>
 
+        <!-- Action Scans traités -->
+        <record id="action_invoice_scan_record_processed" model="ir.actions.act_window">
+            <field name="name">Factures traitées</field>
+            <field name="res_model">invoice.scan.record</field>
+            <field name="view_mode">tree,kanban,form</field>
+            <field name="domain">[('state', '=', 'processed')]</field>
+            <field name="context">{}</field>
+        </record>
+        <menuitem id="menu_invoice_scan_record_processed"
+                  name="Factures traitées"
+                  parent="menu_invoice_qr_scanner_scans"
+                  action="action_invoice_scan_record_processed"
+                  sequence="25"/>
+
+        <!-- Action En attente de traitement (pour Traiteur) -->
+        <record id="action_invoice_scan_record_pending" model="ir.actions.act_window">
+            <field name="name">En attente de traitement</field>
+            <field name="res_model">invoice.scan.record</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('state', '=', 'done'), ('processed_by', '=', False)]</field>
+            <field name="context">{}</field>
+        </record>
+        <menuitem id="menu_invoice_scan_record_pending"
+                  name="En attente de traitement"
+                  parent="menu_invoice_qr_scanner_scans"
+                  action="action_invoice_scan_record_pending"
+                  sequence="26"
+                  groups="group_invoice_scanner_traiteur"/>
+
         <!-- Action Erreurs -->
         <record id="action_invoice_scan_record_errors" model="ir.actions.act_window">
             <field name="name">Erreurs</field>
@@ -64,6 +131,10 @@
                   parent="menu_invoice_qr_scanner_scans"
                   action="action_invoice_scan_record_errors"
                   sequence="30"/>
+
+        <!-- ============================================================ -->
+        <!-- CONFIGURATION -->
+        <!-- ============================================================ -->
 
         <!-- Sous-menu Configuration -->
         <menuitem id="menu_invoice_qr_scanner_config"

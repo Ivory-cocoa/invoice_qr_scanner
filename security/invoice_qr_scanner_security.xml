@@ -9,19 +9,35 @@
             <field name="sequence">50</field>
         </record>
 
-        <!-- Groupe Utilisateur -->
+        <!-- Groupe Utilisateur (base - conservé pour compatibilité) -->
         <record id="group_invoice_scanner_user" model="res.groups">
             <field name="name">Utilisateur Scanner</field>
             <field name="category_id" ref="module_category_invoice_qr_scanner"/>
             <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
-            <field name="comment">Peut scanner des QR-codes et créer des factures fournisseur</field>
+            <field name="comment">Groupe de base pour accéder au module Scanner QR Factures</field>
+        </record>
+
+        <!-- Groupe Vérificateur : scanne les QR, vérifie les doublons, crée les factures -->
+        <record id="group_invoice_scanner_verificateur" model="res.groups">
+            <field name="name">Vérificateur</field>
+            <field name="category_id" ref="module_category_invoice_qr_scanner"/>
+            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_user'))]"/>
+            <field name="comment">Peut scanner des QR-codes, vérifier les doublons et créer des factures fournisseur</field>
+        </record>
+
+        <!-- Groupe Traiteur : scanne les QR existants pour les traiter -->
+        <record id="group_invoice_scanner_traiteur" model="res.groups">
+            <field name="name">Traiteur</field>
+            <field name="category_id" ref="module_category_invoice_qr_scanner"/>
+            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_user'))]"/>
+            <field name="comment">Peut scanner des QR-codes de factures existantes pour les marquer comme traitées</field>
         </record>
 
         <!-- Groupe Manager -->
         <record id="group_invoice_scanner_manager" model="res.groups">
             <field name="name">Responsable Scanner</field>
             <field name="category_id" ref="module_category_invoice_qr_scanner"/>
-            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_user'))]"/>
+            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_verificateur')), (4, ref('group_invoice_scanner_traiteur'))]"/>
             <field name="comment">Accès complet : configuration, historique complet, suppression</field>
         </record>
 
@@ -33,12 +49,20 @@
             <field name="groups" eval="[(4, ref('base.group_user'))]"/>
         </record>
 
-        <!-- Règle : Utilisateurs voient leurs propres scans -->
-        <record id="rule_invoice_scan_record_user" model="ir.rule">
-            <field name="name">Invoice Scan Record: Own records</field>
+        <!-- Règle : Vérificateurs voient leurs propres scans -->
+        <record id="rule_invoice_scan_record_verificateur" model="ir.rule">
+            <field name="name">Invoice Scan Record: Own records (Vérificateur)</field>
             <field name="model_id" ref="model_invoice_scan_record"/>
             <field name="domain_force">[('scanned_by', '=', user.id)]</field>
-            <field name="groups" eval="[(4, ref('group_invoice_scanner_user'))]"/>
+            <field name="groups" eval="[(4, ref('group_invoice_scanner_verificateur'))]"/>
+        </record>
+
+        <!-- Règle : Traiteurs voient leurs propres traitements et les scans non traités disponibles -->
+        <record id="rule_invoice_scan_record_traiteur" model="ir.rule">
+            <field name="name">Invoice Scan Record: Own processed + unprocessed done (Traiteur)</field>
+            <field name="model_id" ref="model_invoice_scan_record"/>
+            <field name="domain_force">['|', ('processed_by', '=', user.id), '&amp;', ('state', '=', 'done'), ('processed_by', '=', False)]</field>
+            <field name="groups" eval="[(4, ref('group_invoice_scanner_traiteur'))]"/>
         </record>
 
         <!-- Règle : Managers voient tous les scans -->

@@ -1082,3 +1082,305 @@ class InvoiceScanRecord(models.Model):
                 'top_suppliers': [],
                 'chart_data': {'labels': [], 'scans': [], 'verified': []},
             }
+
+    @api.model
+    def get_verificateur_dashboard_data(self, period='month'):
+        """Récupérer les données pour le tableau de bord du Vérificateur.
+        
+        Le vérificateur voit ses propres scans, ses doublons détectés et ses factures créées.
+        
+        Args:
+            period: Période d'analyse ('day', 'week', 'month', 'year')
+            
+        Returns:
+            dict: Données du dashboard vérificateur
+        """
+        from datetime import datetime, timedelta
+        
+        try:
+            company_id = self.env.company.id
+            user_id = self.env.user.id
+            today = fields.Date.today()
+            
+            if period not in ('day', 'week', 'month', 'year'):
+                period = 'month'
+            
+            if period == 'day':
+                date_from = today
+            elif period == 'week':
+                date_from = today - timedelta(days=7)
+            elif period == 'month':
+                date_from = today - timedelta(days=30)
+            else:
+                date_from = today - timedelta(days=365)
+            
+            base_domain = [('company_id', '=', company_id), ('scanned_by', '=', user_id)]
+            date_from_dt = datetime.combine(date_from, datetime.min.time())
+            period_domain = base_domain + [('scan_date', '>=', fields.Datetime.to_string(date_from_dt))]
+            
+            # Statistiques période
+            total_scans_period = self.search_count(period_domain)
+            successful_scans = self.search_count(period_domain + [('state', 'in', ['done', 'processed'])])
+            error_scans = self.search_count(period_domain + [('state', '=', 'error')])
+            
+            # Doublons détectés par ce vérificateur
+            records_with_dup = self.search(period_domain + [('duplicate_count', '>', 0)])
+            duplicate_attempts = sum(r.duplicate_count for r in records_with_dup)
+            
+            # Doublons signalés par d'autres (ce vérificateur a scanné l'original)
+            last_dup_by_others = self.search_count(period_domain + [
+                ('last_duplicate_user_id', '!=', user_id),
+                ('duplicate_count', '>', 0)
+            ])
+            
+            total_scans = successful_scans + duplicate_attempts + error_scans
+            
+            # Montant total
+            successful_records = self.search(period_domain + [('state', 'in', ['done', 'processed'])])
+            total_amount = sum(r.amount_ttc for r in successful_records)
+            
+            # Stats globales (all-time)
+            all_time_successful = self.search_count(base_domain + [('state', 'in', ['done', 'processed'])])
+            all_time_error = self.search_count(base_domain + [('state', '=', 'error')])
+            all_time_dup_records = self.search(base_domain + [('duplicate_count', '>', 0)])
+            all_time_duplicates = sum(r.duplicate_count for r in all_time_dup_records)
+            all_time_total = all_time_successful + all_time_duplicates + all_time_error
+            all_time_records = self.search(base_domain + [('state', 'in', ['done', 'processed'])])
+            all_time_amount = sum(r.amount_ttc for r in all_time_records)
+            
+            # Scans récents (5 derniers)
+            recent_scans = self.search(base_domain, limit=5, order='create_date desc')
+            recent_scans_data = [{
+                'id': r.id,
+                'reference': r.reference or '',
+                'nom_fournisseur': r.supplier_name or 'N/A',
+                'montant_ttc': r.amount_ttc or 0,
+                'state': r.state,
+                'duplicate_count': r.duplicate_count,
+                'scan_date': r.scan_date.isoformat() if r.scan_date else None,
+            } for r in recent_scans]
+            
+            # Graphique évolution
+            chart_labels = []
+            chart_scans = []
+            chart_duplicates = []
+            
+            if period in ('week', 'month'):
+                days = 7 if period == 'week' else 30
+                for i in range(days, -1, -1):
+                    day = today - timedelta(days=i)
+                    day_start = datetime.combine(day, datetime.min.time())
+                    day_end = datetime.combine(day, datetime.max.time())
+                    day_domain = base_domain + [
+                        ('scan_date', '>=', fields.Datetime.to_string(day_start)),
+                        ('scan_date', '<=', fields.Datetime.to_string(day_end)),
+                    ]
+                    day_total = self.search_count(day_domain + [('state', 'in', ['done', 'processed'])])
+                    day_dup_records = self.search(day_domain + [('duplicate_count', '>', 0)])
+                    day_dup = sum(r.duplicate_count for r in day_dup_records)
+                    chart_labels.append(day.strftime('%d/%m'))
+                    chart_scans.append(day_total)
+                    chart_duplicates.append(day_dup)
+            
+            # Top fournisseurs scannés par ce vérificateur
+            top_suppliers = []
+            try:
+                self.env.cr.execute("""
+                    SELECT supplier_name, COUNT(*) as scan_count, SUM(amount_ttc) as total_amount
+                    FROM invoice_scan_record
+                    WHERE company_id = %s AND scanned_by = %s
+                    AND supplier_name IS NOT NULL AND supplier_name != ''
+                    AND scan_date >= %s
+                    GROUP BY supplier_name ORDER BY scan_count DESC LIMIT 5
+                """, (company_id, user_id, fields.Datetime.to_string(date_from_dt)))
+                top_suppliers = [{
+                    'name': row[0] or 'Non défini',
+                    'count': row[1],
+                    'amount': row[2] or 0,
+                } for row in self.env.cr.fetchall()]
+            except Exception as e:
+                _logger.warning(f"Erreur top suppliers vérificateur: {e}")
+            
+            return {
+                'stats': {
+                    'total_scans': total_scans,
+                    'successful_scans': successful_scans,
+                    'duplicate_attempts': duplicate_attempts,
+                    'duplicates_by_others': last_dup_by_others,
+                    'error_scans': error_scans,
+                    'total_amount': total_amount,
+                },
+                'all_time_stats': {
+                    'total_scans': all_time_total,
+                    'successful_scans': all_time_successful,
+                    'duplicate_attempts': all_time_duplicates,
+                    'error_scans': all_time_error,
+                    'total_amount': all_time_amount,
+                },
+                'recent_scans': recent_scans_data,
+                'top_suppliers': top_suppliers,
+                'chart_data': {
+                    'labels': chart_labels,
+                    'scans': chart_scans,
+                    'duplicates': chart_duplicates,
+                },
+            }
+        except Exception as e:
+            _logger.error(f"Erreur get_verificateur_dashboard_data: {e}")
+            empty = {'total_scans': 0, 'successful_scans': 0, 'duplicate_attempts': 0,
+                     'duplicates_by_others': 0, 'error_scans': 0, 'total_amount': 0}
+            return {'stats': empty, 'all_time_stats': empty, 'recent_scans': [],
+                    'top_suppliers': [], 'chart_data': {'labels': [], 'scans': [], 'duplicates': []}}
+
+    @api.model
+    def get_traiteur_dashboard_data(self, period='month'):
+        """Récupérer les données pour le tableau de bord du Traiteur.
+        
+        Le traiteur voit les factures qu'il a traitées et celles en attente de traitement.
+        
+        Args:
+            period: Période d'analyse ('day', 'week', 'month', 'year')
+            
+        Returns:
+            dict: Données du dashboard traiteur
+        """
+        from datetime import datetime, timedelta
+        
+        try:
+            company_id = self.env.company.id
+            user_id = self.env.user.id
+            today = fields.Date.today()
+            
+            if period not in ('day', 'week', 'month', 'year'):
+                period = 'month'
+            
+            if period == 'day':
+                date_from = today
+            elif period == 'week':
+                date_from = today - timedelta(days=7)
+            elif period == 'month':
+                date_from = today - timedelta(days=30)
+            else:
+                date_from = today - timedelta(days=365)
+            
+            date_from_dt = datetime.combine(date_from, datetime.min.time())
+            
+            # Factures en attente de traitement (état 'done', non encore traitées)
+            pending_domain = [
+                ('company_id', '=', company_id),
+                ('state', '=', 'done'),
+                ('processed_by', '=', False),
+            ]
+            pending_count = self.search_count(pending_domain)
+            pending_records = self.search(pending_domain)
+            pending_amount = sum(r.amount_ttc for r in pending_records)
+            
+            # Factures traitées par ce traiteur (période)
+            my_processed_domain = [
+                ('company_id', '=', company_id),
+                ('processed_by', '=', user_id),
+                ('state', '=', 'processed'),
+                ('processed_date', '>=', fields.Datetime.to_string(date_from_dt)),
+            ]
+            processed_period = self.search_count(my_processed_domain)
+            processed_records_period = self.search(my_processed_domain)
+            processed_amount_period = sum(r.amount_ttc for r in processed_records_period)
+            
+            # Factures traitées par ce traiteur (all-time)
+            my_processed_all = [
+                ('company_id', '=', company_id),
+                ('processed_by', '=', user_id),
+                ('state', '=', 'processed'),
+            ]
+            processed_all_time = self.search_count(my_processed_all)
+            processed_all_records = self.search(my_processed_all)
+            processed_all_amount = sum(r.amount_ttc for r in processed_all_records)
+            
+            # Total traités par tous les traiteurs (période) 
+            all_processed_domain = [
+                ('company_id', '=', company_id),
+                ('state', '=', 'processed'),
+                ('processed_date', '>=', fields.Datetime.to_string(date_from_dt)),
+            ]
+            all_processed_period = self.search_count(all_processed_domain)
+            
+            # Taux de traitement
+            total_eligible = pending_count + processed_period
+            processing_rate = round((processed_period / total_eligible * 100) if total_eligible > 0 else 0, 1)
+            
+            # Scans récemment traités par moi (5 derniers)
+            recent_processed = self.search(my_processed_all, limit=5, order='processed_date desc')
+            recent_processed_data = [{
+                'id': r.id,
+                'reference': r.reference or '',
+                'nom_fournisseur': r.supplier_name or 'N/A',
+                'montant_ttc': r.amount_ttc or 0,
+                'state': r.state,
+                'processed_date': r.processed_date.isoformat() if r.processed_date else None,
+                'scanned_by_name': r.scanned_by.name if r.scanned_by else '',
+            } for r in recent_processed]
+            
+            # Scans en attente (5 derniers)
+            pending_scans = self.search(pending_domain, limit=5, order='scan_date desc')
+            pending_scans_data = [{
+                'id': r.id,
+                'reference': r.reference or '',
+                'nom_fournisseur': r.supplier_name or 'N/A',
+                'montant_ttc': r.amount_ttc or 0,
+                'state': r.state,
+                'scan_date': r.scan_date.isoformat() if r.scan_date else None,
+                'scanned_by_name': r.scanned_by.name if r.scanned_by else '',
+            } for r in pending_scans]    
+            
+            # Graphique évolution traitement
+            chart_labels = []
+            chart_processed = []
+            chart_pending = []
+            
+            if period in ('week', 'month'):
+                days = 7 if period == 'week' else 30
+                for i in range(days, -1, -1):
+                    day = today - timedelta(days=i)
+                    day_start = datetime.combine(day, datetime.min.time())
+                    day_end = datetime.combine(day, datetime.max.time())
+                    
+                    day_processed = self.search_count([
+                        ('company_id', '=', company_id),
+                        ('processed_by', '=', user_id),
+                        ('state', '=', 'processed'),
+                        ('processed_date', '>=', fields.Datetime.to_string(day_start)),
+                        ('processed_date', '<=', fields.Datetime.to_string(day_end)),
+                    ])
+                    
+                    chart_labels.append(day.strftime('%d/%m'))
+                    chart_processed.append(day_processed)
+            
+            return {
+                'stats': {
+                    'pending_count': pending_count,
+                    'pending_amount': pending_amount,
+                    'processed_period': processed_period,
+                    'processed_amount_period': processed_amount_period,
+                    'all_processed_period': all_processed_period,
+                    'processing_rate': processing_rate,
+                },
+                'all_time_stats': {
+                    'processed_all_time': processed_all_time,
+                    'processed_all_amount': processed_all_amount,
+                },
+                'recent_processed': recent_processed_data,
+                'pending_scans': pending_scans_data,
+                'chart_data': {
+                    'labels': chart_labels,
+                    'processed': chart_processed,
+                },
+            }
+        except Exception as e:
+            _logger.error(f"Erreur get_traiteur_dashboard_data: {e}")
+            return {
+                'stats': {'pending_count': 0, 'pending_amount': 0, 'processed_period': 0,
+                          'processed_amount_period': 0, 'all_processed_period': 0, 'processing_rate': 0},
+                'all_time_stats': {'processed_all_time': 0, 'processed_all_amount': 0},
+                'recent_processed': [], 'pending_scans': [],
+                'chart_data': {'labels': [], 'processed': []},
+            }

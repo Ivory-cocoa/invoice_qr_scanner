@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="invoice_qr_scanner.TraiteurDashboard" owl="1">
+        <div class="scanner-dash">
+            <!-- Header -->
+            <div class="scanner-dash__header">
+                <div class="scanner-dash__title">
+                    <i class="fa fa-tasks"/>
+                    <span>Tableau de Bord - Traiteur</span>
+                </div>
+                <div class="scanner-dash__controls">
+                    <select class="scanner-dash__select" t-on-change="onPeriodChange">
+                        <option value="day" t-att-selected="state.period === 'day'">Aujourd'hui</option>
+                        <option value="week" t-att-selected="state.period === 'week'">Cette semaine</option>
+                        <option value="month" t-att-selected="state.period === 'month'">Ce mois</option>
+                        <option value="year" t-att-selected="state.period === 'year'">Cette année</option>
+                    </select>
+                    <button class="scanner-dash__btn" t-on-click="loadDashboardData" t-att-disabled="state.loading">
+                        <i t-attf-class="fa fa-refresh #{state.loading ? 'fa-spin' : ''}"/>
+                    </button>
+                </div>
+            </div>
+
+            <div class="scanner-dash__body">
+                <!-- KPIs -->
+                <div class="scanner-dash__kpis">
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewPendingScans" title="Voir les factures en attente">
+                        <div class="kpi-card__icon kpi-card__icon--warning">
+                            <i class="fa fa-hourglass-half"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.pending_count)"/>
+                            <span class="kpi-card__label">En attente</span>
+                            <span class="kpi-card__sub" t-esc="formatCurrency(state.stats.pending_amount)"/>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewMyProcessed" title="Voir mes factures traitées">
+                        <div class="kpi-card__icon kpi-card__icon--success">
+                            <i class="fa fa-check-square-o"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.processed_period)"/>
+                            <span class="kpi-card__label">Mes traitées (période)</span>
+                            <span class="kpi-card__sub" t-esc="formatCurrency(state.stats.processed_amount_period)"/>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewAllProcessed" title="Voir toutes les factures traitées">
+                        <div class="kpi-card__icon kpi-card__icon--primary">
+                            <i class="fa fa-users"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.all_processed_period)"/>
+                            <span class="kpi-card__label">Traitées (tous)</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-card__icon kpi-card__icon--processed">
+                            <i class="fa fa-tachometer"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value"><t t-esc="state.stats.processing_rate"/>%</span>
+                            <span class="kpi-card__label">Taux de traitement</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Totaux globaux -->
+                <div class="scanner-dash__alltime">
+                    <div class="scanner-dash__alltime-header">
+                        <i class="fa fa-database"/> Mes totaux globaux
+                    </div>
+                    <div class="scanner-dash__alltime-kpis">
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.processed_all_time)"/>
+                            <span class="alltime-kpi__label">Total traitées</span>
+                        </div>
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.processed_all_amount)"/>
+                            <span class="alltime-kpi__label">Montant total traité</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphique + Factures en attente -->
+                <div class="scanner-dash__charts">
+                    <div class="scanner-dash__chart-card">
+                        <div class="scanner-dash__chart-title">
+                            <i class="fa fa-bar-chart"/> Évolution des traitements
+                        </div>
+                        <div class="scanner-dash__chart-container">
+                            <canvas id="traiteurEvolutionChart"/>
+                        </div>
+                    </div>
+                    <div class="scanner-dash__chart-card">
+                        <div class="scanner-dash__chart-title">
+                            <i class="fa fa-hourglass-start"/> Factures en attente de traitement
+                        </div>
+                        <div class="scanner-dash__table-container">
+                            <table class="scanner-dash__table">
+                                <thead>
+                                    <tr>
+                                        <th>Réf.</th>
+                                        <th>Fournisseur</th>
+                                        <th>Montant</th>
+                                        <th>Scanné par</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="state.pending_scans" t-as="scan" t-key="scan.id">
+                                        <tr>
+                                            <td t-esc="scan.reference"/>
+                                            <td t-esc="scan.nom_fournisseur"/>
+                                            <td t-esc="formatCurrency(scan.montant_ttc)"/>
+                                            <td t-esc="scan.scanned_by_name"/>
+                                        </tr>
+                                    </t>
+                                    <t t-if="!state.pending_scans.length">
+                                        <tr><td colspan="4" class="text-center text-muted">Aucune facture en attente</td></tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Derniers traitements -->
+                <div class="scanner-dash__recent">
+                    <div class="scanner-dash__recent-title">
+                        <i class="fa fa-clock-o"/> Mes derniers traitements
+                    </div>
+                    <div class="scanner-dash__table-container">
+                        <table class="scanner-dash__table">
+                            <thead>
+                                <tr>
+                                    <th>Référence</th>
+                                    <th>Fournisseur</th>
+                                    <th>Montant TTC</th>
+                                    <th>Traité le</th>
+                                    <th>Scanné par</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.recent_processed" t-as="scan" t-key="scan.id">
+                                    <tr>
+                                        <td t-esc="scan.reference"/>
+                                        <td t-esc="scan.nom_fournisseur"/>
+                                        <td t-esc="formatCurrency(scan.montant_ttc)"/>
+                                        <td t-esc="formatDate(scan.processed_date)"/>
+                                        <td t-esc="scan.scanned_by_name"/>
+                                    </tr>
+                                </t>
+                                <t t-if="!state.recent_processed.length">
+                                    <tr><td colspan="5" class="text-center text-muted">Aucun traitement récent</td></tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

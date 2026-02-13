@@ -266,10 +266,26 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not user.active:
             return api_error('USER_INACTIVE', 'Compte désactivé', status=403)
         
-        # Vérifier le droit d'accès au module
-        has_access = user.has_group('invoice_qr_scanner.group_invoice_scanner_user')
+        # Vérifier le droit d'accès au module et déterminer le rôle
+        is_manager = user.has_group('invoice_qr_scanner.group_invoice_scanner_manager')
+        is_verificateur = user.has_group('invoice_qr_scanner.group_invoice_scanner_verificateur')
+        is_traiteur = user.has_group('invoice_qr_scanner.group_invoice_scanner_traiteur')
+        has_access = is_manager or is_verificateur or is_traiteur or user.has_group('invoice_qr_scanner.group_invoice_scanner_user')
+        
         if not has_access:
             return api_error('ACCESS_DENIED', 'Accès non autorisé au scanner de factures', status=403)
+        
+        # Déterminer le rôle principal
+        if is_manager:
+            user_role = 'manager'
+        elif is_verificateur and is_traiteur:
+            user_role = 'manager'  # Les deux rôles = manager
+        elif is_verificateur:
+            user_role = 'verificateur'
+        elif is_traiteur:
+            user_role = 'traiteur'
+        else:
+            user_role = 'user'
         
         # Générer le token
         token = self._generate_api_token()
@@ -293,6 +309,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'name': user.name,
                 'email': user.email or '',
                 'login': user.login,
+                'role': user_role,
             }
         })
 
@@ -483,6 +500,180 @@ class InvoiceScannerMobileAPI(http.Controller):
         })
 
     # ==================== ENDPOINTS TRAITEMENT (MARQUAGE TRAITÉ) ====================
+
+    @http.route('/api/v1/invoice-scanner/scan-to-process', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def scan_to_process(self, user=None, **kw):
+        """Scanner un QR-code pour retrouver et traiter une facture existante (profil Traiteur).
+        
+        Body JSON:
+        - qr_url: URL extraite du QR-code
+        
+        Returns:
+        - record: Enregistrement trouvé avec ses détails
+        - already_processed: Si la facture est déjà traitée
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+            
+        data = get_json_body()
+        qr_url = data.get('qr_url', '').strip()
+        
+        if not qr_url:
+            return api_error('VALIDATION_ERROR', 'URL du QR-code requise', status=400)
+        
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        qr_uuid = ScanRecord.extract_uuid_from_url(qr_url)
+        
+        if not qr_uuid:
+            return api_error('INVALID_URL', 'URL invalide - UUID non trouvé', status=400)
+        
+        # Chercher l'enregistrement existant
+        existing = ScanRecord.search([
+            ('qr_uuid', '=', qr_uuid),
+            ('state', 'in', ['done', 'processed']),
+            ('company_id', '=', request.env.company.id)
+        ], limit=1)
+        
+        if not existing:
+            return api_error(
+                'NOT_FOUND',
+                'Aucune facture trouvée pour ce QR-code. Le vérificateur doit d\'abord scanner cette facture.',
+                status=404
+            )
+        
+        if existing.state == 'processed':
+            return api_response({
+                'already_processed': True,
+                'message': f'Cette facture a déjà été traitée par {existing.processed_by.name or "un utilisateur"} le {existing.processed_date.strftime("%d/%m/%Y à %H:%M") if existing.processed_date else "N/A"}',
+                'record': self._format_scan_record(existing),
+            })
+        
+        # Marquer comme traité
+        existing.write({
+            'state': 'processed',
+            'processed_by': user.id,
+            'processed_date': fields.Datetime.now(),
+        })
+        
+        existing.message_post(
+            body=f"Facture traitée par {user.name} (profil Traiteur, depuis l'application mobile)",
+            message_type='notification'
+        )
+        
+        return api_response({
+            'already_processed': False,
+            'message': 'Facture marquée comme traitée avec succès',
+            'record': self._format_scan_record(existing),
+        })
+
+    @http.route('/api/v1/invoice-scanner/traiteur/pending', type='http', auth='none',
+                methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def get_pending_for_processing(self, user=None, **kw):
+        """Obtenir la liste des factures en attente de traitement (profil Traiteur).
+        
+        Query params ou Body JSON:
+        - page: Numéro de page (défaut: 1)
+        - limit: Nombre par page (défaut: 20, max: 100)
+        
+        Returns:
+        - records: Liste des scans en attente de traitement
+        - pagination: Informations de pagination
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+            
+        if request.httprequest.method == 'POST':
+            data = get_json_body()
+        else:
+            data = dict(request.httprequest.args)
+        
+        page = max(1, int(data.get('page', 1)))
+        limit = min(100, max(1, int(data.get('limit', 20))))
+        
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        
+        domain = [
+            ('company_id', '=', request.env.company.id),
+            ('state', '=', 'done'),
+            ('processed_by', '=', False),
+        ]
+        
+        total_count = ScanRecord.search_count(domain)
+        offset = (page - 1) * limit
+        records = ScanRecord.search(domain, limit=limit, offset=offset, order='scan_date desc')
+        
+        return api_response({
+            'records': [self._format_scan_record(r) for r in records],
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total_count': total_count,
+                'total_pages': (total_count + limit - 1) // limit,
+                'has_next': offset + limit < total_count,
+                'has_previous': page > 1,
+            }
+        })
+
+    @http.route('/api/v1/invoice-scanner/traiteur/stats', type='http', auth='none',
+                methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def get_traiteur_stats(self, user=None, **kw):
+        """Obtenir les statistiques du profil Traiteur."""
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+            
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        company_id = request.env.company.id
+        
+        # Factures en attente
+        pending = ScanRecord.search_count([
+            ('company_id', '=', company_id),
+            ('state', '=', 'done'),
+            ('processed_by', '=', False),
+        ])
+        
+        # Factures traitées par moi
+        my_processed = ScanRecord.search_count([
+            ('company_id', '=', company_id),
+            ('state', '=', 'processed'),
+            ('processed_by', '=', user.id),
+        ])
+        
+        # Total traitées (tous traiteurs)
+        all_processed = ScanRecord.search_count([
+            ('company_id', '=', company_id),
+            ('state', '=', 'processed'),
+        ])
+        
+        # Montants
+        pending_records = ScanRecord.search([
+            ('company_id', '=', company_id),
+            ('state', '=', 'done'),
+            ('processed_by', '=', False),
+        ])
+        pending_amount = sum(r.amount_ttc for r in pending_records)
+        
+        my_processed_records = ScanRecord.search([
+            ('company_id', '=', company_id),
+            ('state', '=', 'processed'),
+            ('processed_by', '=', user.id),
+        ])
+        processed_amount = sum(r.amount_ttc for r in my_processed_records)
+        
+        return api_response({
+            'pending_count': pending,
+            'pending_amount': pending_amount,
+            'my_processed_count': my_processed,
+            'my_processed_amount': processed_amount,
+            'all_processed_count': all_processed,
+            'currency': 'XOF',
+        })
 
     @http.route('/api/v1/invoice-scanner/mark-processed/<int:record_id>', type='http', auth='none',
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')

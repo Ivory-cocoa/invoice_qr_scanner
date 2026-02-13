@@ -1,5 +1,6 @@
 /// Main entry point for Facture Scanner App
 /// Application de scan de QR-codes pour créer des factures fournisseur
+/// Supporte les profils: Vérificateur, Traiteur, Manager
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ import 'core/theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/traiteur_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,9 +52,31 @@ class FactureScannerApp extends StatelessWidget {
         routes: {
           '/': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
-          '/home': (context) => const HomeScreen(),
+          '/home': (context) => const RoleBasedHomeScreen(),
         },
       ),
     );
+  }
+}
+
+/// Routes to the appropriate home screen based on user role
+class RoleBasedHomeScreen extends StatelessWidget {
+  const RoleBasedHomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final role = auth.user?.role ?? 'user';
+
+    switch (role) {
+      case 'traiteur':
+        return const TraiteurHomeScreen();
+      case 'verificateur':
+      case 'manager':
+      default:
+        // Manager and Vérificateur use the existing home screen
+        // (Manager has all capabilities, Vérificateur = default scanner flow)
+        return const HomeScreen();
+    }
   }
 }

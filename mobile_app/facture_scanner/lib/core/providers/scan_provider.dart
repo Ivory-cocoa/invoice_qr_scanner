@@ -47,6 +47,8 @@ class ScanProvider extends ChangeNotifier {
     final baseStats = _stats ?? {
       'total_scans': 0,
       'successful_scans': 0,
+      'processed_scans': 0,
+      'unprocessed_scans': 0,
       'duplicate_attempts': 0,
       'records_with_duplicates': 0,
       'error_scans': 0,
@@ -457,6 +459,107 @@ class ScanProvider extends ChangeNotifier {
     final index = _history.indexWhere((r) => r.id == updatedRecord.id);
     if (index != -1) {
       _history[index] = updatedRecord;
+    }
+  }
+
+  // ============ Traiteur-specific methods ============
+  
+  /// Traiteur stats
+  Map<String, dynamic>? _traiteurStats;
+  Map<String, dynamic>? get traiteurStats => _traiteurStats;
+  
+  /// Pending invoices for Traiteur
+  List<ScanRecord> _pendingInvoices = [];
+  List<ScanRecord> get pendingInvoices => _pendingInvoices;
+  bool _isLoadingPending = false;
+  bool get isLoadingPending => _isLoadingPending;
+
+  /// Process QR code as Traiteur (find existing invoice → mark as processed)
+  Future<void> processQrCodeAsTraiteur(String qrContent) async {
+    _state = ScanState.processing;
+    _message = null;
+    _lastScanResult = null;
+    notifyListeners();
+
+    // Validate URL
+    if (!isValidDgiUrl(qrContent)) {
+      _state = ScanState.error;
+      _message = 'QR-code non valide. Seules les factures DGI sont supportées.';
+      notifyListeners();
+      return;
+    }
+
+    try {
+      final response = await _api.scanToProcess(qrContent);
+      
+      if (response.success && response.data != null) {
+        _state = ScanState.success;
+        _message = response.data!['message'] ?? 'Facture traitée avec succès';
+        
+        if (response.data!.containsKey('record')) {
+          final recordData = response.data!['record'];
+          _lastScanResult = ScanRecord.fromJson(recordData);
+        }
+        
+        // Refresh data
+        await loadTraiteurPending();
+        await loadTraiteurStats();
+      } else {
+        if (response.errorCode == 'AUTH_INVALID' || 
+            response.errorCode == 'AUTH_REQUIRED' ||
+            response.errorCode == 'TOKEN_EXPIRED') {
+          _state = ScanState.error;
+          _message = 'Session expirée. Veuillez vous reconnecter.';
+          _auth?.handleSessionExpired();
+        } else if (response.errorCode == 'ALREADY_PROCESSED') {
+          _state = ScanState.duplicate;
+          _message = response.errorMessage ?? 'Cette facture a déjà été traitée';
+          if (response.data != null && response.data!.containsKey('record')) {
+            _lastScanResult = ScanRecord.fromJson(response.data!['record']);
+          }
+        } else {
+          _state = ScanState.error;
+          _message = response.errorMessage ?? 'Erreur lors du traitement';
+        }
+      }
+    } catch (e) {
+      _state = ScanState.error;
+      _message = 'Erreur: ${e.toString()}';
+    }
+    
+    notifyListeners();
+  }
+
+  /// Load pending invoices for Traiteur
+  Future<void> loadTraiteurPending({int page = 1, int limit = 20}) async {
+    _isLoadingPending = true;
+    notifyListeners();
+    
+    try {
+      final response = await _api.getTraiteurPending(page: page, limit: limit);
+      if (response.success && response.data != null) {
+        _pendingInvoices = (response.data!['records'] as List)
+            .map((json) => ScanRecord.fromJson(json))
+            .toList();
+      }
+    } catch (e) {
+      // Keep existing data on error
+    }
+    
+    _isLoadingPending = false;
+    notifyListeners();
+  }
+
+  /// Load Traiteur statistics
+  Future<void> loadTraiteurStats() async {
+    try {
+      final response = await _api.getTraiteurStats();
+      if (response.success && response.data != null) {
+        _traiteurStats = response.data;
+        notifyListeners();
+      }
+    } catch (e) {
+      // Ignore stats errors
     }
   }
 }

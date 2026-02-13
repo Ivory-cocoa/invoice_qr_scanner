@@ -1,5 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_invoice_scan_record_user,invoice.scan.record.user,model_invoice_scan_record,group_invoice_scanner_user,1,1,1,0
+access_invoice_scan_record_user,invoice.scan.record.user,model_invoice_scan_record,group_invoice_scanner_user,1,0,0,0
+access_invoice_scan_record_verificateur,invoice.scan.record.verificateur,model_invoice_scan_record,group_invoice_scanner_verificateur,1,1,1,0
+access_invoice_scan_record_traiteur,invoice.scan.record.traiteur,model_invoice_scan_record,group_invoice_scanner_traiteur,1,1,0,0
 access_invoice_scan_record_manager,invoice.scan.record.manager,model_invoice_scan_record,group_invoice_scanner_manager,1,1,1,1
 access_invoice_scanner_api_token_user,invoice.scanner.api.token.user,model_invoice_scanner_api_token,group_invoice_scanner_user,1,0,0,0
 access_invoice_scanner_api_token_manager,invoice.scanner.api.token.manager,model_invoice_scanner_api_token,group_invoice_scanner_manager,1,1,1,1

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="invoice_qr_scanner.VerificateurDashboard" owl="1">
+        <div class="scanner-dash">
+            <!-- Header -->
+            <div class="scanner-dash__header">
+                <div class="scanner-dash__title">
+                    <i class="fa fa-shield"/>
+                    <span>Tableau de Bord - Vérificateur</span>
+                </div>
+                <div class="scanner-dash__controls">
+                    <select class="scanner-dash__select" t-on-change="onPeriodChange">
+                        <option value="day" t-att-selected="state.period === 'day'">Aujourd'hui</option>
+                        <option value="week" t-att-selected="state.period === 'week'">Cette semaine</option>
+                        <option value="month" t-att-selected="state.period === 'month'">Ce mois</option>
+                        <option value="year" t-att-selected="state.period === 'year'">Cette année</option>
+                    </select>
+                    <button class="scanner-dash__btn" t-on-click="loadDashboardData" t-att-disabled="state.loading">
+                        <i t-attf-class="fa fa-refresh #{state.loading ? 'fa-spin' : ''}"/>
+                    </button>
+                </div>
+            </div>
+
+            <div class="scanner-dash__body">
+                <!-- KPIs -->
+                <div class="scanner-dash__kpis">
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewMyScans" title="Voir tous mes scans">
+                        <div class="kpi-card__icon kpi-card__icon--primary">
+                            <i class="fa fa-qrcode"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.total_scans)"/>
+                            <span class="kpi-card__label">Total scans</span>
+                            <span class="kpi-card__sub">Réussis + Doublons + Erreurs</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewMySuccessfulScans" title="Voir mes factures créées">
+                        <div class="kpi-card__icon kpi-card__icon--success">
+                            <i class="fa fa-check-circle"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.successful_scans)"/>
+                            <span class="kpi-card__label">Factures créées</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewMyDuplicates" title="Voir mes doublons">
+                        <div class="kpi-card__icon kpi-card__icon--warning">
+                            <i class="fa fa-clone"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.duplicate_attempts)"/>
+                            <span class="kpi-card__label">Doublons détectés</span>
+                            <t t-if="state.stats.duplicates_by_others > 0">
+                                <span class="kpi-card__sub">
+                                    dont <t t-esc="state.stats.duplicates_by_others"/> par d'autres
+                                </span>
+                            </t>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                    <div class="kpi-card kpi-card--clickable" t-on-click="viewMyErrors" title="Voir mes erreurs">
+                        <div class="kpi-card__icon kpi-card__icon--danger">
+                            <i class="fa fa-exclamation-circle"/>
+                        </div>
+                        <div class="kpi-card__data">
+                            <span class="kpi-card__value" t-esc="formatNumber(state.stats.error_scans)"/>
+                            <span class="kpi-card__label">Erreurs</span>
+                        </div>
+                        <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
+                    </div>
+                </div>
+
+                <!-- Montant total -->
+                <div class="scanner-dash__amount">
+                    <span class="scanner-dash__amount-label">Montant total TTC (période)</span>
+                    <span class="scanner-dash__amount-value" t-esc="formatCurrency(state.stats.total_amount)"/>
+                </div>
+
+                <!-- Totaux globaux -->
+                <div class="scanner-dash__alltime">
+                    <div class="scanner-dash__alltime-header">
+                        <i class="fa fa-database"/> Totaux globaux (Mes scans)
+                    </div>
+                    <div class="scanner-dash__alltime-kpis">
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.total_scans)"/>
+                            <span class="alltime-kpi__label">Total</span>
+                        </div>
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.successful_scans)"/>
+                            <span class="alltime-kpi__label">Réussis</span>
+                        </div>
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.duplicate_attempts)"/>
+                            <span class="alltime-kpi__label">Doublons</span>
+                        </div>
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.total_amount)"/>
+                            <span class="alltime-kpi__label">Montant total</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphique + Top fournisseurs -->
+                <div class="scanner-dash__charts">
+                    <div class="scanner-dash__chart-card">
+                        <div class="scanner-dash__chart-title">
+                            <i class="fa fa-bar-chart"/> Évolution des scans
+                        </div>
+                        <div class="scanner-dash__chart-container">
+                            <canvas id="verificateurEvolutionChart"/>
+                        </div>
+                    </div>
+                    <div class="scanner-dash__chart-card">
+                        <div class="scanner-dash__chart-title">
+                            <i class="fa fa-building"/> Top fournisseurs scannés
+                        </div>
+                        <div class="scanner-dash__table-container">
+                            <table class="scanner-dash__table">
+                                <thead>
+                                    <tr>
+                                        <th>Fournisseur</th>
+                                        <th>Scans</th>
+                                        <th>Montant</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="state.top_suppliers" t-as="supplier" t-key="supplier.name">
+                                        <tr>
+                                            <td t-esc="supplier.name"/>
+                                            <td><span class="badge bg-primary" t-esc="supplier.count"/></td>
+                                            <td t-esc="formatCurrency(supplier.amount)"/>
+                                        </tr>
+                                    </t>
+                                    <t t-if="!state.top_suppliers.length">
+                                        <tr><td colspan="3" class="text-center text-muted">Aucune donnée</td></tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scans récents -->
+                <div class="scanner-dash__recent">
+                    <div class="scanner-dash__recent-title">
+                        <i class="fa fa-clock-o"/> Mes scans récents
+                    </div>
+                    <div class="scanner-dash__table-container">
+                        <table class="scanner-dash__table">
+                            <thead>
+                                <tr>
+                                    <th>Référence</th>
+                                    <th>Fournisseur</th>
+                                    <th>Montant TTC</th>
+                                    <th>Doublons</th>
+                                    <th>État</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.recent_scans" t-as="scan" t-key="scan.id">
+                                    <tr>
+                                        <td t-esc="scan.reference"/>
+                                        <td t-esc="scan.nom_fournisseur"/>
+                                        <td t-esc="formatCurrency(scan.montant_ttc)"/>
+                                        <td>
+                                            <span t-attf-class="badge #{scan.duplicate_count > 0 ? 'bg-warning' : 'bg-secondary'}"
+                                                  t-esc="scan.duplicate_count"/>
+                                        </td>
+                                        <td>
+                                            <span t-att-class="getStateClass(scan.state)"
+                                                  t-esc="getStateLabel(scan.state)"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                                <t t-if="!state.recent_scans.length">
+                                    <tr><td colspan="5" class="text-center text-muted">Aucun scan récent</td></tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>
