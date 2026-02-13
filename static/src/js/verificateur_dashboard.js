@@ -12,6 +12,7 @@ export class VerificateurDashboard extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.user = useService("user");
         this.chartRef = useRef("evolutionChart");
         
         this.state = useState({
@@ -160,7 +161,7 @@ export class VerificateurDashboard extends Component {
             name: 'Mes scans',
             res_model: 'invoice.scan.record',
             views: [[false, 'list'], [false, 'form']],
-            domain: [['scanned_by', '=', this.orm.env.uid]],
+            domain: [['scanned_by', '=', this.user.userId]],
         });
     }
 
@@ -170,7 +171,7 @@ export class VerificateurDashboard extends Component {
             name: 'Mes factures créées',
             res_model: 'invoice.scan.record',
             views: [[false, 'list'], [false, 'form']],
-            domain: [['scanned_by', '=', this.orm.env.uid], ['state', 'in', ['done', 'processed']]],
+            domain: [['scanned_by', '=', this.user.userId], ['state', 'in', ['done', 'processed']]],
         });
     }
 
@@ -180,7 +181,7 @@ export class VerificateurDashboard extends Component {
             name: 'Mes doublons détectés',
             res_model: 'invoice.scan.record',
             views: [[false, 'list'], [false, 'form']],
-            domain: [['scanned_by', '=', this.orm.env.uid], ['duplicate_count', '>', 0]],
+            domain: [['scanned_by', '=', this.user.userId], ['duplicate_count', '>', 0]],
         });
     }
 
@@ -190,7 +191,7 @@ export class VerificateurDashboard extends Component {
             name: 'Mes erreurs',
             res_model: 'invoice.scan.record',
             views: [[false, 'list'], [false, 'form']],
-            domain: [['scanned_by', '=', this.orm.env.uid], ['state', '=', 'error']],
+            domain: [['scanned_by', '=', this.user.userId], ['state', '=', 'error']],
         });
     }
 }

@@ -12,6 +12,7 @@ export class TraiteurDashboard extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.user = useService("user");
         this.chartRef = useRef("evolutionChart");
         
         this.state = useState({
@@ -149,7 +150,7 @@ export class TraiteurDashboard extends Component {
             name: 'Mes factures traitées',
             res_model: 'invoice.scan.record',
             views: [[false, 'list'], [false, 'form']],
-            domain: [['state', '=', 'processed'], ['processed_by', '=', this.orm.env.uid]],
+            domain: [['state', '=', 'processed'], ['processed_by', '=', this.user.userId]],
         });
     }
 
