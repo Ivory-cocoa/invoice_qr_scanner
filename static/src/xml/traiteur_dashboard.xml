@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
 
     <t t-name="invoice_qr_scanner.TraiteurDashboard" owl="1">
-        <div class="scanner-dash">
+        <div t-attf-class="scanner-dash #{state.loading ? 'scanner-dash--loading' : ''}">
             <!-- Header -->
             <div class="scanner-dash__header">
                 <div class="scanner-dash__title">
@@ -23,8 +23,8 @@
             </div>
 
             <div class="scanner-dash__body">
-                <!-- KPIs -->
-                <div class="scanner-dash__kpis">
+                <!-- KPIs - 4 colonnes -->
+                <div class="scanner-dash__kpis scanner-dash__kpis--4">
                     <div class="kpi-card kpi-card--clickable" t-on-click="viewPendingScans" title="Voir les factures en attente">
                         <div class="kpi-card__icon kpi-card__icon--warning">
                             <i class="fa fa-hourglass-half"/>
@@ -68,17 +68,41 @@
                     </div>
                 </div>
 
+                <!-- Barre de progression du taux de traitement -->
+                <div class="scanner-dash__progress">
+                    <div class="scanner-dash__progress-header">
+                        <span class="scanner-dash__progress-title">
+                            <i class="fa fa-tasks"/> Progression du traitement
+                        </span>
+                        <span t-attf-class="scanner-dash__progress-value scanner-dash__progress-value--#{getProgressLevel()}">
+                            <t t-esc="state.stats.processing_rate"/>%
+                        </span>
+                    </div>
+                    <div class="scanner-dash__progress-bar">
+                        <div t-attf-class="scanner-dash__progress-fill scanner-dash__progress-fill--#{getProgressLevel()}"
+                             t-attf-style="width: #{Math.min(state.stats.processing_rate, 100)}%"/>
+                    </div>
+                    <div class="scanner-dash__progress-legend">
+                        <span>
+                            <t t-esc="formatNumber(state.stats.all_processed_period)"/> traitées
+                        </span>
+                        <span>
+                            <t t-esc="formatNumber(state.stats.pending_count)"/> en attente
+                        </span>
+                    </div>
+                </div>
+
                 <!-- Totaux globaux -->
                 <div class="scanner-dash__alltime">
                     <div class="scanner-dash__alltime-header">
                         <i class="fa fa-database"/> Mes totaux globaux
                     </div>
                     <div class="scanner-dash__alltime-kpis">
-                        <div class="alltime-kpi">
+                        <div class="alltime-kpi alltime-kpi--success">
                             <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.processed_all_time)"/>
                             <span class="alltime-kpi__label">Total traitées</span>
                         </div>
-                        <div class="alltime-kpi">
+                        <div class="alltime-kpi alltime-kpi--info">
                             <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.processed_all_amount)"/>
                             <span class="alltime-kpi__label">Montant total traité</span>
                         </div>
@@ -86,18 +110,18 @@
                 </div>
 
                 <!-- Graphique + Factures en attente -->
-                <div class="scanner-dash__charts">
+                <div class="scanner-dash__charts scanner-dash__charts--equal">
                     <div class="scanner-dash__chart-card">
                         <div class="scanner-dash__chart-title">
                             <i class="fa fa-bar-chart"/> Évolution des traitements
                         </div>
                         <div class="scanner-dash__chart-container">
-                            <canvas id="traiteurEvolutionChart"/>
+                            <canvas t-ref="evolutionChart"/>
                         </div>
                     </div>
                     <div class="scanner-dash__chart-card">
                         <div class="scanner-dash__chart-title">
-                            <i class="fa fa-hourglass-start"/> Factures en attente de traitement
+                            <i class="fa fa-hourglass-start"/> Factures en attente
                         </div>
                         <div class="scanner-dash__table-container">
                             <table class="scanner-dash__table">
@@ -119,7 +143,7 @@
                                         </tr>
                                     </t>
                                     <t t-if="!state.pending_scans.length">
-                                        <tr><td colspan="4" class="text-center text-muted">Aucune facture en attente</td></tr>
+                                        <tr><td colspan="4" class="text-center text-muted" style="padding: 24px;">Aucune facture en attente</td></tr>
                                     </t>
                                 </tbody>
                             </table>
@@ -154,7 +178,7 @@
                                     </tr>
                                 </t>
                                 <t t-if="!state.recent_processed.length">
-                                    <tr><td colspan="5" class="text-center text-muted">Aucun traitement récent</td></tr>
+                                    <tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">Aucun traitement récent</td></tr>
                                 </t>
                             </tbody>
                         </table>

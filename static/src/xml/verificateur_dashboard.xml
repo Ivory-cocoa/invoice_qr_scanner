@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
 
     <t t-name="invoice_qr_scanner.VerificateurDashboard" owl="1">
-        <div class="scanner-dash">
+        <div t-attf-class="scanner-dash #{state.loading ? 'scanner-dash--loading' : ''}">
             <!-- Header -->
             <div class="scanner-dash__header">
                 <div class="scanner-dash__title">
@@ -23,8 +23,8 @@
             </div>
 
             <div class="scanner-dash__body">
-                <!-- KPIs -->
-                <div class="scanner-dash__kpis">
+                <!-- KPIs - 4 colonnes -->
+                <div class="scanner-dash__kpis scanner-dash__kpis--4">
                     <div class="kpi-card kpi-card--clickable" t-on-click="viewMyScans" title="Voir tous mes scans">
                         <div class="kpi-card__icon kpi-card__icon--primary">
                             <i class="fa fa-qrcode"/>
@@ -32,7 +32,7 @@
                         <div class="kpi-card__data">
                             <span class="kpi-card__value" t-esc="formatNumber(state.stats.total_scans)"/>
                             <span class="kpi-card__label">Total scans</span>
-                            <span class="kpi-card__sub">Réussis + Doublons + Erreurs</span>
+                            <span class="kpi-card__sub">Période sélectionnée</span>
                         </div>
                         <div class="kpi-card__arrow"><i class="fa fa-chevron-right"/></div>
                     </div>
@@ -89,15 +89,15 @@
                             <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.total_scans)"/>
                             <span class="alltime-kpi__label">Total</span>
                         </div>
-                        <div class="alltime-kpi">
+                        <div class="alltime-kpi alltime-kpi--success">
                             <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.successful_scans)"/>
                             <span class="alltime-kpi__label">Réussis</span>
                         </div>
-                        <div class="alltime-kpi">
+                        <div class="alltime-kpi alltime-kpi--warning">
                             <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.duplicate_attempts)"/>
                             <span class="alltime-kpi__label">Doublons</span>
                         </div>
-                        <div class="alltime-kpi">
+                        <div class="alltime-kpi alltime-kpi--info">
                             <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.total_amount)"/>
                             <span class="alltime-kpi__label">Montant total</span>
                         </div>
@@ -111,7 +111,7 @@
                             <i class="fa fa-bar-chart"/> Évolution des scans
                         </div>
                         <div class="scanner-dash__chart-container">
-                            <canvas id="verificateurEvolutionChart"/>
+                            <canvas t-ref="evolutionChart"/>
                         </div>
                     </div>
                     <div class="scanner-dash__chart-card">
@@ -136,7 +136,7 @@
                                         </tr>
                                     </t>
                                     <t t-if="!state.top_suppliers.length">
-                                        <tr><td colspan="3" class="text-center text-muted">Aucune donnée</td></tr>
+                                        <tr><td colspan="3" class="text-center text-muted" style="padding: 24px;">Aucune donnée</td></tr>
                                     </t>
                                 </tbody>
                             </table>
@@ -177,7 +177,7 @@
                                     </tr>
                                 </t>
                                 <t t-if="!state.recent_scans.length">
-                                    <tr><td colspan="5" class="text-center text-muted">Aucun scan récent</td></tr>
+                                    <tr><td colspan="5" class="text-center text-muted" style="padding: 24px;">Aucun scan récent</td></tr>
                                 </t>
                             </tbody>
                         </table>

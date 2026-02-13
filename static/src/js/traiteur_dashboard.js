@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Component, useState, onMounted } from "@odoo/owl";
+import { Component, useState, onMounted, onWillUnmount, useRef } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { loadJS } from "@web/core/assets";
@@ -12,6 +12,7 @@ export class TraiteurDashboard extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
+        this.chartRef = useRef("evolutionChart");
         
         this.state = useState({
             loading: true,
@@ -39,6 +40,13 @@ export class TraiteurDashboard extends Component {
             await loadJS("https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js");
             await this.loadDashboardData();
         });
+
+        onWillUnmount(() => {
+            if (this.evolutionChart) {
+                this.evolutionChart.destroy();
+                this.evolutionChart = null;
+            }
+        });
     }
 
     async loadDashboardData() {
@@ -64,8 +72,12 @@ export class TraiteurDashboard extends Component {
 
     renderChart() {
         if (typeof Chart === 'undefined') return;
-        const canvas = document.getElementById('traiteurEvolutionChart');
-        if (!canvas) return;
+        const canvas = this.chartRef.el;
+        if (!canvas) {
+            // Retry after DOM update
+            setTimeout(() => this.renderChart(), 100);
+            return;
+        }
         if (this.evolutionChart) this.evolutionChart.destroy();
         
         const ctx = canvas.getContext('2d');
@@ -149,6 +161,13 @@ export class TraiteurDashboard extends Component {
             view_mode: 'tree,form',
             domain: [['state', '=', 'processed']],
         });
+    }
+
+    getProgressLevel() {
+        const rate = this.state.stats.processing_rate || 0;
+        if (rate >= 75) return 'success';
+        if (rate >= 50) return 'warning';
+        return 'danger';
     }
 }
 

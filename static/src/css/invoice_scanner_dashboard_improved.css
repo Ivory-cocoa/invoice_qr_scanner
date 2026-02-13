@@ -614,3 +614,255 @@
     pointer-events: none;
     opacity: 0.7;
 }
+
+/* =============================================
+   Vérificateur & Traiteur Dashboards
+   Styles pour les sections chart-card, tables,
+   recent scans, etc.
+   ============================================= */
+
+/* ===== Chart Cards Grid ===== */
+.scanner-dash__chart-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.scanner-dash__chart-title {
+    padding: 14px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+    flex-shrink: 0;
+}
+
+.scanner-dash__chart-title i {
+    color: #714B67;
+    font-size: 15px;
+}
+
+/* Chart container - CRITICAL: explicit height for Chart.js
+   when maintainAspectRatio: false */
+.scanner-dash__chart-container {
+    padding: 16px 20px;
+    height: 280px;
+    min-height: 280px;
+    position: relative;
+}
+
+.scanner-dash__chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* ===== Tables inside chart-cards / recent sections ===== */
+.scanner-dash__table-container {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    max-height: 300px;
+}
+
+.scanner-dash__table-container::-webkit-scrollbar {
+    width: 5px;
+}
+
+.scanner-dash__table-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.scanner-dash__table-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.scanner-dash__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.scanner-dash__table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.scanner-dash__table th {
+    text-align: left;
+    padding: 10px 16px;
+    font-weight: 500;
+    color: #64748b;
+    background: #f8fafc;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.scanner-dash__table td {
+    padding: 10px 16px;
+    color: #334155;
+    border-top: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.scanner-dash__table tbody tr {
+    transition: background 0.15s;
+}
+
+.scanner-dash__table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.scanner-dash__table td:last-child,
+.scanner-dash__table th:last-child {
+    text-align: right;
+}
+
+/* Badge styles inside tables */
+.scanner-dash__table .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+/* ===== Recent Scans Section ===== */
+.scanner-dash__recent {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+.scanner-dash__recent-title {
+    padding: 14px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+}
+
+.scanner-dash__recent-title i {
+    color: #714B67;
+    font-size: 15px;
+}
+
+.scanner-dash__recent .scanner-dash__table-container {
+    max-height: 350px;
+}
+
+/* ===== Amount Box ===== */
+.scanner-dash__amount {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #714B67 0%, #8B5A7C 100%);
+    border-radius: 10px;
+    color: #fff;
+}
+
+/* ===== KPI Grid - Auto-adapt to 4 or 5 cards ===== */
+.scanner-dash__kpis--4 {
+    grid-template-columns: repeat(4, 1fr) !important;
+}
+
+@media (max-width: 1024px) {
+    .scanner-dash__kpis--4 {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (max-width: 600px) {
+    .scanner-dash__kpis--4 {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ===== Charts Grid - Equal columns variant ===== */
+.scanner-dash__charts--equal {
+    grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 900px) {
+    .scanner-dash__charts--equal {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== Progress Bar (Traiteur Taux de traitement) ===== */
+.scanner-dash__progress {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    padding: 20px 24px;
+}
+
+.scanner-dash__progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.scanner-dash__progress-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.scanner-dash__progress-title i {
+    color: #714B67;
+}
+
+.scanner-dash__progress-value {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.scanner-dash__progress-value--success { color: #2E7D32; }
+.scanner-dash__progress-value--warning { color: #EF6C00; }
+.scanner-dash__progress-value--danger { color: #C62828; }
+
+.scanner-dash__progress-bar {
+    width: 100%;
+    height: 12px;
+    background: #f1f5f9;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.scanner-dash__progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.6s ease;
+}
+
+.scanner-dash__progress-fill--success { background: linear-gradient(90deg, #66BB6A, #2E7D32); }
+.scanner-dash__progress-fill--warning { background: linear-gradient(90deg, #FFA726, #EF6C00); }
+.scanner-dash__progress-fill--danger { background: linear-gradient(90deg, #EF5350, #C62828); }
+
+.scanner-dash__progress-legend {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+}
