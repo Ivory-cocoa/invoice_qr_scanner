@@ -138,7 +138,7 @@ export class TraiteurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Factures en attente de traitement',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['state', '=', 'done'], ['processed_by', '=', false]],
         });
     }
@@ -148,7 +148,7 @@ export class TraiteurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Mes factures traitées',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['state', '=', 'processed'], ['processed_by', '=', this.orm.env.uid]],
         });
     }
@@ -158,7 +158,7 @@ export class TraiteurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Toutes les factures traitées',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['state', '=', 'processed']],
         });
     }

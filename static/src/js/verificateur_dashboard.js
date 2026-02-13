@@ -159,7 +159,7 @@ export class VerificateurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Mes scans',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['scanned_by', '=', this.orm.env.uid]],
         });
     }
@@ -169,7 +169,7 @@ export class VerificateurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Mes factures créées',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['scanned_by', '=', this.orm.env.uid], ['state', 'in', ['done', 'processed']]],
         });
     }
@@ -179,7 +179,7 @@ export class VerificateurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Mes doublons détectés',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['scanned_by', '=', this.orm.env.uid], ['duplicate_count', '>', 0]],
         });
     }
@@ -189,7 +189,7 @@ export class VerificateurDashboard extends Component {
             type: 'ir.actions.act_window',
             name: 'Mes erreurs',
             res_model: 'invoice.scan.record',
-            view_mode: 'tree,form',
+            views: [[false, 'list'], [false, 'form']],
             domain: [['scanned_by', '=', this.orm.env.uid], ['state', '=', 'error']],
         });
     }
