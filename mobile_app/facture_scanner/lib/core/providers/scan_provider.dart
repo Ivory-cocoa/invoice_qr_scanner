@@ -9,7 +9,7 @@ import '../services/sync_service.dart';
 import '../models/scan_record.dart';
 import 'auth_provider.dart';
 
-enum ScanState { idle, scanning, processing, success, error, duplicate }
+enum ScanState { idle, scanning, processing, success, error, duplicate, alreadyProcessed }
 
 class ScanProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
@@ -512,7 +512,7 @@ class ScanProvider extends ChangeNotifier {
           _message = 'Session expirée. Veuillez vous reconnecter.';
           _auth?.handleSessionExpired();
         } else if (response.errorCode == 'ALREADY_PROCESSED') {
-          _state = ScanState.duplicate;
+          _state = ScanState.alreadyProcessed;
           _message = response.errorMessage ?? 'Cette facture a déjà été traitée';
           if (response.data != null && response.data!.containsKey('record')) {
             _lastScanResult = ScanRecord.fromJson(response.data!['record']);

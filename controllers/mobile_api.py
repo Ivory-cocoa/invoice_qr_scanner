@@ -200,6 +200,10 @@ class InvoiceScannerMobileAPI(http.Controller):
             'duplicate_count': record.duplicate_count,
             'last_duplicate_attempt': record.last_duplicate_attempt.isoformat() if record.last_duplicate_attempt else None,
             'last_duplicate_user': record.last_duplicate_user_id.name if record.last_duplicate_user_id else '',
+            # Champs pour le suivi des tentatives de retraitement
+            'reprocess_attempt_count': record.reprocess_attempt_count,
+            'last_reprocess_attempt': record.last_reprocess_attempt.isoformat() if record.last_reprocess_attempt else None,
+            'last_reprocess_user': record.last_reprocess_user_id.name if record.last_reprocess_user_id else '',
         }
 
     def _format_invoice(self, invoice):
@@ -545,11 +549,27 @@ class InvoiceScannerMobileAPI(http.Controller):
             )
         
         if existing.state == 'processed':
-            return api_response({
-                'already_processed': True,
-                'message': f'Cette facture a déjà été traitée par {existing.processed_by.name or "un utilisateur"} le {existing.processed_date.strftime("%d/%m/%Y à %H:%M") if existing.processed_date else "N/A"}',
-                'record': self._format_scan_record(existing),
+            # Incrémenter le compteur de tentatives de retraitement
+            existing.write({
+                'reprocess_attempt_count': existing.reprocess_attempt_count + 1,
+                'last_reprocess_attempt': fields.Datetime.now(),
+                'last_reprocess_user_id': user.id,
             })
+            
+            existing.message_post(
+                body=f"Tentative de retraitement #{existing.reprocess_attempt_count} par {user.name} "
+                     f"(facture déjà traitée par {existing.processed_by.name or 'N/A'})",
+                message_type='notification'
+            )
+            
+            return api_error(
+                'ALREADY_PROCESSED',
+                f'Cette facture a déjà été traitée par {existing.processed_by.name or "un utilisateur"} '
+                f'le {existing.processed_date.strftime("%d/%m/%Y à %H:%M") if existing.processed_date else "N/A"}. '
+                f'Tentative de retraitement #{existing.reprocess_attempt_count}.',
+                data={'record': self._format_scan_record(existing)},
+                status=409
+            )
         
         # Marquer comme traité
         existing.write({

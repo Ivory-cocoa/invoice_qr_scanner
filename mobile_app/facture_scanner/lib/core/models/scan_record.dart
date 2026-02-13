@@ -23,6 +23,11 @@ class ScanRecord {
   final DateTime? lastDuplicateAttempt;
   final String? lastDuplicateUser;
   
+  // Champs pour le suivi des tentatives de retraitement
+  final int reprocessAttemptCount;
+  final DateTime? lastReprocessAttempt;
+  final String? lastReprocessUser;
+  
   // Champs pour le marquage traité
   final bool isProcessed;
   final String? processedBy;
@@ -50,6 +55,9 @@ class ScanRecord {
     this.duplicateCount = 0,
     this.lastDuplicateAttempt,
     this.lastDuplicateUser,
+    this.reprocessAttemptCount = 0,
+    this.lastReprocessAttempt,
+    this.lastReprocessUser,
     this.isProcessed = false,
     this.processedBy,
     this.processedById,
@@ -84,6 +92,11 @@ class ScanRecord {
           ? DateTime.tryParse(json['last_duplicate_attempt'])
           : null,
       lastDuplicateUser: json['last_duplicate_user'] as String?,
+      reprocessAttemptCount: json['reprocess_attempt_count'] as int? ?? 0,
+      lastReprocessAttempt: json['last_reprocess_attempt'] != null
+          ? DateTime.tryParse(json['last_reprocess_attempt'])
+          : null,
+      lastReprocessUser: json['last_reprocess_user'] as String?,
       isProcessed: json['is_processed'] as bool? ?? (json['state'] == 'processed'),
       processedBy: json['processed_by'] as String?,
       processedById: json['processed_by_id'] as int?,
@@ -121,6 +134,11 @@ class ScanRecord {
           ? DateTime.tryParse(map['last_duplicate_attempt'])
           : null,
       lastDuplicateUser: map['last_duplicate_user'] as String?,
+      reprocessAttemptCount: map['reprocess_attempt_count'] as int? ?? 0,
+      lastReprocessAttempt: map['last_reprocess_attempt'] != null
+          ? DateTime.tryParse(map['last_reprocess_attempt'])
+          : null,
+      lastReprocessUser: map['last_reprocess_user'] as String?,
       isProcessed: map['is_processed'] as bool? ?? (map['state'] == 'processed'),
       processedBy: map['processed_by'] as String?,
       processedById: map['processed_by_id'] as int?,
@@ -152,6 +170,9 @@ class ScanRecord {
       'duplicate_count': duplicateCount,
       'last_duplicate_attempt': lastDuplicateAttempt?.toIso8601String(),
       'last_duplicate_user': lastDuplicateUser,
+      'reprocess_attempt_count': reprocessAttemptCount,
+      'last_reprocess_attempt': lastReprocessAttempt?.toIso8601String(),
+      'last_reprocess_user': lastReprocessUser,
       'is_processed': isProcessed,
       'processed_by': processedBy,
       'processed_by_id': processedById,
@@ -162,6 +183,7 @@ class ScanRecord {
   bool get isSuccess => state == 'done' || state == 'processed';
   bool get isError => state == 'error';
   bool get hasDuplicates => duplicateCount > 0;
+  bool get hasReprocessAttempts => reprocessAttemptCount > 0;
   
   String get formattedAmount {
     final formatted = amountTtc.toStringAsFixed(0).replaceAllMapped(

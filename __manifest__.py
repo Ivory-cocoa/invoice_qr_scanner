@@ -51,6 +51,7 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'invoice_qr_scanner/static/src/js/clipboard_fix.js',
             'invoice_qr_scanner/static/src/js/invoice_scanner_dashboard_improved.js',
             'invoice_qr_scanner/static/src/xml/invoice_scanner_dashboard_improved.xml',
             'invoice_qr_scanner/static/src/css/invoice_scanner_dashboard_improved.css',

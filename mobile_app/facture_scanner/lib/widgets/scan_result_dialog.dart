@@ -111,6 +111,14 @@ class ScanResultDialog extends StatelessWidget {
             ? 'Tentative #${scanRecord!.duplicateCount + 1}'
             : 'Cette facture existe déjà';
         break;
+      case ScanState.alreadyProcessed:
+        color = AppTheme.getWarning(context);
+        icon = Icons.published_with_changes_rounded;
+        title = 'Déjà traitée';
+        subtitle = scanRecord != null && scanRecord!.reprocessAttemptCount > 0
+            ? 'Tentative de retraitement #${scanRecord!.reprocessAttemptCount}'
+            : 'Cette facture a déjà été traitée';
+        break;
       case ScanState.error:
         color = AppTheme.getError(context);
         icon = Icons.error_rounded;
@@ -223,6 +231,34 @@ class ScanResultDialog extends StatelessWidget {
               'Date du scan',
               dateFormat.format(record.scanDate!),
               Icons.schedule_rounded,
+              isLast: !record.isProcessed && record.reprocessAttemptCount == 0,
+            ),
+          
+          // Infos de traitement (qui a déjà traité + date)
+          if (record.isProcessed && record.processedBy != null)
+            _buildDetailRow(
+              context,
+              'Traité par',
+              record.processedBy!,
+              Icons.person_rounded,
+            ),
+          
+          if (record.isProcessed && record.processedDate != null)
+            _buildDetailRow(
+              context,
+              'Date de traitement',
+              dateFormat.format(record.processedDate!),
+              Icons.event_available_rounded,
+            ),
+          
+          // Compteur de tentatives de retraitement
+          if (record.reprocessAttemptCount > 0)
+            _buildDetailRow(
+              context,
+              'Tentatives de retraitement',
+              '${record.reprocessAttemptCount}',
+              Icons.replay_rounded,
+              isHighlight: true,
               isLast: true,
             ),
         ],
@@ -352,6 +388,8 @@ class ScanResultDialog extends StatelessWidget {
       case ScanState.success:
         return AppTheme.getSuccess(context);
       case ScanState.duplicate:
+        return AppTheme.getWarning(context);
+      case ScanState.alreadyProcessed:
         return AppTheme.getWarning(context);
       case ScanState.error:
         return AppTheme.getError(context);

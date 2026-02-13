@@ -175,6 +175,24 @@ class InvoiceScanRecord(models.Model):
         help="Utilisateur ayant fait la dernière tentative de scan en doublon"
     )
     
+    # Compteur de tentatives de retraitement (facture déjà traitée)
+    reprocess_attempt_count = fields.Integer(
+        string="Tentatives de retraitement",
+        default=0,
+        help="Nombre de fois qu'un utilisateur a tenté de traiter une facture déjà traitée"
+    )
+    
+    last_reprocess_attempt = fields.Datetime(
+        string="Dernière tentative de retraitement",
+        help="Date/heure de la dernière tentative de retraitement"
+    )
+    
+    last_reprocess_user_id = fields.Many2one(
+        'res.users',
+        string="Dernier utilisateur retraitement",
+        help="Utilisateur ayant fait la dernière tentative de retraitement"
+    )
+    
     # Informations de scan
     scanned_by = fields.Many2one(
         'res.users',

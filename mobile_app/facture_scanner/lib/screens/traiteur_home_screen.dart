@@ -821,9 +821,179 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
               ],
             ),
           ],
+          const SizedBox(height: 12),
+          // Bouton "Traiter manuellement"
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _confirmManualProcess(record),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.successColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(Icons.check_circle_rounded, size: 18),
+              label: const Text(
+                'Marquer comme traité',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Confirmation avant traitement manuel
+  Future<void> _confirmManualProcess(ScanRecord record) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.successLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.check_circle_rounded, color: AppTheme.successColor, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Confirmer le traitement', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Voulez-vous marquer cette facture comme traitée ?',
+              style: const TextStyle(fontSize: 14, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(record.reference, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  if (record.supplierName.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(record.supplierName, style: const TextStyle(color: AppTheme.textLight, fontSize: 13)),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatAmount(record.amountTtc),
+                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.primaryColor, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler', style: TextStyle(color: AppTheme.textMedium)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.successColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await _executeManualProcess(record);
+    }
+  }
+
+  /// Exécuter le traitement manuel
+  Future<void> _executeManualProcess(ScanRecord record) async {
+    // Afficher un indicateur de chargement
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.successColor),
+      ),
+    );
+
+    final scan = context.read<ScanProvider>();
+    final success = await scan.markAsProcessed(record.id);
+
+    // Fermer l'indicateur de chargement
+    if (mounted) Navigator.of(context).pop();
+
+    if (success && mounted) {
+      // Rafraîchir les données
+      await scan.loadTraiteurPending();
+      await scan.loadTraiteurStats();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Facture ${record.reference} marquée comme traitée',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.successColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_rounded, color: Colors.white, size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Erreur lors du traitement de la facture',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.errorColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
   }
 
   Widget _buildRecordTile(ScanRecord record) {
