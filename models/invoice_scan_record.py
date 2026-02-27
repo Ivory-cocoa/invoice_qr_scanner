@@ -803,7 +803,7 @@ class InvoiceScanRecord(models.Model):
                 'error_code': 'INVALID_URL'
             }
         
-        # Vérifier les doublons
+        # Vérifier les doublons (scans réussis)
         existing = self.check_duplicate(qr_uuid)
         if existing:
             # Incrémenter le compteur de doublons sur l'enregistrement original
@@ -840,18 +840,31 @@ class InvoiceScanRecord(models.Model):
                 }
             }
         
+        # Vérifier s'il existe un enregistrement en erreur pour ce QR-code
+        # (la contrainte unique empêche d'en créer un nouveau)
+        existing_error = self.search([
+            ('qr_uuid', '=', qr_uuid),
+            ('state', '=', 'error'),
+            ('company_id', '=', self.env.company.id)
+        ], limit=1)
+        
         # Récupérer les données du site DGI
         dgi_data = self.fetch_invoice_data_from_dgi(qr_url)
         
         if not dgi_data.get('success'):
-            # Créer un enregistrement d'erreur
-            record = self.create({
-                'qr_uuid': qr_uuid,
+            # Créer ou mettre à jour un enregistrement d'erreur
+            error_vals = {
                 'qr_url': qr_url,
                 'state': 'error',
                 'error_message': dgi_data.get('error', 'Erreur inconnue'),
                 'scanned_by': user_id or self.env.user.id,
-            })
+            }
+            if existing_error:
+                existing_error.write(error_vals)
+                record = existing_error
+            else:
+                error_vals['qr_uuid'] = qr_uuid
+                record = self.create(error_vals)
             return {
                 'success': False,
                 'error': dgi_data.get('error'),
@@ -859,9 +872,8 @@ class InvoiceScanRecord(models.Model):
                 'record_id': record.id,
             }
         
-        # Créer l'enregistrement de scan
+        # Créer ou mettre à jour l'enregistrement de scan
         record_vals = {
-            'qr_uuid': qr_uuid,
             'qr_url': qr_url,
             'supplier_name': dgi_data.get('supplier_name'),
             'supplier_code_dgi': dgi_data.get('supplier_code_dgi'),
@@ -874,9 +886,15 @@ class InvoiceScanRecord(models.Model):
             'raw_html': dgi_data.get('raw_html'),
             'scanned_by': user_id or self.env.user.id,
             'state': 'draft',
+            'error_message': False,
         }
         
-        record = self.create(record_vals)
+        if existing_error:
+            existing_error.write(record_vals)
+            record = existing_error
+        else:
+            record_vals['qr_uuid'] = qr_uuid
+            record = self.create(record_vals)
         
         # Créer la facture
         try:
