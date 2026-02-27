@@ -292,11 +292,210 @@ class InvoiceScanRecord(models.Model):
         return match.group(0).lower() if match else None
 
     @api.model
+    def _extract_dgi_data_from_text(self, text_content, raw_html=''):
+        """Extraire les données de facture DGI depuis le texte rendu.
+        
+        Méthode utilitaire partagée entre l'approche Playwright et le fallback requests.
+        
+        Args:
+            text_content: Texte brut de la page
+            raw_html: HTML brut (optionnel, pour debug)
+            
+        Returns:
+            dict: Données extraites de la facture
+        """
+        data = {
+            'raw_html': raw_html[:5000] if raw_html else '',
+            'text_content': text_content[:3000],
+            'success': True,
+        }
+        
+        # Fournisseur (format: "NOM - CODE" sur plusieurs lignes)
+        supplier_match = re.search(
+            r'FOURNISSEUR:\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
+            text_content, re.IGNORECASE | re.MULTILINE
+        )
+        if supplier_match:
+            data['supplier_name'] = supplier_match.group(1).strip()
+            data['supplier_code_dgi'] = supplier_match.group(2).strip()
+        
+        # Client (format: "NOM - CODE")
+        client_match = re.search(
+            r'CLIENT:\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
+            text_content, re.IGNORECASE | re.MULTILINE
+        )
+        if client_match:
+            data['customer_name'] = client_match.group(1).strip()
+            data['customer_code_dgi'] = client_match.group(2).strip()
+        
+        # Numéro de facture
+        invoice_match = re.search(
+            r'NUMERO DE FACTURE:\s*\n*\s*([A-Z0-9]+)',
+            text_content, re.IGNORECASE | re.MULTILINE
+        )
+        if invoice_match:
+            data['invoice_number_dgi'] = invoice_match.group(1).strip()
+        
+        # Date de facturation (format: DD/MM/YYYY)
+        date_match = re.search(
+            r'DATE DE FACTURATION:\s*\n*\s*(\d{2}/\d{2}/\d{4})',
+            text_content, re.IGNORECASE | re.MULTILINE
+        )
+        if date_match:
+            date_str = date_match.group(1)
+            data['invoice_date'] = datetime.strptime(date_str, '%d/%m/%Y').date()
+        
+        # ID Vérification
+        verif_match = re.search(
+            r'ID VERIFICATION:\s*\n*\s*([A-Z0-9\-]+)',
+            text_content, re.IGNORECASE | re.MULTILINE
+        )
+        if verif_match:
+            data['verification_id'] = verif_match.group(1).strip()
+        
+        # Montant TTC (format: "1 677 566 CFA" ou "1 677 566 FCFA")
+        amount_match = re.search(
+            r'MONTANT TTC:\s*\n*\s*([\d\s]+)\s*(?:F?CFA)',
+            text_content, re.IGNORECASE | re.MULTILINE
+        )
+        if amount_match:
+            amount_str = amount_match.group(1).replace(' ', '').replace('\u00a0', '').strip()
+            data['amount_ttc'] = float(amount_str)
+        
+        _logger.info(f"DGI Data extracted: supplier={data.get('supplier_name')}, "
+                     f"amount={data.get('amount_ttc')}, invoice={data.get('invoice_number_dgi')}")
+        
+        return data
+
+    @api.model
+    def _fetch_dgi_with_requests(self, url):
+        """Tentative de récupération des données DGI via requests (sans navigateur).
+        
+        Certaines pages DGI peuvent renvoyer les données directement dans le HTML
+        ou via une API JSON interne. Cette méthode essaie d'abord sans Playwright.
+        
+        Args:
+            url: URL complète de vérification DGI
+            
+        Returns:
+            dict ou None: Données si trouvées, None si JS rendering nécessaire
+        """
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                              'AppleWebKit/537.36 (KHTML, like Gecko) '
+                              'Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+            }
+            
+            # Extraire l'UUID pour tenter l'API directe
+            uuid = self.extract_uuid_from_url(url)
+            
+            # Tentative 1: API JSON directe (si le site expose une API)
+            if uuid:
+                api_urls = [
+                    f"https://www.services.fne.dgi.gouv.ci/api/verification/{uuid}",
+                    f"https://www.services.fne.dgi.gouv.ci/api/v1/verification/{uuid}",
+                ]
+                for api_url in api_urls:
+                    try:
+                        resp = requests.get(api_url, headers=headers, timeout=15, verify=True)
+                        if resp.status_code == 200:
+                            json_data = resp.json()
+                            if json_data and isinstance(json_data, dict):
+                                _logger.info(f"DGI API directe a retourné des données: {list(json_data.keys())}")
+                                # Mapper les données JSON vers notre format
+                                data = {'success': True, 'raw_html': '', 'text_content': str(json_data)[:3000]}
+                                # Essayer de mapper les clés communes
+                                for key in ['supplier_name', 'fournisseur', 'supplierName']:
+                                    if key in json_data:
+                                        data['supplier_name'] = json_data[key]
+                                for key in ['amount_ttc', 'montantTtc', 'montant_ttc', 'totalAmount']:
+                                    if key in json_data:
+                                        data['amount_ttc'] = float(str(json_data[key]).replace(' ', ''))
+                                for key in ['invoice_number', 'invoiceNumber', 'numero_facture']:
+                                    if key in json_data:
+                                        data['invoice_number_dgi'] = json_data[key]
+                                if data.get('supplier_name') or data.get('amount_ttc'):
+                                    return data
+                    except (requests.exceptions.RequestException, ValueError):
+                        continue
+            
+            # Tentative 2: HTML direct (SSR - Server Side Rendering)
+            resp = requests.get(url, headers=headers, timeout=30, verify=True)
+            if resp.status_code == 200:
+                text_content = BeautifulSoup(resp.text, 'html.parser').get_text(separator='\n')
+                if 'FOURNISSEUR' in text_content.upper() or 'NUMERO DE FACTURE' in text_content.upper():
+                    _logger.info("DGI: Données trouvées via requests (SSR), Playwright non nécessaire")
+                    return self._extract_dgi_data_from_text(text_content, resp.text)
+            
+            _logger.info("DGI: Données non trouvées via requests, Playwright nécessaire")
+            return None
+            
+        except Exception as e:
+            _logger.warning(f"Fallback requests DGI échoué (non bloquant): {e}")
+            return None
+
+    @api.model
+    def _launch_playwright_browser(self, playwright_instance, max_retries=3):
+        """Lancer le navigateur Playwright avec mécanisme de retry.
+        
+        Le navigateur Chromium peut crasher au lancement (SIGTRAP) en cas de
+        pression mémoire sur le serveur. Cette méthode réessaie plusieurs fois
+        avec un délai croissant entre chaque tentative.
+        
+        Args:
+            playwright_instance: Instance Playwright (p)
+            max_retries: Nombre maximum de tentatives (défaut: 3)
+            
+        Returns:
+            Browser: Instance du navigateur lancé
+            
+        Raises:
+            Exception: Si toutes les tentatives échouent
+        """
+        import time
+        
+        last_error = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                _logger.info(f"Lancement Chromium (tentative {attempt}/{max_retries})")
+                browser = playwright_instance.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-web-security',
+                        '--disable-gpu',
+                        '--disable-extensions',
+                        '--disable-software-rasterizer',
+                        '--single-process',
+                    ]
+                )
+                _logger.info(f"Chromium lancé avec succès (tentative {attempt})")
+                return browser
+            except Exception as e:
+                last_error = e
+                error_msg = str(e)
+                _logger.warning(
+                    f"Échec lancement Chromium (tentative {attempt}/{max_retries}): {error_msg}"
+                )
+                if attempt < max_retries:
+                    wait_time = attempt * 3  # 3s, 6s, 9s
+                    _logger.info(f"Attente de {wait_time}s avant nouvelle tentative...")
+                    time.sleep(wait_time)
+        
+        raise last_error
+
+    @api.model
     def fetch_invoice_data_from_dgi(self, url):
         """Récupérer les données de la facture depuis le site DGI.
         
-        Utilise Playwright pour charger la page JavaScript (Next.js/React)
-        car les données sont chargées dynamiquement côté client.
+        Stratégie en 2 étapes:
+        1. Essayer d'abord avec requests (rapide, sans navigateur)
+        2. Si échec, utiliser Playwright avec retry (3 tentatives)
         
         Args:
             url: URL complète de vérification DGI
@@ -304,24 +503,28 @@ class InvoiceScanRecord(models.Model):
         Returns:
             dict: Données de la facture ou erreur
         """
+        # Étape 1: Essayer sans Playwright (requests + BeautifulSoup)
+        _logger.info(f"DGI: Tentative de récupération sans navigateur pour: {url}")
+        requests_result = self._fetch_dgi_with_requests(url)
+        if requests_result and requests_result.get('success'):
+            return requests_result
+        
+        # Étape 2: Utiliser Playwright avec retry
+        _logger.info(f"DGI: Utilisation de Playwright pour: {url}")
+        browser = None
+        context = None
         try:
             from playwright.sync_api import sync_playwright
             
             with sync_playwright() as p:
-                # Configurer le navigateur pour simuler un vrai utilisateur
-                browser = p.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-web-security',
-                    ]
-                )
+                # Lancement avec retry (3 tentatives)
+                browser = self._launch_playwright_browser(p, max_retries=3)
                 
                 # Créer un contexte avec un User-Agent réel
                 context = browser.new_context(
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) '
+                               'Chrome/120.0.0.0 Safari/537.36',
                     viewport={'width': 1920, 'height': 1080},
                     locale='fr-FR',
                 )
@@ -331,94 +534,65 @@ class InvoiceScanRecord(models.Model):
                 _logger.info(f"Chargement de l'URL DGI: {url}")
                 page.goto(url, wait_until="networkidle", timeout=60000)
                 
-                # Attendre plus longtemps et vérifier si les données sont chargées
-                # Le site DGI charge les données via une API après le rendu initial
+                # Attendre et vérifier si les données sont chargées
                 max_attempts = 15
                 text_content = ""
                 for attempt in range(max_attempts):
                     page.wait_for_timeout(2000)  # Attendre 2s
                     text_content = page.inner_text("body")
-                    # Vérifier si les données de facture sont présentes
                     if 'FOURNISSEUR' in text_content.upper() or 'NUMERO DE FACTURE' in text_content.upper():
                         _logger.info(f"Données DGI chargées après {(attempt + 1) * 2} secondes")
                         break
-                    _logger.info(f"Tentative {attempt + 1}/{max_attempts} - Données non encore chargées. Texte: {text_content[:200]}")
+                    _logger.info(f"Tentative {attempt + 1}/{max_attempts} - Données non encore chargées. "
+                                f"Texte: {text_content[:200]}")
                 
                 raw_html = page.content()[:5000]
-                context.close()
-                browser.close()
+                
+                # Fermeture propre dans le bloc try
+                try:
+                    context.close()
+                except Exception:
+                    pass
+                context = None
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+                browser = None
             
-            # Extraction des données depuis le texte rendu
-            data = {
-                'raw_html': raw_html,
-                'text_content': text_content[:3000],  # Debug: inclure le texte
-                'success': True,
-            }
-            
-            # Fournisseur (format: "NOM - CODE" sur plusieurs lignes)
-            supplier_match = re.search(
-                r'FOURNISSEUR:\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
-                text_content, re.IGNORECASE | re.MULTILINE
-            )
-            if supplier_match:
-                data['supplier_name'] = supplier_match.group(1).strip()
-                data['supplier_code_dgi'] = supplier_match.group(2).strip()
-            
-            # Client (format: "NOM - CODE")
-            client_match = re.search(
-                r'CLIENT:\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
-                text_content, re.IGNORECASE | re.MULTILINE
-            )
-            if client_match:
-                data['customer_name'] = client_match.group(1).strip()
-                data['customer_code_dgi'] = client_match.group(2).strip()
-            
-            # Numéro de facture
-            invoice_match = re.search(
-                r'NUMERO DE FACTURE:\s*\n*\s*([A-Z0-9]+)',
-                text_content, re.IGNORECASE | re.MULTILINE
-            )
-            if invoice_match:
-                data['invoice_number_dgi'] = invoice_match.group(1).strip()
-            
-            # Date de facturation (format: DD/MM/YYYY)
-            date_match = re.search(
-                r'DATE DE FACTURATION:\s*\n*\s*(\d{2}/\d{2}/\d{4})',
-                text_content, re.IGNORECASE | re.MULTILINE
-            )
-            if date_match:
-                date_str = date_match.group(1)
-                data['invoice_date'] = datetime.strptime(date_str, '%d/%m/%Y').date()
-            
-            # ID Vérification
-            verif_match = re.search(
-                r'ID VERIFICATION:\s*\n*\s*([A-Z0-9\-]+)',
-                text_content, re.IGNORECASE | re.MULTILINE
-            )
-            if verif_match:
-                data['verification_id'] = verif_match.group(1).strip()
-            
-            # Montant TTC (format: "1 677 566 CFA" ou "1 677 566 FCFA")
-            amount_match = re.search(
-                r'MONTANT TTC:\s*\n*\s*([\d\s]+)\s*(?:F?CFA)',
-                text_content, re.IGNORECASE | re.MULTILINE
-            )
-            if amount_match:
-                amount_str = amount_match.group(1).replace(' ', '').replace('\u00a0', '').strip()
-                data['amount_ttc'] = float(amount_str)
-            
-            # Log pour debug
-            _logger.info(f"DGI Data extracted: supplier={data.get('supplier_name')}, "
-                        f"amount={data.get('amount_ttc')}, invoice={data.get('invoice_number_dgi')}")
-            
-            return data
+            return self._extract_dgi_data_from_text(text_content, raw_html)
             
         except ImportError:
             _logger.error("Playwright non installé. Installer avec: pip install playwright && playwright install chromium")
             return {'success': False, 'error': 'Playwright non installé sur le serveur'}
         except Exception as e:
-            _logger.error(f"Erreur lors de la récupération des données DGI: {e}", exc_info=True)
-            return {'success': False, 'error': f'Erreur: {str(e)}'}
+            error_msg = str(e)
+            _logger.error(f"Erreur lors de la récupération des données DGI: {error_msg}", exc_info=True)
+            
+            # Message d'erreur enrichi pour le diagnostic
+            if 'Target page, context or browser has been closed' in error_msg or 'SIGTRAP' in error_msg:
+                diagnostic = (
+                    f"Erreur: Le navigateur Chromium a crashé sur le serveur. "
+                    f"Causes possibles: mémoire insuffisante, /dev/shm trop petit "
+                    f"(Docker: ajouter --shm-size=256m), ou binaire Chromium corrompu "
+                    f"(réinstaller: playwright install chromium). Détail: {error_msg}"
+                )
+                _logger.error(diagnostic)
+                return {'success': False, 'error': diagnostic}
+            
+            return {'success': False, 'error': f'Erreur: {error_msg}'}
+        finally:
+            # Nettoyage garanti même en cas d'exception
+            try:
+                if context:
+                    context.close()
+            except Exception:
+                pass
+            try:
+                if browser:
+                    browser.close()
+            except Exception:
+                pass
 
     @api.model
     def check_duplicate(self, qr_uuid):
