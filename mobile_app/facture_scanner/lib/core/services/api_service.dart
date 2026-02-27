@@ -257,6 +257,29 @@ class ApiService {
         body: jsonEncode(body),
       ).timeout(const Duration(seconds: 30));
       
+      // Vérifier que la réponse est bien du JSON avant de parser
+      final contentType = response.headers['content-type'] ?? '';
+      final body_text = response.body.trimLeft();
+      
+      if (!contentType.contains('application/json') && body_text.startsWith('<')) {
+        // Le serveur a renvoyé du HTML (page d'erreur, redirection, etc.)
+        String errorMsg;
+        if (response.statusCode == 301 || response.statusCode == 302) {
+          errorMsg = 'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
+        } else if (response.statusCode >= 500) {
+          errorMsg = 'Erreur interne du serveur (${response.statusCode}). Réessayez plus tard.';
+        } else if (response.statusCode == 404) {
+          errorMsg = 'Endpoint non trouvé. Vérifiez la version de l\'API sur le serveur.';
+        } else {
+          errorMsg = 'Le serveur a renvoyé une réponse inattendue (${response.statusCode}). Vérifiez l\'URL du serveur.';
+        }
+        return ApiResponse<T>(
+          success: false,
+          errorCode: 'SERVER_ERROR',
+          errorMessage: errorMsg,
+        );
+      }
+      
       // Parse la réponse JSON pour tous les status (200, 400, etc.)
       final jsonResponse = jsonDecode(response.body);
       
@@ -287,6 +310,12 @@ class ApiService {
         success: false,
         errorCode: 'TIMEOUT',
         errorMessage: 'Le serveur ne répond pas',
+      );
+    } on FormatException {
+      return ApiResponse<T>(
+        success: false,
+        errorCode: 'PARSE_ERROR',
+        errorMessage: 'Réponse invalide du serveur. Vérifiez l\'URL et la connexion.',
       );
     } catch (e) {
       return ApiResponse<T>(

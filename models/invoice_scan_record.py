@@ -471,7 +471,7 @@ class InvoiceScanRecord(models.Model):
                         '--disable-gpu',
                         '--disable-extensions',
                         '--disable-software-rasterizer',
-                        '--single-process',
+                        '--disable-features=VizDisplayCompositor',
                     ]
                 )
                 _logger.info(f"Chromium lancé avec succès (tentative {attempt})")
