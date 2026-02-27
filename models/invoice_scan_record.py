@@ -5,6 +5,7 @@ Modèle pour enregistrer les scans de QR-code de factures
 
 import logging
 import requests
+import sys
 from bs4 import BeautifulSoup
 import re
 from datetime import datetime
@@ -441,9 +442,9 @@ class InvoiceScanRecord(models.Model):
     def _launch_playwright_browser(self, playwright_instance, max_retries=3):
         """Lancer le navigateur Playwright avec mécanisme de retry.
         
-        Le navigateur Chromium peut crasher au lancement (SIGTRAP) en cas de
-        pression mémoire sur le serveur. Cette méthode réessaie plusieurs fois
-        avec un délai croissant entre chaque tentative.
+        Le navigateur Chromium peut crasher au lancement (SIGTRAP) lorsqu'il est
+        lancé depuis le processus Odoo à cause des limites de ressources.
+        Cette méthode réessaie plusieurs fois avec un délai croissant.
         
         Args:
             playwright_instance: Instance Playwright (p)
@@ -490,12 +491,149 @@ class InvoiceScanRecord(models.Model):
         raise last_error
 
     @api.model
+    def _fetch_dgi_via_subprocess(self, url):
+        """Exécuter Playwright dans un sous-processus Python séparé.
+        
+        Le processus Odoo applique des limites de ressources (RLIMIT_AS via
+        --limit-memory-hard) et des contraintes cgroup Docker qui empêchent
+        Chromium de démarrer correctement. Cette méthode lance un script Python
+        isolé en sous-processus qui n'hérite pas de ces restrictions.
+        
+        Args:
+            url: URL DGI à scraper
+            
+        Returns:
+            dict: Résultat de l'extraction (success, data, error)
+        """
+        import subprocess
+        import json
+        
+        # Script Python autonome exécuté dans un processus séparé
+        script = '''
+import json
+import sys
+import resource
+
+# Lever toutes les limites de ressources héritées
+try:
+    resource.setrlimit(resource.RLIMIT_AS, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+except Exception:
+    pass
+
+url = sys.argv[1]
+
+try:
+    from playwright.sync_api import sync_playwright
+    
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-web-security',
+                '--disable-gpu',
+                '--disable-extensions',
+                '--disable-software-rasterizer',
+                '--disable-features=VizDisplayCompositor',
+            ]
+        )
+        
+        context = browser.new_context(
+            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/120.0.0.0 Safari/537.36',
+            viewport={'width': 1920, 'height': 1080},
+            locale='fr-FR',
+        )
+        page = context.new_page()
+        
+        page.goto(url, wait_until="networkidle", timeout=60000)
+        
+        # Attendre le chargement des données
+        max_attempts = 15
+        text_content = ""
+        for attempt in range(max_attempts):
+            page.wait_for_timeout(2000)
+            text_content = page.inner_text("body")
+            if 'FOURNISSEUR' in text_content.upper() or 'NUMERO DE FACTURE' in text_content.upper():
+                break
+        
+        raw_html = page.content()[:5000]
+        
+        try:
+            context.close()
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+    
+    print(json.dumps({
+        "success": True,
+        "text_content": text_content,
+        "raw_html": raw_html
+    }))
+
+except Exception as e:
+    print(json.dumps({
+        "success": False,
+        "error": str(e)
+    }))
+'''
+        
+        try:
+            _logger.info(f"DGI: Lancement du sous-processus Playwright pour: {url}")
+            result = subprocess.run(
+                [sys.executable, '-c', script, url],
+                capture_output=True,
+                text=True,
+                timeout=120,  # 2 minutes max
+                env={
+                    **__import__('os').environ,
+                    'PLAYWRIGHT_BROWSERS_PATH': '/opt/playwright-browsers',
+                },
+            )
+            
+            if result.returncode != 0:
+                stderr = result.stderr[:500] if result.stderr else 'No stderr'
+                _logger.error(f"DGI subprocess error (code {result.returncode}): {stderr}")
+                return None
+            
+            output = result.stdout.strip()
+            if not output:
+                _logger.error("DGI subprocess: sortie vide")
+                return None
+            
+            data = json.loads(output)
+            
+            if data.get('success'):
+                _logger.info("DGI: Données récupérées avec succès via subprocess")
+                return data
+            else:
+                _logger.warning(f"DGI subprocess echec: {data.get('error', 'Unknown')}")
+                return None
+                
+        except subprocess.TimeoutExpired:
+            _logger.error("DGI subprocess: timeout après 120s")
+            return None
+        except json.JSONDecodeError as e:
+            _logger.error(f"DGI subprocess: JSON invalide: {e}")
+            return None
+        except Exception as e:
+            _logger.error(f"DGI subprocess error: {e}")
+            return None
+
+    @api.model
     def fetch_invoice_data_from_dgi(self, url):
         """Récupérer les données de la facture depuis le site DGI.
         
-        Stratégie en 2 étapes:
+        Stratégie en 3 étapes:
         1. Essayer d'abord avec requests (rapide, sans navigateur)
-        2. Si échec, utiliser Playwright avec retry (3 tentatives)
+        2. Si échec, utiliser Playwright en subprocess isolé (évite les contraintes Odoo)
+        3. Si échec, fallback Playwright en processus Odoo (retry x3)
         
         Args:
             url: URL complète de vérification DGI
@@ -509,8 +647,17 @@ class InvoiceScanRecord(models.Model):
         if requests_result and requests_result.get('success'):
             return requests_result
         
-        # Étape 2: Utiliser Playwright avec retry
-        _logger.info(f"DGI: Utilisation de Playwright pour: {url}")
+        # Étape 2: Utiliser Playwright en subprocess isolé
+        # (évite les crashes causés par les limites de ressources d'Odoo)
+        _logger.info(f"DGI: Utilisation de Playwright en subprocess pour: {url}")
+        subprocess_result = self._fetch_dgi_via_subprocess(url)
+        if subprocess_result and subprocess_result.get('success'):
+            text_content = subprocess_result.get('text_content', '')
+            raw_html = subprocess_result.get('raw_html', '')
+            return self._extract_dgi_data_from_text(text_content, raw_html)
+        
+        # Étape 3: Fallback - Playwright en processus Odoo (peut crasher)
+        _logger.info(f"DGI: Fallback Playwright in-process pour: {url}")
         browser = None
         context = None
         try:
