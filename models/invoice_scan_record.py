@@ -1129,9 +1129,9 @@ except Exception as e:
             elif period == 'week':
                 date_from = today - timedelta(days=7)
             elif period == 'month':
-                date_from = today - timedelta(days=30)
+                date_from = today.replace(day=1)
             else:  # year
-                date_from = today - timedelta(days=365)
+                date_from = today.replace(month=1, day=1)
             
             # Domaine de base
             base_domain = [('company_id', '=', company_id)]
@@ -1155,7 +1155,7 @@ except Exception as e:
             # Statistiques temporelles
             today_start = datetime.combine(today, datetime.min.time())
             week_start = today - timedelta(days=7)
-            month_start = today - timedelta(days=30)
+            month_start = today.replace(day=1)
             
             today_scans = self.search_count(base_domain + [
                 ('scan_date', '>=', fields.Datetime.to_string(today_start))
@@ -1205,7 +1205,7 @@ except Exception as e:
             # Données pour graphiques (par jour sur la période)
             daily_data = []
             if period in ('week', 'month'):
-                days = 7 if period == 'week' else 30
+                days = 7 if period == 'week' else (today - today.replace(day=1)).days
                 for i in range(days, -1, -1):
                     day = today - timedelta(days=i)
                     day_start = datetime.combine(day, datetime.min.time())
@@ -1269,7 +1269,7 @@ except Exception as e:
         Args:
             date_start: Date de début (format ISO)
             date_end: Date de fin (format ISO)
-            period: Période d'analyse ('day', 'week', 'month', 'year')
+            period: Période d'analyse ('day', 'week', 'month', 'year', 'custom')
             
         Returns:
             dict: Données formatées pour le dashboard OWL
@@ -1284,23 +1284,34 @@ except Exception as e:
             today = fields.Date.today()
             
             # Valider et convertir les dates
-            if period not in ('day', 'week', 'month', 'year'):
+            if period not in ('day', 'week', 'month', 'year', 'custom'):
                 period = 'month'
             
             # Calculer les dates selon la période
-            if period == 'day':
+            if period == 'custom' and date_start and date_end:
+                date_from = fields.Date.from_string(date_start)
+                date_to = fields.Date.from_string(date_end)
+            elif period == 'day':
                 date_from = today
+                date_to = today
             elif period == 'week':
                 date_from = today - timedelta(days=7)
+                date_to = today
             elif period == 'month':
-                date_from = today - timedelta(days=30)
+                date_from = today.replace(day=1)
+                date_to = today
             else:  # year
-                date_from = today - timedelta(days=365)
+                date_from = today.replace(month=1, day=1)
+                date_to = today
             
             # Domaine de base
             base_domain = [('company_id', '=', company_id)]
             date_from_dt = datetime.combine(date_from, datetime.min.time())
-            period_domain = base_domain + [('scan_date', '>=', fields.Datetime.to_string(date_from_dt))]
+            date_to_dt = datetime.combine(date_to, datetime.max.time())
+            period_domain = base_domain + [
+                ('scan_date', '>=', fields.Datetime.to_string(date_from_dt)),
+                ('scan_date', '<=', fields.Datetime.to_string(date_to_dt)),
+            ]
             
             # Statistiques de la période
             done_scans = self.search_count(period_domain + [('state', 'in', ['done', 'processed'])])
@@ -1351,10 +1362,11 @@ except Exception as e:
                     AND supplier_name IS NOT NULL
                     AND supplier_name != ''
                     AND scan_date >= %s
+                    AND scan_date <= %s
                     GROUP BY supplier_name
                     ORDER BY scan_count DESC
                     LIMIT 5
-                """, (company_id, fields.Datetime.to_string(date_from_dt)))
+                """, (company_id, fields.Datetime.to_string(date_from_dt), fields.Datetime.to_string(date_to_dt)))
                 
                 top_suppliers = [{
                     'name': row[0] or 'Non défini',
@@ -1368,10 +1380,10 @@ except Exception as e:
             chart_scans = []
             chart_verified = []
             
-            if period in ('week', 'month'):
-                days = 7 if period == 'week' else 30
+            if period in ('week', 'month', 'custom'):
+                days = (date_to - date_from).days
                 for i in range(days, -1, -1):
-                    day = today - timedelta(days=i)
+                    day = date_to - timedelta(days=i)
                     day_start = datetime.combine(day, datetime.min.time())
                     day_end = datetime.combine(day, datetime.max.time())
                     
@@ -1441,13 +1453,15 @@ except Exception as e:
             }
 
     @api.model
-    def get_verificateur_dashboard_data(self, period='month'):
+    def get_verificateur_dashboard_data(self, period='month', date_start=None, date_end=None):
         """Récupérer les données pour le tableau de bord du Vérificateur.
         
         Le vérificateur voit ses propres scans, ses doublons détectés et ses factures créées.
         
         Args:
-            period: Période d'analyse ('day', 'week', 'month', 'year')
+            period: Période d'analyse ('day', 'week', 'month', 'year', 'custom')
+            date_start: Date de début (format ISO) pour période personnalisée
+            date_end: Date de fin (format ISO) pour période personnalisée
             
         Returns:
             dict: Données du dashboard vérificateur
@@ -1459,21 +1473,32 @@ except Exception as e:
             user_id = self.env.user.id
             today = fields.Date.today()
             
-            if period not in ('day', 'week', 'month', 'year'):
+            if period not in ('day', 'week', 'month', 'year', 'custom'):
                 period = 'month'
             
-            if period == 'day':
+            if period == 'custom' and date_start and date_end:
+                date_from = fields.Date.from_string(date_start)
+                date_to = fields.Date.from_string(date_end)
+            elif period == 'day':
                 date_from = today
+                date_to = today
             elif period == 'week':
                 date_from = today - timedelta(days=7)
+                date_to = today
             elif period == 'month':
-                date_from = today - timedelta(days=30)
-            else:
-                date_from = today - timedelta(days=365)
+                date_from = today.replace(day=1)
+                date_to = today
+            else:  # year
+                date_from = today.replace(month=1, day=1)
+                date_to = today
             
             base_domain = [('company_id', '=', company_id), ('scanned_by', '=', user_id)]
             date_from_dt = datetime.combine(date_from, datetime.min.time())
-            period_domain = base_domain + [('scan_date', '>=', fields.Datetime.to_string(date_from_dt))]
+            date_to_dt = datetime.combine(date_to, datetime.max.time())
+            period_domain = base_domain + [
+                ('scan_date', '>=', fields.Datetime.to_string(date_from_dt)),
+                ('scan_date', '<=', fields.Datetime.to_string(date_to_dt)),
+            ]
             
             # Statistiques période
             total_scans_period = self.search_count(period_domain)
@@ -1522,10 +1547,10 @@ except Exception as e:
             chart_scans = []
             chart_duplicates = []
             
-            if period in ('week', 'month'):
-                days = 7 if period == 'week' else 30
+            if period in ('week', 'month', 'custom'):
+                days = (date_to - date_from).days
                 for i in range(days, -1, -1):
-                    day = today - timedelta(days=i)
+                    day = date_to - timedelta(days=i)
                     day_start = datetime.combine(day, datetime.min.time())
                     day_end = datetime.combine(day, datetime.max.time())
                     day_domain = base_domain + [
@@ -1547,9 +1572,9 @@ except Exception as e:
                     FROM invoice_scan_record
                     WHERE company_id = %s AND scanned_by = %s
                     AND supplier_name IS NOT NULL AND supplier_name != ''
-                    AND scan_date >= %s
+                    AND scan_date >= %s AND scan_date <= %s
                     GROUP BY supplier_name ORDER BY scan_count DESC LIMIT 5
-                """, (company_id, user_id, fields.Datetime.to_string(date_from_dt)))
+                """, (company_id, user_id, fields.Datetime.to_string(date_from_dt), fields.Datetime.to_string(date_to_dt)))
                 top_suppliers = [{
                     'name': row[0] or 'Non défini',
                     'count': row[1],
@@ -1590,13 +1615,15 @@ except Exception as e:
                     'top_suppliers': [], 'chart_data': {'labels': [], 'scans': [], 'duplicates': []}}
 
     @api.model
-    def get_traiteur_dashboard_data(self, period='month'):
+    def get_traiteur_dashboard_data(self, period='month', date_start=None, date_end=None):
         """Récupérer les données pour le tableau de bord du Traiteur.
         
         Le traiteur voit les factures qu'il a traitées et celles en attente de traitement.
         
         Args:
-            period: Période d'analyse ('day', 'week', 'month', 'year')
+            period: Période d'analyse ('day', 'week', 'month', 'year', 'custom')
+            date_start: Date de début (format ISO) pour période personnalisée
+            date_end: Date de fin (format ISO) pour période personnalisée
             
         Returns:
             dict: Données du dashboard traiteur
@@ -1608,19 +1635,27 @@ except Exception as e:
             user_id = self.env.user.id
             today = fields.Date.today()
             
-            if period not in ('day', 'week', 'month', 'year'):
+            if period not in ('day', 'week', 'month', 'year', 'custom'):
                 period = 'month'
             
-            if period == 'day':
+            if period == 'custom' and date_start and date_end:
+                date_from = fields.Date.from_string(date_start)
+                date_to = fields.Date.from_string(date_end)
+            elif period == 'day':
                 date_from = today
+                date_to = today
             elif period == 'week':
                 date_from = today - timedelta(days=7)
+                date_to = today
             elif period == 'month':
-                date_from = today - timedelta(days=30)
-            else:
-                date_from = today - timedelta(days=365)
+                date_from = today.replace(day=1)
+                date_to = today
+            else:  # year
+                date_from = today.replace(month=1, day=1)
+                date_to = today
             
             date_from_dt = datetime.combine(date_from, datetime.min.time())
+            date_to_dt = datetime.combine(date_to, datetime.max.time())
             
             # Factures en attente de traitement (état 'done', non encore traitées)
             pending_domain = [
@@ -1638,6 +1673,7 @@ except Exception as e:
                 ('processed_by', '=', user_id),
                 ('state', '=', 'processed'),
                 ('processed_date', '>=', fields.Datetime.to_string(date_from_dt)),
+                ('processed_date', '<=', fields.Datetime.to_string(date_to_dt)),
             ]
             processed_period = self.search_count(my_processed_domain)
             processed_records_period = self.search(my_processed_domain)
@@ -1658,6 +1694,7 @@ except Exception as e:
                 ('company_id', '=', company_id),
                 ('state', '=', 'processed'),
                 ('processed_date', '>=', fields.Datetime.to_string(date_from_dt)),
+                ('processed_date', '<=', fields.Datetime.to_string(date_to_dt)),
             ]
             all_processed_period = self.search_count(all_processed_domain)
             
@@ -1694,10 +1731,10 @@ except Exception as e:
             chart_processed = []
             chart_pending = []
             
-            if period in ('week', 'month'):
-                days = 7 if period == 'week' else 30
+            if period in ('week', 'month', 'custom'):
+                days = (date_to - date_from).days
                 for i in range(days, -1, -1):
-                    day = today - timedelta(days=i)
+                    day = date_to - timedelta(days=i)
                     day_start = datetime.combine(day, datetime.min.time())
                     day_end = datetime.combine(day, datetime.max.time())
                     

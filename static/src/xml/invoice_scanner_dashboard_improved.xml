@@ -15,7 +15,12 @@
                         <option value="week" t-att-selected="state.period === 'week'">Cette semaine</option>
                         <option value="month" t-att-selected="state.period === 'month'">Ce mois</option>
                         <option value="year" t-att-selected="state.period === 'year'">Cette année</option>
+                        <option value="custom" t-att-selected="state.period === 'custom'">Période personnalisée</option>
                     </select>
+                    <t t-if="state.period === 'custom'">
+                        <input type="date" class="scanner-dash__date-input" t-att-value="state.date_start" t-on-change="onDateStartChange" placeholder="Début"/>
+                        <input type="date" class="scanner-dash__date-input" t-att-value="state.date_end" t-on-change="onDateEndChange" placeholder="Fin"/>
+                    </t>
                     <button class="scanner-dash__btn" t-on-click="loadDashboardData" t-att-disabled="state.loading">
                         <i t-attf-class="fa fa-refresh #{state.loading ? 'fa-spin' : ''}"/>
                     </button>

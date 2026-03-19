@@ -58,6 +58,20 @@
     background: #fff;
 }
 
+.scanner-dash__date-input {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #1e293b;
+    background: rgba(255,255,255,0.95);
+    outline: none;
+}
+
+.scanner-dash__date-input:focus {
+    background: #fff;
+}
+
 .scanner-dash__btn {
     width: 34px;
     height: 34px;

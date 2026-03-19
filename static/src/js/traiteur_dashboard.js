@@ -18,6 +18,8 @@ export class TraiteurDashboard extends Component {
         this.state = useState({
             loading: true,
             period: "month",
+            date_start: "",
+            date_end: "",
             stats: {
                 pending_count: 0,
                 pending_amount: 0,
@@ -56,7 +58,11 @@ export class TraiteurDashboard extends Component {
             const result = await this.orm.call(
                 "invoice.scan.record",
                 "get_traiteur_dashboard_data",
-                [this.state.period]
+                [
+                    this.state.period,
+                    this.state.period === "custom" ? this.state.date_start : null,
+                    this.state.period === "custom" ? this.state.date_end : null,
+                ]
             );
             this.state.stats = result.stats || this.state.stats;
             this.state.all_time_stats = result.all_time_stats || this.state.all_time_stats;
@@ -113,7 +119,23 @@ export class TraiteurDashboard extends Component {
 
     onPeriodChange(ev) {
         this.state.period = ev.target.value;
-        this.loadDashboardData();
+        if (this.state.period !== "custom") {
+            this.loadDashboardData();
+        }
+    }
+
+    onDateStartChange(ev) {
+        this.state.date_start = ev.target.value;
+        if (this.state.date_start && this.state.date_end) {
+            this.loadDashboardData();
+        }
+    }
+
+    onDateEndChange(ev) {
+        this.state.date_end = ev.target.value;
+        if (this.state.date_start && this.state.date_end) {
+            this.loadDashboardData();
+        }
     }
 
     formatNumber(value) {

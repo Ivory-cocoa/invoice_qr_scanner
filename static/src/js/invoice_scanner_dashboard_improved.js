@@ -16,6 +16,8 @@ export class InvoiceScannerDashboardImproved extends Component {
         this.state = useState({
             loading: true,
             period: "month",
+            date_start: "",
+            date_end: "",
             stats: {
                 total_scans: 0,
                 successful_scans: 0,
@@ -56,7 +58,11 @@ export class InvoiceScannerDashboardImproved extends Component {
             const result = await this.orm.call(
                 "invoice.scan.record",
                 "get_dashboard_stats",
-                [null, null, this.state.period]
+                [
+                    this.state.period === "custom" ? this.state.date_start : null,
+                    this.state.period === "custom" ? this.state.date_end : null,
+                    this.state.period,
+                ]
             );
             
             this.state.stats = result.stats || this.state.stats;
@@ -95,8 +101,13 @@ export class InvoiceScannerDashboardImproved extends Component {
         switch (this.state.period) {
             case "day": start.setHours(0, 0, 0, 0); break;
             case "week": start.setDate(now.getDate() - 7); break;
-            case "month": start.setMonth(now.getMonth() - 1); break;
-            case "year": start.setFullYear(now.getFullYear() - 1); break;
+            case "month": start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case "year": start = new Date(now.getFullYear(), 0, 1); break;
+            case "custom":
+                return {
+                    start: this.state.date_start,
+                    end: this.state.date_end,
+                };
         }
         
         return {
@@ -107,7 +118,23 @@ export class InvoiceScannerDashboardImproved extends Component {
 
     onPeriodChange(ev) {
         this.state.period = ev.target.value;
-        this.loadDashboardData();
+        if (this.state.period !== "custom") {
+            this.loadDashboardData();
+        }
+    }
+
+    onDateStartChange(ev) {
+        this.state.date_start = ev.target.value;
+        if (this.state.date_start && this.state.date_end) {
+            this.loadDashboardData();
+        }
+    }
+
+    onDateEndChange(ev) {
+        this.state.date_end = ev.target.value;
+        if (this.state.date_start && this.state.date_end) {
+            this.loadDashboardData();
+        }
     }
 
     renderCharts() {
