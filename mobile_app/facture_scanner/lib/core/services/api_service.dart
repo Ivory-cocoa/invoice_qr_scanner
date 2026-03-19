@@ -10,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/environment.dart';
 import '../models/api_response.dart';
 import '../models/user.dart';
-import '../models/scan_record.dart';
 
 class ApiService {
   static const String _baseUrlKey = 'api_base_url';

@@ -3,7 +3,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shimmer/shimmer.dart';
 
 import '../core/providers/scan_provider.dart';
 import '../core/theme/app_theme.dart';
@@ -264,95 +263,5 @@ class StatsCard extends StatelessWidget {
       (Match m) => '${m[1]} ',
     );
     return '$formatted FCFA';
-  }
-
-  Widget _buildLoadingCard(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
-    
-    return Container(
-      decoration: AppTheme.getCardDecoration(context),
-      child: Shimmer.fromColors(
-        baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
-        highlightColor: isDark ? Colors.grey.shade700 : Colors.grey.shade100,
-        child: Column(
-          children: [
-            Container(
-              height: 80,
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkSurfaceHigher : Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: _buildLoadingStatItem(context)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildLoadingStatItem(context)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(child: _buildLoadingStatItem(context)),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildLoadingStatItem(context)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, color: AppTheme.getDivider(context)),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.darkSurfaceHigher : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 100, 
-                        height: 12, 
-                        color: isDark ? AppTheme.darkSurfaceHigher : Colors.white,
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        width: 140, 
-                        height: 20, 
-                        color: isDark ? AppTheme.darkSurfaceHigher : Colors.white,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingStatItem(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
-    
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurfaceHigher : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
-    );
   }
 }

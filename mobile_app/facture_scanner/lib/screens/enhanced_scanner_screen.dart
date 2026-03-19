@@ -1,7 +1,6 @@
 /// Enhanced Scanner Screen - Design Professionnel ICP
 /// Interface de scan QR moderne avec overlay personnalisé et animations avancées
 
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -754,7 +753,6 @@ class _ScanOverlayPainter extends CustomPainter {
 
     final centerX = size.width / 2;
     final centerY = size.height / 2;
-    final halfSize = scanAreaSize / 2;
 
     final path = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))

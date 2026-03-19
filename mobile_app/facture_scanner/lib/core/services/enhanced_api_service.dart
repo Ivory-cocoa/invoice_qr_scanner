@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/environment.dart';
 import '../models/api_response.dart';
 import '../models/user.dart';
-import '../models/scan_record.dart';
 
 /// Configuration des retries
 class RetryConfig {

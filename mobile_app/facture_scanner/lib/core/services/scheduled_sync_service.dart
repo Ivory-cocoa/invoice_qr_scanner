@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'api_service.dart';
 import 'database_service.dart';
 import 'sync_service.dart';
 
@@ -22,6 +23,13 @@ void callbackDispatcher() {
     try {
       // Initialiser les services nécessaires
       await DatabaseService().init();
+      await ApiService().init();
+
+      // Vérifier que l'utilisateur est connecté
+      if (!ApiService().isAuthenticated) {
+        debugPrint('[ScheduledSync] Utilisateur non connecté, sync ignorée');
+        return true;
+      }
 
       final db = DatabaseService();
       final settings = await db.getSyncSettings();

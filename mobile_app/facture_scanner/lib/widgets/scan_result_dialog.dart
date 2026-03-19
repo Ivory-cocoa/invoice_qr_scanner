@@ -90,7 +90,6 @@ class ScanResultDialog extends StatelessWidget {
   }
   
   Widget _buildHeader(BuildContext context) {
-    final isDark = AppTheme.isDark(context);
     Color color;
     IconData icon;
     String title;
@@ -381,21 +380,6 @@ class ScanResultDialog extends StatelessWidget {
         ),
       ],
     );
-  }
-  
-  Color _getStateColor(BuildContext context) {
-    switch (state) {
-      case ScanState.success:
-        return AppTheme.getSuccess(context);
-      case ScanState.duplicate:
-        return AppTheme.getWarning(context);
-      case ScanState.alreadyProcessed:
-        return AppTheme.getWarning(context);
-      case ScanState.error:
-        return AppTheme.getError(context);
-      default:
-        return AppTheme.getPrimary(context);
-    }
   }
   
   Widget _buildErrorMessageBox(BuildContext context, String errorMessage) {
