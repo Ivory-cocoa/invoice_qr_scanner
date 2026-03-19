@@ -138,6 +138,13 @@ class ApiService {
       'scans': scans,
     });
   }
+
+  /// Sync offline scans with pre-parsed DGI data (no server-side fetch needed)
+  Future<ApiResponse<Map<String, dynamic>>> syncParsedScans(List<Map<String, dynamic>> scans) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/sync-parsed', {
+      'scans': scans,
+    });
+  }
   
   /// Get errors list with filters
   Future<ApiResponse<Map<String, dynamic>>> getErrors({

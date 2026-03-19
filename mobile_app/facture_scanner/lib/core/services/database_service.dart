@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 import '../models/scan_record.dart';
+import 'dgi_parser_service.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -31,7 +32,7 @@ class DatabaseService {
     
     final db = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -43,7 +44,7 @@ class DatabaseService {
   }
   
   Future<void> _onCreate(Database db, int version) async {
-    // Pending scans table (for offline scans)
+    // Pending scans table (for offline scans with parsed DGI data)
     await db.execute('''
       CREATE TABLE pending_scans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,9 +53,38 @@ class DatabaseService {
         scanned_at TEXT NOT NULL,
         synced INTEGER DEFAULT 0,
         sync_error TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        supplier_name TEXT,
+        supplier_code_dgi TEXT,
+        customer_name TEXT,
+        customer_code_dgi TEXT,
+        invoice_number_dgi TEXT,
+        invoice_date TEXT,
+        verification_id TEXT,
+        amount_ttc REAL,
+        raw_text TEXT,
+        parsed INTEGER DEFAULT 0
       )
     ''');
+
+    // Sync settings table
+    await db.execute('''
+      CREATE TABLE sync_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sync_hour INTEGER DEFAULT 20,
+        sync_minute INTEGER DEFAULT 0,
+        auto_sync_enabled INTEGER DEFAULT 1,
+        last_scheduled_sync TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+
+    // Insert default settings
+    await db.insert('sync_settings', {
+      'sync_hour': 20,
+      'sync_minute': 0,
+      'auto_sync_enabled': 1,
+    });
     
     // Scan history cache table
     await db.execute('''
@@ -106,6 +136,39 @@ class DatabaseService {
         await db.execute('ALTER TABLE scan_history ADD COLUMN last_duplicate_user TEXT');
       } catch (_) {}
     }
+    if (oldVersion < 4) {
+      // Add parsed DGI data columns to pending_scans
+      try {
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN supplier_name TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN supplier_code_dgi TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN customer_name TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN customer_code_dgi TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN invoice_number_dgi TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN invoice_date TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN verification_id TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN amount_ttc REAL');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN raw_text TEXT');
+        await db.execute('ALTER TABLE pending_scans ADD COLUMN parsed INTEGER DEFAULT 0');
+      } catch (_) {}
+      // Create sync_settings table
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS sync_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sync_hour INTEGER DEFAULT 20,
+            sync_minute INTEGER DEFAULT 0,
+            auto_sync_enabled INTEGER DEFAULT 1,
+            last_scheduled_sync TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+          )
+        ''');
+        await db.insert('sync_settings', {
+          'sync_hour': 20,
+          'sync_minute': 0,
+          'auto_sync_enabled': 1,
+        });
+      } catch (_) {}
+    }
   }
   
   /// Nettoyer les données de plus de 24 heures
@@ -139,6 +202,32 @@ class DatabaseService {
       'qr_uuid': qrUuid,
       'scanned_at': DateTime.now().toIso8601String(),
       'synced': 0,
+      'parsed': 0,
+    });
+  }
+
+  /// Add a pending scan with parsed DGI data (local extraction mode)
+  Future<int> addParsedPendingScan(
+    String qrUrl,
+    String qrUuid,
+    DgiParsedData parsedData,
+  ) async {
+    final db = await database;
+    return await db.insert('pending_scans', {
+      'qr_url': qrUrl,
+      'qr_uuid': qrUuid,
+      'scanned_at': DateTime.now().toIso8601String(),
+      'synced': 0,
+      'parsed': 1,
+      'supplier_name': parsedData.supplierName,
+      'supplier_code_dgi': parsedData.supplierCodeDgi,
+      'customer_name': parsedData.customerName,
+      'customer_code_dgi': parsedData.customerCodeDgi,
+      'invoice_number_dgi': parsedData.invoiceNumberDgi,
+      'invoice_date': parsedData.invoiceDate,
+      'verification_id': parsedData.verificationId,
+      'amount_ttc': parsedData.amountTtc,
+      'raw_text': parsedData.rawText,
     });
   }
   
@@ -258,6 +347,85 @@ class DatabaseService {
   
   // ==================== UTILITIES ====================
   
+  /// Get all parsed pending scans (for enriched sync)
+  Future<List<Map<String, dynamic>>> getParsedPendingScans() async {
+    final db = await database;
+    return await db.query(
+      'pending_scans',
+      where: 'synced = ? AND parsed = ?',
+      whereArgs: [0, 1],
+      orderBy: 'created_at ASC',
+    );
+  }
+
+  /// Get all unparsed pending scans (for fallback sync)
+  Future<List<Map<String, dynamic>>> getUnparsedPendingScans() async {
+    final db = await database;
+    return await db.query(
+      'pending_scans',
+      where: 'synced = ? AND parsed = ?',
+      whereArgs: [0, 0],
+      orderBy: 'created_at ASC',
+    );
+  }
+
+  // ==================== SYNC SETTINGS ====================
+
+  /// Get sync settings
+  Future<Map<String, dynamic>> getSyncSettings() async {
+    final db = await database;
+    final results = await db.query('sync_settings', limit: 1);
+    if (results.isEmpty) {
+      // Insert default and return
+      await db.insert('sync_settings', {
+        'sync_hour': 20,
+        'sync_minute': 0,
+        'auto_sync_enabled': 1,
+      });
+      return {
+        'sync_hour': 20,
+        'sync_minute': 0,
+        'auto_sync_enabled': 1,
+      };
+    }
+    return results.first;
+  }
+
+  /// Update sync settings
+  Future<void> updateSyncSettings({
+    int? syncHour,
+    int? syncMinute,
+    bool? autoSyncEnabled,
+  }) async {
+    final db = await database;
+    final current = await getSyncSettings();
+    await db.update(
+      'sync_settings',
+      {
+        if (syncHour != null) 'sync_hour': syncHour,
+        if (syncMinute != null) 'sync_minute': syncMinute,
+        if (autoSyncEnabled != null) 'auto_sync_enabled': autoSyncEnabled ? 1 : 0,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [current['id']],
+    );
+  }
+
+  /// Record the last scheduled sync time
+  Future<void> recordScheduledSync() async {
+    final db = await database;
+    final current = await getSyncSettings();
+    await db.update(
+      'sync_settings',
+      {
+        'last_scheduled_sync': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [current['id']],
+    );
+  }
+
   /// Clear all data (logout)
   Future<void> clearAllData() async {
     final db = await database;

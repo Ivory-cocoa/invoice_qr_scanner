@@ -128,7 +128,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     
     if (result != null && mounted) {
-      await scan.processQrCode(result, isOnline: connectivity.isOnline);
+      await scan.processQrCode(
+        result,
+        isOnline: connectivity.isOnline,
+        localExtraction: !connectivity.isOnline,
+      );
       
       if (scan.state != ScanState.idle && mounted) {
         final dialogResult = await showDialog<String>(
@@ -534,6 +538,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 if (value == 'logout') _logout();
                 if (value == 'clear_offline') _clearOfflineData();
                 if (value == 'mark_all_processed') _markAllProcessed();
+                if (value == 'settings') Navigator.pushNamed(context, '/settings');
               },
               itemBuilder: (context) => [
                 PopupMenuItem(
@@ -585,6 +590,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       const SizedBox(width: 12),
                       Text(
                         'Vider données hors ligne',
+                        style: TextStyle(
+                          color: AppTheme.getTextPrimary(context),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'settings',
+                  child: Row(
+                    children: [
+                      Icon(Icons.settings_rounded, color: AppTheme.getPrimary(context), size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Paramètres sync',
                         style: TextStyle(
                           color: AppTheme.getTextPrimary(context),
                           fontWeight: FontWeight.w500,
@@ -966,6 +987,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     badge: duplicateAttempts > 0 ? duplicateAttempts : null,
                   );
                 },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Consumer2<ScanProvider, ConnectivityProvider>(
+                builder: (context, scan, connectivity, _) {
+                  return _buildActionCard(
+                    icon: Icons.cloud_sync_rounded,
+                    title: 'Synchroniser',
+                    subtitle: scan.hasPendingScans
+                        ? '${scan.pendingScansCount} en attente'
+                        : 'Tout est à jour',
+                    color: scan.hasPendingScans
+                        ? const Color(0xFF6C63FF)
+                        : Colors.grey,
+                    onTap: scan.hasPendingScans && connectivity.isOnline
+                        ? _syncPendingScans
+                        : () {},
+                    badge: scan.hasPendingScans ? scan.pendingScansCount : null,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.settings_rounded,
+                title: 'Paramètres',
+                subtitle: 'Heure de sync',
+                color: Colors.blueGrey,
+                onTap: () => Navigator.pushNamed(context, '/settings'),
               ),
             ),
           ],

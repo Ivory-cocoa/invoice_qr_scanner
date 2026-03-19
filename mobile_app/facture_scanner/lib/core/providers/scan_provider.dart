@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
+import '../services/dgi_extractor_service.dart';
 import '../models/scan_record.dart';
 import 'auth_provider.dart';
 
@@ -15,6 +16,7 @@ class ScanProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
   final SyncService _sync = SyncService();
+  final DgiExtractorService _extractor = DgiExtractorService();
   
   AuthProvider? _auth;
   
@@ -31,6 +33,9 @@ class ScanProvider extends ChangeNotifier {
   int _localErrorCount = 0;
   int _localSuccessCount = 0;
   
+  // Progression de l'extraction DGI
+  String? _extractionProgress;
+  
   // Getters
   ScanState get state => _state;
   String? get message => _message;
@@ -40,6 +45,7 @@ class ScanProvider extends ChangeNotifier {
   int get pendingScansCount => _pendingScansCount;
   Map<String, dynamic>? get stats => _stats;
   bool get hasPendingScans => _pendingScansCount > 0;
+  String? get extractionProgress => _extractionProgress;
   
   // Stats avec compteurs locaux combinés
   // Retourne toujours les stats (même si vides) pour permettre l'affichage des compteurs locaux
@@ -80,7 +86,8 @@ class ScanProvider extends ChangeNotifier {
   }
   
   /// Process a scanned QR code
-  Future<void> processQrCode(String qrContent, {bool isOnline = true}) async {
+  /// If [localExtraction] is true, extract DGI data locally and save for scheduled sync
+  Future<void> processQrCode(String qrContent, {bool isOnline = true, bool localExtraction = false}) async {
     _state = ScanState.processing;
     _message = null;
     _lastScanResult = null;
@@ -131,11 +138,11 @@ class ScanProvider extends ChangeNotifier {
       return;
     }
     
-    if (isOnline) {
+    if (isOnline && !localExtraction) {
       // Online mode: send to server immediately
       await _processOnline(qrContent);
     } else {
-      // Offline mode: save locally
+      // Offline or local extraction mode: extract locally and save
       await _processOffline(qrContent, qrUuid);
     }
   }
@@ -276,16 +283,54 @@ class ScanProvider extends ChangeNotifier {
   
   Future<void> _processOffline(String qrUrl, String qrUuid) async {
     try {
-      await _db.addPendingScan(qrUrl, qrUuid);
-      await _updatePendingCount();
+      // Tenter d'extraire les données DGI localement via WebView
+      _extractionProgress = 'Chargement de la page DGI...';
+      notifyListeners();
       
-      _state = ScanState.success;
-      _message = 'Scan enregistré localement. Sera synchronisé une fois en ligne.';
+      final extractionResult = await _extractor.extractFromUrl(
+        qrUrl,
+        onProgress: (msg) {
+          _extractionProgress = msg;
+          notifyListeners();
+        },
+      );
+      
+      _extractionProgress = null;
+      
+      if (extractionResult.success && extractionResult.data != null) {
+        // Sauvegarder avec les données parsées
+        await _db.addParsedPendingScan(qrUrl, qrUuid, extractionResult.data!);
+        await _updatePendingCount();
+        
+        _state = ScanState.success;
+        _message = 'Facture analysée et enregistrée localement.\n'
+            'Fournisseur: ${extractionResult.data!.supplierName}\n'
+            'Montant: ${extractionResult.data!.formattedAmount}\n'
+            'Sera synchronisée à l\'heure programmée.';
+        _localSuccessCount++;
+      } else {
+        // Fallback: sauvegarder juste l'URL (le serveur fera le fetch plus tard)
+        await _db.addPendingScan(qrUrl, qrUuid);
+        await _updatePendingCount();
+        
+        _state = ScanState.success;
+        _message = 'Scan enregistré localement (données non extraites).\n'
+            'Le serveur extraira les données lors de la synchronisation.';
+      }
     } catch (e) {
-      _state = ScanState.error;
-      _message = 'Erreur lors de l\'enregistrement local';
+      // Fallback en cas d'erreur: sauvegarder juste l'URL
+      try {
+        await _db.addPendingScan(qrUrl, qrUuid);
+        await _updatePendingCount();
+        _state = ScanState.success;
+        _message = 'Scan enregistré localement. Sera synchronisé une fois en ligne.';
+      } catch (e2) {
+        _state = ScanState.error;
+        _message = 'Erreur lors de l\'enregistrement local';
+      }
     }
     
+    _extractionProgress = null;
     notifyListeners();
   }
   
@@ -392,6 +437,7 @@ class ScanProvider extends ChangeNotifier {
     _localDuplicateCount = 0;
     _localErrorCount = 0;
     _localSuccessCount = 0;
+    _extractionProgress = null;
     notifyListeners();
   }
 

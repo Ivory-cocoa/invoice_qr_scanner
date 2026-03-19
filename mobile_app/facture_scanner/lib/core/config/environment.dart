@@ -67,9 +67,9 @@ class EnvironmentConfig {
 /// MODIFIER ICI POUR CHANGER D'ENVIRONNEMENT
 class AppConfig {
   // ========================================
-  // ENVIRONNEMENT ACTUEL: PRODUCTION
+  // ENVIRONNEMENT ACTUEL: DÉVELOPPEMENT
   // ========================================
-  static const Environment currentEnvironment = Environment.production;
+  static const Environment currentEnvironment = Environment.development;
   
   static EnvironmentConfig get config => 
       EnvironmentConfig.fromEnvironment(currentEnvironment);

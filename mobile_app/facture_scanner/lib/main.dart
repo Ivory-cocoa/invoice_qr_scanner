@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'core/services/api_service.dart';
 import 'core/services/database_service.dart';
 import 'core/services/sync_service.dart';
+import 'core/services/scheduled_sync_service.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/scan_provider.dart';
 import 'core/providers/connectivity_provider.dart';
@@ -17,6 +18,7 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/traiteur_home_screen.dart';
 import 'screens/manager_home_screen.dart';
+import 'screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +26,9 @@ void main() async {
   // Initialize services
   await DatabaseService().init();
   await ApiService().init();
+  
+  // Initialize scheduled sync (WorkManager)
+  await ScheduledSyncService().initialize();
   
   runApp(const FactureScannerApp());
 }
@@ -54,6 +59,7 @@ class FactureScannerApp extends StatelessWidget {
           '/': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
           '/home': (context) => const RoleBasedHomeScreen(),
+          '/settings': (context) => const SettingsScreen(),
         },
       ),
     );
