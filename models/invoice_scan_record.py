@@ -293,10 +293,24 @@ class InvoiceScanRecord(models.Model):
         return match.group(0).lower() if match else None
 
     @api.model
+    def _normalize_dgi_url(self, url):
+        """Convertir l'URL DGI en version française pour avoir les labels FR.
+        
+        Les QR codes DGI peuvent encoder l'URL en anglais (/en/) ou en français (/fr/).
+        Nos regex d'extraction utilisent principalement les labels français,
+        donc on force la version française.
+        """
+        if url and '/en/verification/' in url:
+            url = url.replace('/en/verification/', '/fr/verification/')
+            _logger.info(f"DGI: URL normalisée en français: {url}")
+        return url
+
+    @api.model
     def _extract_dgi_data_from_text(self, text_content, raw_html=''):
         """Extraire les données de facture DGI depuis le texte rendu.
         
         Méthode utilitaire partagée entre l'approche Playwright et le fallback requests.
+        Supporte les labels en français ET en anglais (fallback).
         
         Args:
             text_content: Texte brut de la page
@@ -311,52 +325,52 @@ class InvoiceScanRecord(models.Model):
             'success': True,
         }
         
-        # Fournisseur (format: "NOM - CODE" sur plusieurs lignes)
+        # Fournisseur / Supplier (format: "NOM - CODE" sur plusieurs lignes)
         supplier_match = re.search(
-            r'FOURNISSEUR:\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
+            r'(?:FOURNISSEUR|SUPPLIER):\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
             text_content, re.IGNORECASE | re.MULTILINE
         )
         if supplier_match:
             data['supplier_name'] = supplier_match.group(1).strip()
             data['supplier_code_dgi'] = supplier_match.group(2).strip()
         
-        # Client (format: "NOM - CODE")
+        # Client / Customer (format: "NOM - CODE")
         client_match = re.search(
-            r'CLIENT:\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
+            r'(?:CLIENT|CUSTOMER):\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
             text_content, re.IGNORECASE | re.MULTILINE
         )
         if client_match:
             data['customer_name'] = client_match.group(1).strip()
             data['customer_code_dgi'] = client_match.group(2).strip()
         
-        # Numéro de facture
+        # Numéro de facture / Invoice Number
         invoice_match = re.search(
-            r'NUMERO DE FACTURE:\s*\n*\s*([A-Z0-9]+)',
+            r'(?:NUMERO DE FACTURE|INVOICE NUMBER):\s*\n*\s*([A-Z0-9]+)',
             text_content, re.IGNORECASE | re.MULTILINE
         )
         if invoice_match:
             data['invoice_number_dgi'] = invoice_match.group(1).strip()
         
-        # Date de facturation (format: DD/MM/YYYY)
+        # Date de facturation / Invoice Date (format: DD/MM/YYYY)
         date_match = re.search(
-            r'DATE DE FACTURATION:\s*\n*\s*(\d{2}/\d{2}/\d{4})',
+            r'(?:DATE DE FACTURATION|INVOICE DATE|BILLING DATE):\s*\n*\s*(\d{2}/\d{2}/\d{4})',
             text_content, re.IGNORECASE | re.MULTILINE
         )
         if date_match:
             date_str = date_match.group(1)
             data['invoice_date'] = datetime.strptime(date_str, '%d/%m/%Y').date()
         
-        # ID Vérification
+        # ID Vérification / Verification ID
         verif_match = re.search(
-            r'ID VERIFICATION:\s*\n*\s*([A-Z0-9\-]+)',
+            r'(?:ID VERIFICATION|VERIFICATION ID):\s*\n*\s*([A-Z0-9\-]+)',
             text_content, re.IGNORECASE | re.MULTILINE
         )
         if verif_match:
             data['verification_id'] = verif_match.group(1).strip()
         
-        # Montant TTC (format: "1 677 566 CFA" ou "1 677 566 FCFA")
+        # Montant TTC / Total Amount (format: "1 677 566 CFA" ou "1 677 566 FCFA")
         amount_match = re.search(
-            r'MONTANT TTC:\s*\n*\s*([\d\s]+)\s*(?:F?CFA)',
+            r'(?:MONTANT TTC|TOTAL AMOUNT|AMOUNT INCLUDING TAX):\s*\n*\s*([\d\s]+)\s*(?:F?CFA)',
             text_content, re.IGNORECASE | re.MULTILINE
         )
         if amount_match:
@@ -377,6 +391,8 @@ class InvoiceScanRecord(models.Model):
         
         if missing_fields:
             _logger.warning(f"DGI: Données incomplètes - champs manquants: {', '.join(missing_fields)}")
+            # Log le début du texte pour diagnostiquer ce que la page a renvoyé
+            _logger.warning(f"DGI: Début du texte page (500 chars): {text_content[:500]}")
             data['success'] = False
             data['error'] = f"Données DGI incomplètes: {', '.join(missing_fields)} non trouvé(s). La page n'a peut-être pas fini de charger."
             data['missing_fields'] = missing_fields
@@ -549,6 +565,10 @@ except Exception:
 
 url = sys.argv[1]
 
+# Normaliser l'URL en français pour avoir les labels FR
+if '/en/verification/' in url:
+    url = url.replace('/en/verification/', '/fr/verification/')
+
 try:
     from playwright.sync_api import sync_playwright
     
@@ -578,13 +598,16 @@ try:
         
         page.goto(url, wait_until="networkidle", timeout=60000)
         
-        # Attendre le chargement des données
+        # Attendre le chargement des données (FR + EN keywords)
         max_attempts = 15
         text_content = ""
+        data_found = False
         for attempt in range(max_attempts):
             page.wait_for_timeout(2000)
             text_content = page.inner_text("body")
-            if 'FOURNISSEUR' in text_content.upper() or 'NUMERO DE FACTURE' in text_content.upper():
+            upper = text_content.upper()
+            if any(kw in upper for kw in ['FOURNISSEUR', 'NUMERO DE FACTURE', 'SUPPLIER', 'INVOICE NUMBER']):
+                data_found = True
                 break
         
         raw_html = page.content()[:5000]
@@ -598,11 +621,15 @@ try:
         except Exception:
             pass
     
-    print(json.dumps({
+    result = {
         "success": True,
         "text_content": text_content,
-        "raw_html": raw_html
-    }))
+        "raw_html": raw_html,
+        "data_found": data_found
+    }
+    if not data_found:
+        result["warning"] = f"Keywords not found after {max_attempts} attempts. Text start: " + text_content[:300]
+    print(json.dumps(result))
 
 except Exception as e:
     print(json.dumps({
@@ -729,6 +756,9 @@ except Exception as e:
         Returns:
             dict: Données de la facture ou erreur
         """
+        # Normaliser l'URL en français (les QR codes DGI peuvent avoir /en/)
+        url = self._normalize_dgi_url(url)
+        
         # Étape 1: Essayer sans Playwright (requests + BeautifulSoup)
         _logger.info(f"DGI: Tentative de récupération sans navigateur pour: {url}")
         requests_result = self._fetch_dgi_with_requests(url)

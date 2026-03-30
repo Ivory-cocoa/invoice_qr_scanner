@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Daemon Playwright persistant pour le fetch DGI.
 
-Ce script tourne en arrière-plan comme un service séparé, gardant
-une instance Chromium en vie. Odoo communique avec lui via HTTP
-sur un socket local (port 9222).
+Architecture queue-based:
+- Le thread principal gère Playwright (sync API avec greenlets)
+- Le serveur HTTP tourne dans un thread séparé
+- Les requêtes HTTP sont transmises au thread principal via une queue
+- Ceci évite le problème "Cannot switch to a different thread" des greenlets
 
 Avantages:
 - Chromium lancé UNE SEULE FOIS (pas de crash SIGTRAP à chaque scan)
@@ -13,12 +15,12 @@ Avantages:
 
 Usage:
     python3 playwright_daemon.py              # Lancement normal
-    python3 playwright_daemon.py --port 9222  # Port personnalisé
 """
 
 import json
 import logging
 import os
+import queue
 import resource
 import signal
 import sys
@@ -45,13 +47,15 @@ MAX_CONCURRENT = int(os.environ.get('PLAYWRIGHT_MAX_CONCURRENT', '3'))
 PAGE_TIMEOUT = 60000  # 60s pour page.goto
 POLL_INTERVAL = 2000  # 2s entre chaque vérification
 MAX_POLL_ATTEMPTS = 20  # 40s max de polling
-BROWSER_RESTART_DELAY = 5  # 5s avant restart
+
+# Mots-clés DGI attendus (FR + EN)
+DGI_KEYWORDS = ['FOURNISSEUR', 'NUMERO DE FACTURE', 'SUPPLIER', 'INVOICE NUMBER']
 
 # État global
 _browser = None
 _playwright = None
-_lock = threading.Lock()
 _semaphore = threading.Semaphore(MAX_CONCURRENT)
+_request_queue = queue.Queue()
 _stats = {
     'total_requests': 0,
     'successful': 0,
@@ -61,8 +65,16 @@ _stats = {
 }
 
 
+def _normalize_dgi_url(url):
+    """Convertir l'URL DGI en version française pour que les labels soient en français."""
+    if '/en/verification/' in url:
+        url = url.replace('/en/verification/', '/fr/verification/')
+        logger.info(f"URL normalisée en français: {url}")
+    return url
+
+
 def _launch_browser():
-    """Lance ou relance le navigateur Chromium."""
+    """Lance ou relance le navigateur Chromium (MUST run on main thread)."""
     global _browser, _playwright
 
     from playwright.sync_api import sync_playwright
@@ -90,32 +102,32 @@ def _launch_browser():
             '--single-process',
         ]
     )
-    logger.info(f"Chromium lancé avec succès (PID: {_browser.contexts})")
+    logger.info("Chromium lancé avec succès")
     return _browser
 
 
 def _ensure_browser():
-    """S'assure que le navigateur est disponible, le relance si nécessaire."""
+    """S'assure que le navigateur est disponible (MUST run on main thread)."""
     global _browser
-    with _lock:
-        if _browser is None or not _browser.is_connected():
-            try:
-                if _browser:
-                    try:
-                        _browser.close()
-                    except Exception:
-                        pass
-                _browser = None
-                _launch_browser()
-                _stats['browser_restarts'] += 1
-            except Exception as e:
-                logger.error(f"Échec lancement navigateur: {e}")
-                raise
+    if _browser is None or not _browser.is_connected():
+        try:
+            if _browser:
+                try:
+                    _browser.close()
+                except Exception:
+                    pass
+            _browser = None
+            _launch_browser()
+            _stats['browser_restarts'] += 1
+        except Exception as e:
+            logger.error(f"Échec lancement navigateur: {e}")
+            raise
     return _browser
 
 
 def fetch_dgi_page(url):
-    """Fetch une page DGI et retourne le texte + HTML."""
+    """Fetch une page DGI et retourne le texte + HTML (MUST run on main thread)."""
+    url = _normalize_dgi_url(url)
     browser = _ensure_browser()
 
     context = None
@@ -142,7 +154,7 @@ def fetch_dgi_page(url):
             page.wait_for_timeout(POLL_INTERVAL)
             text_content = page.inner_text("body")
             upper_text = text_content.upper()
-            if 'FOURNISSEUR' in upper_text or 'NUMERO DE FACTURE' in upper_text:
+            if any(kw in upper_text for kw in DGI_KEYWORDS):
                 logger.info(f"Données trouvées après {(attempt + 1) * 2}s")
                 data_found = True
                 break
@@ -150,7 +162,8 @@ def fetch_dgi_page(url):
         raw_html = page.content()[:5000]
 
         if not data_found:
-            logger.warning(f"Données non trouvées après {MAX_POLL_ATTEMPTS * 2}s de polling")
+            logger.warning(f"Données non trouvées après {MAX_POLL_ATTEMPTS * 2}s. "
+                          f"Texte début: {text_content[:500]}")
 
         return {
             'success': True,
@@ -166,8 +179,7 @@ def fetch_dgi_page(url):
         # Si le navigateur a crashé, le marquer pour restart
         if 'closed' in error_msg.lower() or 'crash' in error_msg.lower():
             global _browser
-            with _lock:
-                _browser = None
+            _browser = None
 
         return {
             'success': False,
@@ -187,14 +199,12 @@ def fetch_dgi_page(url):
 
 
 class DGIHandler(BaseHTTPRequestHandler):
-    """Handler HTTP pour les requêtes du module Odoo."""
+    """Handler HTTP — transmet les requêtes au thread principal via queue."""
 
     def log_message(self, format, *args):
-        """Redirige les logs vers le logger."""
         logger.debug(f"HTTP: {format % args}")
 
     def do_GET(self):
-        """Health check."""
         if self.path == '/health':
             uptime = time.time() - _stats['start_time'] if _stats['start_time'] else 0
             response = {
@@ -208,12 +218,10 @@ class DGIHandler(BaseHTTPRequestHandler):
             self._send_json(404, {'error': 'Not found'})
 
     def do_POST(self):
-        """Traite une requête de fetch DGI."""
         if self.path != '/fetch':
             self._send_json(404, {'error': 'Not found'})
             return
 
-        # Lire le body
         content_length = int(self.headers.get('Content-Length', 0))
         if content_length == 0:
             self._send_json(400, {'error': 'Missing body'})
@@ -241,7 +249,21 @@ class DGIHandler(BaseHTTPRequestHandler):
 
         _stats['total_requests'] += 1
         try:
-            result = fetch_dgi_page(url)
+            # Transmettre au thread principal via queue (évite greenlet crash)
+            result_event = threading.Event()
+            result_holder = {}
+            _request_queue.put((url, result_holder, result_event))
+
+            # Attendre le résultat (timeout 120s)
+            if not result_event.wait(timeout=120):
+                _stats['failed'] += 1
+                self._send_json(504, {
+                    'success': False,
+                    'error': 'Timeout: le traitement a pris trop de temps',
+                })
+                return
+
+            result = result_holder.get('data', {'success': False, 'error': 'No result'})
             if result.get('success'):
                 _stats['successful'] += 1
             else:
@@ -254,7 +276,6 @@ class DGIHandler(BaseHTTPRequestHandler):
             _semaphore.release()
 
     def _send_json(self, status_code, data):
-        """Envoie une réponse JSON."""
         body = json.dumps(data, default=str).encode('utf-8')
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
@@ -263,30 +284,22 @@ class DGIHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-class ThreadedHTTPServer(HTTPServer):
-    """Serveur HTTP multi-threadé pour gérer les requêtes concurrentes."""
-    allow_reuse_address = True
-
-    def process_request(self, request, client_address):
-        """Traite chaque requête dans un thread séparé."""
-        thread = threading.Thread(target=self._handle_request, args=(request, client_address))
-        thread.daemon = True
-        thread.start()
-
-    def _handle_request(self, request, client_address):
-        try:
-            self.finish_request(request, client_address)
-        except Exception:
-            self.handle_error(request, client_address)
-        finally:
-            self.shutdown_request(request)
+def _run_http_server(port):
+    """Lancer le serveur HTTP dans un thread séparé."""
+    server = HTTPServer(('127.0.0.1', port), DGIHandler)
+    server.allow_reuse_address = True
+    server.serve_forever()
 
 
 def main():
-    """Point d'entrée principal."""
+    """Point d'entrée principal — queue-based architecture.
+
+    Le thread principal possède le contexte greenlet de Playwright.
+    Les requêtes HTTP arrivent via un thread séparé et sont relayées
+    au thread principal via une queue pour exécution.
+    """
     port = DAEMON_PORT
 
-    # Gestion du signal d'arrêt
     def signal_handler(sig, frame):
         logger.info("Arrêt du daemon...")
         if _browser:
@@ -304,27 +317,42 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Lancer le navigateur
+    # Lancer le navigateur sur le thread principal (greenlet context)
     try:
         _launch_browser()
     except Exception as e:
         logger.error(f"Impossible de lancer Chromium: {e}")
-        logger.error("Vérifiez que Playwright est installé: pip install playwright && playwright install chromium")
+        logger.error("Vérifiez: pip install playwright && playwright install chromium")
         sys.exit(1)
 
     _stats['start_time'] = time.time()
 
-    # Démarrer le serveur HTTP
-    server = ThreadedHTTPServer(('127.0.0.1', port), DGIHandler)
+    # Démarrer le serveur HTTP dans un thread séparé
+    server_thread = threading.Thread(target=_run_http_server, args=(port,), daemon=True)
+    server_thread.start()
+
     logger.info(f"Daemon Playwright démarré sur http://127.0.0.1:{port}")
     logger.info(f"  - Max concurrent: {MAX_CONCURRENT}")
     logger.info(f"  - Health check: GET /health")
     logger.info(f"  - Fetch DGI: POST /fetch {{\"url\": \"...\"}}")
 
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        signal_handler(None, None)
+    # Boucle principale: traite les requêtes Playwright sur le thread principal
+    # (seul le thread principal peut utiliser le sync API / greenlets de Playwright)
+    while True:
+        try:
+            url, result_holder, result_event = _request_queue.get(timeout=1)
+            try:
+                result = fetch_dgi_page(url)
+                result_holder['data'] = result
+            except Exception as e:
+                logger.error(f"Erreur traitement requête: {e}")
+                result_holder['data'] = {'success': False, 'error': str(e)}
+            finally:
+                result_event.set()
+        except queue.Empty:
+            continue
+        except KeyboardInterrupt:
+            signal_handler(None, None)
 
 
 if __name__ == '__main__':
