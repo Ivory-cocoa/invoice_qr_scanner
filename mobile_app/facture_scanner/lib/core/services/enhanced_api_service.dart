@@ -25,7 +25,7 @@ class RetryConfig {
     this.initialDelay = const Duration(seconds: 1),
     this.backoffMultiplier = 2.0,
     this.maxDelay = const Duration(seconds: 30),
-    this.retryableErrorCodes = const ['NETWORK_ERROR', 'TIMEOUT', 'HTTP_503', 'HTTP_502', 'HTTP_504'],
+    this.retryableErrorCodes = const ['NETWORK_ERROR', 'TIMEOUT', 'SERVER_BUSY', 'HTTP_503', 'HTTP_502', 'HTTP_504'],
   });
 }
 
@@ -64,7 +64,7 @@ class ApiException implements Exception {
     ApiErrorType.network,
     ApiErrorType.timeout,
     ApiErrorType.serverError,
-  ].contains(type);
+  ].contains(type) || code == 'SERVER_BUSY';
 }
 
 /// Classe principale du service API amélioré
@@ -520,10 +520,28 @@ class EnhancedApiService {
     // Gérer les codes HTTP d'erreur
     if (response.statusCode >= 400) {
       final errorType = _getErrorType(response.statusCode);
-      final errorMessage = _getHttpErrorMessage(response.statusCode);
+      String errorMessage = _getHttpErrorMessage(response.statusCode);
+      String errorCode = 'HTTP_${response.statusCode}';
+      
+      // Extraire le message d'erreur du body JSON si disponible
+      // (le serveur renvoie un body structuré même sur 503 SERVER_BUSY)
+      try {
+        final jsonBody = jsonDecode(response.body);
+        final error = jsonBody['error'];
+        if (error != null) {
+          if (error['message'] != null) {
+            errorMessage = error['message'];
+          }
+          if (error['code'] != null) {
+            errorCode = error['code'];
+          }
+        }
+      } catch (_) {
+        // Body non-JSON, on garde le message par défaut
+      }
       
       throw ApiException(
-        code: 'HTTP_${response.statusCode}',
+        code: errorCode,
         message: errorMessage,
         type: errorType,
         statusCode: response.statusCode,
@@ -595,7 +613,7 @@ class EnhancedApiService {
       case 502:
         return 'Serveur temporairement indisponible';
       case 503:
-        return 'Service en maintenance';
+        return 'Serveur occupé, nouvelle tentative en cours...';
       case 504:
         return 'Délai d\'attente serveur dépassé';
       default:

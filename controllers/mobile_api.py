@@ -28,6 +28,11 @@ from odoo import http, _, fields
 from odoo.http import request, Response
 import json
 
+from .scan_semaphore import (
+    acquire_scan_slot, release_scan_slot,
+    get_semaphore_status, SEMAPHORE_TIMEOUT,
+)
+
 _logger = logging.getLogger(__name__)
 
 # Configuration
@@ -366,9 +371,22 @@ class InvoiceScannerMobileAPI(http.Controller):
         if 'services.fne.dgi.gouv.ci' not in qr_url:
             return api_error('INVALID_URL', 'URL non reconnue. Seules les factures DGI sont supportées.', status=400)
         
-        # Traiter le scan
-        ScanRecord = request.env['invoice.scan.record'].sudo()
-        result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
+        # Acquérir un slot du sémaphore pour limiter les traitements concurrents
+        if not acquire_scan_slot():
+            _logger.warning("Scan rejeté (serveur occupé) pour user=%s", user.id)
+            return api_error(
+                'SERVER_BUSY',
+                'Le serveur traite actuellement plusieurs scans. Veuillez réessayer dans quelques secondes.',
+                status=503,
+                details=get_semaphore_status()
+            )
+        
+        try:
+            # Traiter le scan
+            ScanRecord = request.env['invoice.scan.record'].sudo()
+            result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
+        finally:
+            release_scan_slot()
         
         if result.get('success'):
             return api_response(result)
@@ -946,6 +964,7 @@ class InvoiceScannerMobileAPI(http.Controller):
             'status': 'healthy',
             'api_version': API_VERSION,
             'module': 'invoice_qr_scanner',
+            'semaphore': get_semaphore_status(),
         })
 
     @http.route('/api/v1/invoice-scanner/test-dgi', type='http', auth='none',
@@ -1063,26 +1082,39 @@ class InvoiceScannerMobileAPI(http.Controller):
         if len(scans) > 50:
             return api_error('LIMIT_EXCEEDED', 'Maximum 50 scans par synchronisation', status=400)
         
-        ScanRecord = request.env['invoice.scan.record'].sudo()
-        results = []
+        # Acquérir un slot du sémaphore pour toute la synchronisation
+        if not acquire_scan_slot():
+            _logger.warning("Sync rejeté (serveur occupé) pour user=%s, scans=%d", user.id, len(scans))
+            return api_error(
+                'SERVER_BUSY',
+                'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
+                status=503,
+                details=get_semaphore_status()
+            )
         
-        for scan in scans:
-            qr_url = scan.get('qr_url', '').strip()
-            scanned_at = scan.get('scanned_at')
+        try:
+            ScanRecord = request.env['invoice.scan.record'].sudo()
+            results = []
             
-            if not qr_url:
-                results.append({
-                    'qr_url': qr_url,
-                    'success': False,
-                    'error': 'URL manquante'
-                })
-                continue
-            
-            # Traiter le scan
-            result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
-            result['qr_url'] = qr_url
-            result['scanned_at'] = scanned_at
-            results.append(result)
+            for scan in scans:
+                qr_url = scan.get('qr_url', '').strip()
+                scanned_at = scan.get('scanned_at')
+                
+                if not qr_url:
+                    results.append({
+                        'qr_url': qr_url,
+                        'success': False,
+                        'error': 'URL manquante'
+                    })
+                    continue
+                
+                # Traiter le scan
+                result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
+                result['qr_url'] = qr_url
+                result['scanned_at'] = scanned_at
+                results.append(result)
+        finally:
+            release_scan_slot()
         
         # Résumé
         successful = sum(1 for r in results if r.get('success'))
@@ -1142,139 +1174,152 @@ class InvoiceScannerMobileAPI(http.Controller):
         if len(scans) > 50:
             return api_error('LIMIT_EXCEEDED', 'Maximum 50 scans par synchronisation', status=400)
         
-        ScanRecord = request.env['invoice.scan.record'].sudo()
-        results = []
+        # Acquérir un slot du sémaphore pour toute la synchronisation
+        if not acquire_scan_slot():
+            _logger.warning("Sync-parsed rejeté (serveur occupé) pour user=%s, scans=%d", user.id, len(scans))
+            return api_error(
+                'SERVER_BUSY',
+                'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
+                status=503,
+                details=get_semaphore_status()
+            )
         
-        for scan in scans:
-            qr_url = scan.get('qr_url', '').strip()
-            scanned_at = scan.get('scanned_at')
-            parsed_data = scan.get('parsed_data', {})
+        try:
+            ScanRecord = request.env['invoice.scan.record'].sudo()
+            results = []
             
-            if not qr_url:
-                results.append({
+            for scan in scans:
+                qr_url = scan.get('qr_url', '').strip()
+                scanned_at = scan.get('scanned_at')
+                parsed_data = scan.get('parsed_data', {})
+                
+                if not qr_url:
+                    results.append({
+                        'qr_url': qr_url,
+                        'success': False,
+                        'error': 'URL manquante'
+                    })
+                    continue
+                
+                # Extraire l'UUID
+                qr_uuid = ScanRecord.extract_uuid_from_url(qr_url)
+                if not qr_uuid:
+                    results.append({
+                        'qr_url': qr_url,
+                        'success': False,
+                        'error': 'URL invalide - UUID non trouvé',
+                        'error_code': 'INVALID_URL'
+                    })
+                    continue
+                
+                # Vérifier les doublons
+                existing = ScanRecord.check_duplicate(qr_uuid)
+                if existing:
+                    existing.write({
+                        'duplicate_count': existing.duplicate_count + 1,
+                        'last_duplicate_attempt': fields.Datetime.now(),
+                        'last_duplicate_user_id': user.id,
+                    })
+                    existing.message_post(
+                        body=f"Tentative de scan doublon #{existing.duplicate_count} (sync pré-parsé) par {user.name}",
+                        message_type='notification'
+                    )
+                    results.append({
+                        'qr_url': qr_url,
+                        'success': False,
+                        'error': 'Cette facture a déjà été scannée',
+                        'error_code': 'DUPLICATE',
+                        'duplicate_count': existing.duplicate_count,
+                    })
+                    continue
+                
+                # Valider les données parsées côté serveur
+                supplier_name = (parsed_data.get('supplier_name') or '').strip()
+                supplier_code_dgi = (parsed_data.get('supplier_code_dgi') or '').strip()
+                amount_ttc = parsed_data.get('amount_ttc', 0)
+                invoice_number_dgi = (parsed_data.get('invoice_number_dgi') or '').strip()
+                
+                if not supplier_name and not invoice_number_dgi:
+                    # Données insuffisantes - fallback au mode serveur
+                    result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
+                    result['qr_url'] = qr_url
+                    result['scanned_at'] = scanned_at
+                    result['note'] = 'Fallback serveur: données pré-parsées insuffisantes'
+                    results.append(result)
+                    continue
+                
+                # Convertir la date si fournie (DD/MM/YYYY → date Python)
+                invoice_date = None
+                date_str = parsed_data.get('invoice_date')
+                if date_str:
+                    try:
+                        parts = date_str.split('/')
+                        if len(parts) == 3:
+                            invoice_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                    except Exception:
+                        pass
+                
+                # Vérifier s'il existe un enregistrement en erreur pour ce QR
+                existing_error = ScanRecord.search([
+                    ('qr_uuid', '=', qr_uuid),
+                    ('state', '=', 'error'),
+                    ('company_id', '=', request.env.company.id)
+                ], limit=1)
+                
+                # Créer l'enregistrement de scan avec les données pré-parsées
+                record_vals = {
                     'qr_url': qr_url,
-                    'success': False,
-                    'error': 'URL manquante'
-                })
-                continue
-            
-            # Extraire l'UUID
-            qr_uuid = ScanRecord.extract_uuid_from_url(qr_url)
-            if not qr_uuid:
-                results.append({
-                    'qr_url': qr_url,
-                    'success': False,
-                    'error': 'URL invalide - UUID non trouvé',
-                    'error_code': 'INVALID_URL'
-                })
-                continue
-            
-            # Vérifier les doublons
-            existing = ScanRecord.check_duplicate(qr_uuid)
-            if existing:
-                existing.write({
-                    'duplicate_count': existing.duplicate_count + 1,
-                    'last_duplicate_attempt': fields.Datetime.now(),
-                    'last_duplicate_user_id': user.id,
-                })
-                existing.message_post(
-                    body=f"Tentative de scan doublon #{existing.duplicate_count} (sync pré-parsé) par {user.name}",
-                    message_type='notification'
-                )
-                results.append({
-                    'qr_url': qr_url,
-                    'success': False,
-                    'error': 'Cette facture a déjà été scannée',
-                    'error_code': 'DUPLICATE',
-                    'duplicate_count': existing.duplicate_count,
-                })
-                continue
-            
-            # Valider les données parsées côté serveur
-            supplier_name = (parsed_data.get('supplier_name') or '').strip()
-            supplier_code_dgi = (parsed_data.get('supplier_code_dgi') or '').strip()
-            amount_ttc = parsed_data.get('amount_ttc', 0)
-            invoice_number_dgi = (parsed_data.get('invoice_number_dgi') or '').strip()
-            
-            if not supplier_name and not invoice_number_dgi:
-                # Données insuffisantes - fallback au mode serveur
-                result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
-                result['qr_url'] = qr_url
-                result['scanned_at'] = scanned_at
-                result['note'] = 'Fallback serveur: données pré-parsées insuffisantes'
-                results.append(result)
-                continue
-            
-            # Convertir la date si fournie (DD/MM/YYYY → date Python)
-            invoice_date = None
-            date_str = parsed_data.get('invoice_date')
-            if date_str:
+                    'supplier_name': supplier_name,
+                    'supplier_code_dgi': supplier_code_dgi,
+                    'customer_name': (parsed_data.get('customer_name') or '').strip(),
+                    'customer_code_dgi': (parsed_data.get('customer_code_dgi') or '').strip(),
+                    'invoice_number_dgi': invoice_number_dgi,
+                    'invoice_date': invoice_date,
+                    'verification_id': (parsed_data.get('verification_id') or '').strip(),
+                    'amount_ttc': amount_ttc if isinstance(amount_ttc, (int, float)) else 0,
+                    'scanned_by': user.id,
+                    'state': 'draft',
+                    'error_message': False,
+                }
+                
                 try:
-                    parts = date_str.split('/')
-                    if len(parts) == 3:
-                        invoice_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
-                except Exception:
-                    pass
-            
-            # Vérifier s'il existe un enregistrement en erreur pour ce QR
-            existing_error = ScanRecord.search([
-                ('qr_uuid', '=', qr_uuid),
-                ('state', '=', 'error'),
-                ('company_id', '=', request.env.company.id)
-            ], limit=1)
-            
-            # Créer l'enregistrement de scan avec les données pré-parsées
-            record_vals = {
-                'qr_url': qr_url,
-                'supplier_name': supplier_name,
-                'supplier_code_dgi': supplier_code_dgi,
-                'customer_name': (parsed_data.get('customer_name') or '').strip(),
-                'customer_code_dgi': (parsed_data.get('customer_code_dgi') or '').strip(),
-                'invoice_number_dgi': invoice_number_dgi,
-                'invoice_date': invoice_date,
-                'verification_id': (parsed_data.get('verification_id') or '').strip(),
-                'amount_ttc': amount_ttc if isinstance(amount_ttc, (int, float)) else 0,
-                'scanned_by': user.id,
-                'state': 'draft',
-                'error_message': False,
-            }
-            
-            try:
-                if existing_error:
-                    existing_error.write(record_vals)
-                    record = existing_error
-                else:
-                    record_vals['qr_uuid'] = qr_uuid
-                    record = ScanRecord.create(record_vals)
-                
-                record.message_post(
-                    body="Scan synchronisé avec données pré-extraites côté mobile",
-                    message_type='notification'
-                )
-                
-                # Créer la facture
-                invoice = record._create_invoice()
-                results.append({
-                    'qr_url': qr_url,
-                    'scanned_at': scanned_at,
-                    'success': True,
-                    'message': 'Facture créée avec succès (données pré-parsées)',
-                    'record_id': record.id,
-                    'invoice_id': invoice.id,
-                    'invoice_name': invoice.name,
-                })
-            except Exception as e:
-                _logger.warning(f"Erreur création facture (sync parsed) pour {qr_url}: {e}")
-                if existing_error or ScanRecord.search([('qr_uuid', '=', qr_uuid)], limit=1):
-                    rec = existing_error or ScanRecord.search([('qr_uuid', '=', qr_uuid)], limit=1)
-                    rec.write({'state': 'error', 'error_message': str(e)})
-                results.append({
-                    'qr_url': qr_url,
-                    'scanned_at': scanned_at,
-                    'success': False,
-                    'error': f'Erreur lors de la création de la facture: {str(e)}',
-                    'error_code': 'INVOICE_ERROR',
-                })
+                    if existing_error:
+                        existing_error.write(record_vals)
+                        record = existing_error
+                    else:
+                        record_vals['qr_uuid'] = qr_uuid
+                        record = ScanRecord.create(record_vals)
+                    
+                    record.message_post(
+                        body="Scan synchronisé avec données pré-extraites côté mobile",
+                        message_type='notification'
+                    )
+                    
+                    # Créer la facture
+                    invoice = record._create_invoice()
+                    results.append({
+                        'qr_url': qr_url,
+                        'scanned_at': scanned_at,
+                        'success': True,
+                        'message': 'Facture créée avec succès (données pré-parsées)',
+                        'record_id': record.id,
+                        'invoice_id': invoice.id,
+                        'invoice_name': invoice.name,
+                    })
+                except Exception as e:
+                    _logger.warning(f"Erreur création facture (sync parsed) pour {qr_url}: {e}")
+                    if existing_error or ScanRecord.search([('qr_uuid', '=', qr_uuid)], limit=1):
+                        rec = existing_error or ScanRecord.search([('qr_uuid', '=', qr_uuid)], limit=1)
+                        rec.write({'state': 'error', 'error_message': str(e)})
+                    results.append({
+                        'qr_url': qr_url,
+                        'scanned_at': scanned_at,
+                        'success': False,
+                        'error': f'Erreur lors de la création de la facture: {str(e)}',
+                        'error_code': 'INVOICE_ERROR',
+                    })
+        finally:
+            release_scan_slot()
         
         # Résumé
         successful = sum(1 for r in results if r.get('success'))
@@ -1507,27 +1552,40 @@ class InvoiceScannerMobileAPI(http.Controller):
         
         records = ScanRecord.search(domain, limit=max_records, order='scan_date asc')
         
-        results = []
-        for record in records:
-            try:
-                invoice = record._create_invoice()
-                results.append({
-                    'record_id': record.id,
-                    'reference': record.reference,
-                    'success': True,
-                    'invoice_id': invoice.id,
-                    'invoice_name': invoice.name,
-                })
-            except Exception as e:
-                record.write({
-                    'error_message': f'Tentative groupée échouée: {str(e)}'
-                })
-                results.append({
-                    'record_id': record.id,
-                    'reference': record.reference,
-                    'success': False,
-                    'error': str(e),
-                })
+        # Acquérir un slot du sémaphore pour le traitement groupé
+        if not acquire_scan_slot():
+            _logger.warning("Bulk-retry rejeté (serveur occupé) pour user=%s, records=%d", user.id, len(records))
+            return api_error(
+                'SERVER_BUSY',
+                'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
+                status=503,
+                details=get_semaphore_status()
+            )
+        
+        try:
+            results = []
+            for record in records:
+                try:
+                    invoice = record._create_invoice()
+                    results.append({
+                        'record_id': record.id,
+                        'reference': record.reference,
+                        'success': True,
+                        'invoice_id': invoice.id,
+                        'invoice_name': invoice.name,
+                    })
+                except Exception as e:
+                    record.write({
+                        'error_message': f'Tentative groupée échouée: {str(e)}'
+                    })
+                    results.append({
+                        'record_id': record.id,
+                        'reference': record.reference,
+                        'success': False,
+                        'error': str(e),
+                    })
+        finally:
+            release_scan_slot()
         
         successful = sum(1 for r in results if r.get('success'))
         
