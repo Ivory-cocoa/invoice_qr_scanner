@@ -654,13 +654,74 @@ except Exception as e:
             return None
 
     @api.model
+    def _fetch_dgi_via_daemon(self, url):
+        """Récupérer les données DGI via le daemon Playwright persistant.
+        
+        Le daemon tourne en arrière-plan avec son propre Chromium,
+        indépendant des limites mémoire d'Odoo. Communication via HTTP local.
+        
+        Args:
+            url: URL DGI à scraper
+            
+        Returns:
+            dict ou None: Données si trouvées, None si daemon indisponible
+        """
+        daemon_port = int(self.env['ir.config_parameter'].sudo().get_param(
+            'invoice_qr_scanner.playwright_daemon_port', '9222'
+        ))
+        daemon_url = f'http://127.0.0.1:{daemon_port}'
+        
+        try:
+            # Vérifier que le daemon est disponible
+            health_resp = requests.get(f'{daemon_url}/health', timeout=3)
+            if health_resp.status_code != 200:
+                _logger.warning("Daemon Playwright non disponible (health check échoué)")
+                return None
+                
+            health = health_resp.json()
+            if not health.get('browser_connected'):
+                _logger.warning("Daemon Playwright: navigateur non connecté")
+                return None
+            
+            # Envoyer la requête de fetch
+            _logger.info(f"DGI: Fetch via daemon Playwright pour: {url}")
+            resp = requests.post(
+                f'{daemon_url}/fetch',
+                json={'url': url},
+                timeout=120,  # 2 min max
+            )
+            
+            if resp.status_code == 503:
+                _logger.warning("Daemon Playwright: trop de scans en cours")
+                return None
+            
+            result = resp.json()
+            if result.get('success'):
+                _logger.info("DGI: Données récupérées via daemon Playwright")
+                return result
+            else:
+                _logger.warning(f"DGI daemon fetch échoué: {result.get('error', 'Unknown')}")
+                return None
+                
+        except requests.exceptions.ConnectionError:
+            _logger.info("Daemon Playwright non démarré (connexion refusée)")
+            return None
+        except requests.exceptions.Timeout:
+            _logger.warning("Daemon Playwright: timeout après 120s")
+            return None
+        except Exception as e:
+            _logger.warning(f"Erreur daemon Playwright: {e}")
+            return None
+
+    @api.model
     def fetch_invoice_data_from_dgi(self, url):
         """Récupérer les données de la facture depuis le site DGI.
         
-        Stratégie en 3 étapes:
-        1. Essayer d'abord avec requests (rapide, sans navigateur)
-        2. Si échec, utiliser Playwright en subprocess isolé (évite les contraintes Odoo)
-        3. Si échec, fallback Playwright en processus Odoo (retry x3)
+        Stratégie en 4 étapes (du plus léger au plus lourd):
+        1. requests + BeautifulSoup (pas de navigateur)
+        2. Daemon Playwright persistant (navigateur partagé, sans crash)
+        3. Playwright en subprocess isolé (lance un nouveau navigateur)
+        4. Playwright in-process Odoo (peut crasher - dernier recours)
         
         Args:
             url: URL complète de vérification DGI
@@ -674,17 +735,24 @@ except Exception as e:
         if requests_result and requests_result.get('success'):
             return requests_result
         
-        # Étape 2: Utiliser Playwright en subprocess isolé
-        # (évite les crashes causés par les limites de ressources d'Odoo)
-        _logger.info(f"DGI: Utilisation de Playwright en subprocess pour: {url}")
+        # Étape 2: Utiliser le daemon Playwright persistant (recommandé)
+        _logger.info(f"DGI: Tentative via daemon Playwright pour: {url}")
+        daemon_result = self._fetch_dgi_via_daemon(url)
+        if daemon_result and daemon_result.get('success'):
+            text_content = daemon_result.get('text_content', '')
+            raw_html = daemon_result.get('raw_html', '')
+            return self._extract_dgi_data_from_text(text_content, raw_html)
+        
+        # Étape 3: Utiliser Playwright en subprocess isolé (fallback)
+        _logger.info(f"DGI: Fallback subprocess Playwright pour: {url}")
         subprocess_result = self._fetch_dgi_via_subprocess(url)
         if subprocess_result and subprocess_result.get('success'):
             text_content = subprocess_result.get('text_content', '')
             raw_html = subprocess_result.get('raw_html', '')
             return self._extract_dgi_data_from_text(text_content, raw_html)
         
-        # Étape 3: Fallback - Playwright en processus Odoo (peut crasher)
-        _logger.info(f"DGI: Fallback Playwright in-process pour: {url}")
+        # Étape 4: Dernier recours - Playwright en processus Odoo (peut crasher)
+        _logger.warning(f"DGI: Dernier recours - Playwright in-process pour: {url}")
         browser = None
         context = None
         try:
@@ -746,15 +814,14 @@ except Exception as e:
             # Message d'erreur enrichi pour le diagnostic
             if 'Target page, context or browser has been closed' in error_msg or 'SIGTRAP' in error_msg:
                 diagnostic = (
-                    f"Erreur: Le navigateur Chromium a crashé sur le serveur. "
-                    f"Causes possibles: mémoire insuffisante, /dev/shm trop petit "
-                    f"(Docker: ajouter --shm-size=256m), ou binaire Chromium corrompu "
-                    f"(réinstaller: playwright install chromium). Détail: {error_msg}"
+                    f"Le navigateur du serveur n'a pas pu accéder au site DGI. "
+                    f"Veuillez réessayer dans quelques instants. "
+                    f"Si le problème persiste, contactez l'administrateur."
                 )
                 _logger.error(diagnostic)
                 return {'success': False, 'error': diagnostic}
             
-            return {'success': False, 'error': f'Erreur: {error_msg}'}
+            return {'success': False, 'error': 'Le site DGI est temporairement inaccessible. Veuillez réessayer.'}
         finally:
             # Nettoyage garanti même en cas d'exception
             try:
