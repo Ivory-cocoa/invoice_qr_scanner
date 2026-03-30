@@ -366,6 +366,21 @@ class InvoiceScanRecord(models.Model):
         _logger.info(f"DGI Data extracted: supplier={data.get('supplier_name')}, "
                      f"amount={data.get('amount_ttc')}, invoice={data.get('invoice_number_dgi')}")
         
+        # Vérifier que les champs minimaux obligatoires ont été extraits
+        missing_fields = []
+        if not data.get('supplier_name'):
+            missing_fields.append('fournisseur')
+        if not data.get('amount_ttc'):
+            missing_fields.append('montant TTC')
+        if not data.get('invoice_number_dgi'):
+            missing_fields.append('numéro de facture')
+        
+        if missing_fields:
+            _logger.warning(f"DGI: Données incomplètes - champs manquants: {', '.join(missing_fields)}")
+            data['success'] = False
+            data['error'] = f"Données DGI incomplètes: {', '.join(missing_fields)} non trouvé(s). La page n'a peut-être pas fini de charger."
+            data['missing_fields'] = missing_fields
+        
         return data
 
     @api.model
@@ -418,8 +433,20 @@ class InvoiceScanRecord(models.Model):
                                 for key in ['invoice_number', 'invoiceNumber', 'numero_facture']:
                                     if key in json_data:
                                         data['invoice_number_dgi'] = json_data[key]
-                                if data.get('supplier_name') or data.get('amount_ttc'):
+                                # Vérifier que les 3 champs obligatoires sont présents
+                                if data.get('supplier_name') and data.get('amount_ttc') and data.get('invoice_number_dgi'):
                                     return data
+                                elif data.get('supplier_name') or data.get('amount_ttc'):
+                                    # Données partielles - marquer comme échec
+                                    missing = []
+                                    if not data.get('supplier_name'):
+                                        missing.append('fournisseur')
+                                    if not data.get('amount_ttc'):
+                                        missing.append('montant TTC')
+                                    if not data.get('invoice_number_dgi'):
+                                        missing.append('numéro de facture')
+                                    _logger.warning(f"DGI API: données partielles, champs manquants: {', '.join(missing)}")
+                                    # Continuer vers les autres stratégies
                     except (requests.exceptions.RequestException, ValueError):
                         continue
             
@@ -995,8 +1022,20 @@ except Exception as e:
             ('company_id', '=', self.env.company.id)
         ], limit=1)
         
-        # Récupérer les données du site DGI
+        # Récupérer les données du site DGI (avec 1 retry si données incomplètes)
         dgi_data = self.fetch_invoice_data_from_dgi(qr_url)
+        
+        if not dgi_data.get('success') and dgi_data.get('missing_fields'):
+            # Données incomplètes - réessayer une fois (la page DGI peut être lente)
+            _logger.info(f"DGI: Données incomplètes ({dgi_data.get('missing_fields')}), retry en cours...")
+            import time
+            time.sleep(3)
+            dgi_data_retry = self.fetch_invoice_data_from_dgi(qr_url)
+            if dgi_data_retry.get('success'):
+                dgi_data = dgi_data_retry
+                _logger.info("DGI: Retry réussi - données complètes obtenues")
+            else:
+                _logger.warning(f"DGI: Retry échoué - toujours incomplet: {dgi_data_retry.get('missing_fields')}")
         
         if not dgi_data.get('success'):
             # Créer ou mettre à jour un enregistrement d'erreur
@@ -1015,7 +1054,8 @@ except Exception as e:
             return {
                 'success': False,
                 'error': dgi_data.get('error'),
-                'error_code': 'DGI_ERROR',
+                'error_code': 'DGI_INCOMPLETE' if dgi_data.get('missing_fields') else 'DGI_ERROR',
+                'missing_fields': dgi_data.get('missing_fields', []),
                 'record_id': record.id,
             }
         

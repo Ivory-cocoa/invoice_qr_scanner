@@ -268,17 +268,62 @@ class ScanProvider extends ChangeNotifier {
           _auth?.handleSessionExpired();
         } else {
           _state = ScanState.error;
-          _message = response.errorMessage ?? 'Erreur lors du scan';
-          _localErrorCount++; // Incrémenter le compteur d'erreurs
+          _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
+          _localErrorCount++;
         }
       }
     } catch (e) {
       _state = ScanState.error;
-      _message = 'Erreur: ${e.toString()}';
-      _localErrorCount++; // Incrémenter le compteur d'erreurs
+      _message = _getUserFriendlyMessage(null, e.toString());
+      _localErrorCount++;
     }
     
     notifyListeners();
+  }
+
+  /// Convertit les codes d'erreur en messages clairs pour l'utilisateur
+  String _getUserFriendlyMessage(String? errorCode, String? rawMessage) {
+    switch (errorCode) {
+      case 'DGI_INCOMPLETE':
+        return 'Le site DGI n\'a pas fourni toutes les informations de la facture. '
+               'Veuillez réessayer dans quelques instants.';
+      case 'DGI_ERROR':
+        return 'Impossible d\'accéder au site DGI pour vérifier cette facture. '
+               'Le site peut être temporairement indisponible.';
+      case 'INVOICE_ERROR':
+        return 'La facture n\'a pas pu être créée dans le système. '
+               'Veuillez contacter l\'administrateur si le problème persiste.';
+      case 'INVALID_URL':
+        return 'Le QR code scanné n\'est pas un QR code de facture DGI valide. '
+               'Veuillez vérifier que vous scannez le bon QR code.';
+      case 'SERVER_BUSY':
+        return 'Le serveur traite d\'autres scans en ce moment. '
+               'Veuillez patienter quelques secondes et réessayer.';
+      case 'TIMEOUT':
+        return 'Le traitement prend plus de temps que prévu. '
+               'Le site DGI peut être lent. Veuillez réessayer.';
+      case 'NETWORK_ERROR':
+        return 'Pas de connexion internet. '
+               'Vérifiez votre Wi-Fi ou vos données mobiles.';
+      case 'AUTH_INVALID':
+      case 'AUTH_REQUIRED':
+      case 'TOKEN_EXPIRED':
+        return 'Votre session a expiré. Veuillez vous reconnecter.';
+      default:
+        // Si le message brut contient des infos utiles du serveur, l'utiliser
+        if (rawMessage != null && rawMessage.isNotEmpty) {
+          // Nettoyer les messages techniques
+          if (rawMessage.contains('TimeoutException') || rawMessage.contains('timeout')) {
+            return 'Le traitement a pris trop de temps. Veuillez réessayer.';
+          }
+          if (rawMessage.contains('SocketException') || rawMessage.contains('Connection refused')) {
+            return 'Impossible de contacter le serveur. Vérifiez votre connexion.';
+          }
+          // Retourner le message tel quel s'il vient du serveur (déjà en français)
+          return rawMessage;
+        }
+        return 'Une erreur est survenue lors du scan. Veuillez réessayer.';
+    }
   }
   
   Future<void> _processOffline(String qrUrl, String qrUuid) async {

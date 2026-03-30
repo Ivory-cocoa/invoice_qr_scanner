@@ -227,6 +227,7 @@ class EnhancedApiService {
       method: 'POST',
       endpoint: '/api/v1/invoice-scanner/scan',
       body: {'qr_url': qrUrl},
+      timeout: const Duration(seconds: 120), // DGI fetch peut prendre jusqu'à 120s
     );
   }
 
@@ -298,7 +299,7 @@ class EnhancedApiService {
         'scans': scans,
         'continue_on_error': continueOnError,
       },
-      timeout: Duration(seconds: 60), // Timeout plus long pour la sync
+      timeout: Duration(seconds: 180), // Timeout long pour la sync batch (N scans séquentiels)
     );
   }
 
@@ -484,14 +485,16 @@ class EnhancedApiService {
     } on SocketException catch (e) {
       throw ApiException(
         code: 'NETWORK_ERROR',
-        message: 'Pas de connexion internet',
+        message: 'Pas de connexion internet. '
+                 'Vérifiez votre Wi-Fi ou vos données mobiles puis réessayez.',
         type: ApiErrorType.network,
         originalError: e,
       );
     } on TimeoutException catch (e) {
       throw ApiException(
         code: 'TIMEOUT',
-        message: 'Le serveur ne répond pas',
+        message: 'Le traitement prend plus de temps que prévu. '
+                 'Le site DGI peut être lent. Veuillez réessayer dans quelques instants.',
         type: ApiErrorType.timeout,
         originalError: e,
       );
@@ -609,13 +612,13 @@ class EnhancedApiService {
       case 429:
         return 'Trop de requêtes, veuillez patienter';
       case 500:
-        return 'Erreur serveur interne';
+        return 'Une erreur inattendue est survenue sur le serveur. Veuillez réessayer.';
       case 502:
-        return 'Serveur temporairement indisponible';
+        return 'Le serveur est temporairement indisponible. Veuillez réessayer dans quelques minutes.';
       case 503:
-        return 'Serveur occupé, nouvelle tentative en cours...';
+        return 'Le serveur est occupé avec d\'autres scans. Nouvelle tentative en cours...';
       case 504:
-        return 'Délai d\'attente serveur dépassé';
+        return 'Le site DGI met trop de temps à répondre. Veuillez réessayer plus tard.';
       default:
         return 'Erreur HTTP $statusCode';
     }
