@@ -175,7 +175,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text('Paramètres'),
         centerTitle: true,
       ),
-      body: _isLoading
+      body: SafeArea(
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -413,6 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 

@@ -9,6 +9,7 @@ import 'core/services/api_service.dart';
 import 'core/services/database_service.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/scheduled_sync_service.dart';
+import 'core/services/background_scan_queue.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/scan_provider.dart';
 import 'core/providers/connectivity_provider.dart';
@@ -45,6 +46,14 @@ class FactureScannerApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AuthProvider, ScanProvider>(
           create: (_) => ScanProvider(),
           update: (_, auth, scan) => scan!..updateAuth(auth),
+        ),
+        ChangeNotifierProxyProvider<ScanProvider, BackgroundScanQueue>(
+          create: (_) => BackgroundScanQueue(),
+          update: (_, scan, queue) {
+            queue!.verificationTimeout = scan.verificationTimeout;
+            queue.onHistoryChanged = () => scan.loadHistory(isOnline: true);
+            return queue;
+          },
         ),
         Provider(create: (_) => SyncService()),
       ],

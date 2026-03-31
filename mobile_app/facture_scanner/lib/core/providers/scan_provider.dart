@@ -337,6 +337,63 @@ class ScanProvider extends ChangeNotifier {
     return true; // Caller should navigate to ManualEntryScreen
   }
 
+  /// Validate QR code and check for duplicates (without starting extraction).
+  /// Returns ({bool valid, String? error, String? qrUuid, bool isDuplicate, ScanRecord? existing}).
+  /// Used by HomeScreen before enqueuing to BackgroundScanQueue.
+  Future<({bool valid, String? error, String? qrUuid, bool isDuplicate, ScanRecord? existing})>
+      validateQrForQueue(String qrContent, {bool checkServer = true}) async {
+    // Validate URL
+    if (!isValidDgiUrl(qrContent)) {
+      _localErrorCount++;
+      notifyListeners();
+      return (valid: false, error: 'QR-code non valide. Seules les factures DGI sont supportées.', qrUuid: null, isDuplicate: false, existing: null);
+    }
+
+    final qrUuid = extractUuidFromUrl(qrContent);
+    if (qrUuid == null) {
+      _localErrorCount++;
+      notifyListeners();
+      return (valid: false, error: 'Impossible d\'extraire l\'identifiant du QR-code', qrUuid: null, isDuplicate: false, existing: null);
+    }
+
+    // Check local cache
+    final cached = await _db.findInHistoryCache(qrUuid);
+    if (cached != null) {
+      _localDuplicateCount++;
+      if (checkServer) _reportDuplicateToServer(qrContent);
+      notifyListeners();
+      return (valid: false, error: 'Cette facture a déjà été scannée', qrUuid: qrUuid, isDuplicate: true, existing: cached);
+    }
+
+    // Check pending scans
+    final isPending = await _db.isPendingScan(qrUuid);
+    if (isPending) {
+      _localDuplicateCount++;
+      notifyListeners();
+      return (valid: false, error: 'Ce scan est en attente de synchronisation', qrUuid: qrUuid, isDuplicate: true, existing: null);
+    }
+
+    // Check server
+    if (checkServer) {
+      try {
+        final checkResponse = await _api.checkQrCode(qrContent);
+        if (!checkResponse.success && checkResponse.errorCode == 'DUPLICATE') {
+          _localDuplicateCount++;
+          ScanRecord? existing;
+          if (checkResponse.data != null && checkResponse.data!.containsKey('existing_record')) {
+            existing = ScanRecord.fromJson(checkResponse.data!['existing_record']);
+          }
+          notifyListeners();
+          return (valid: false, error: checkResponse.errorMessage ?? 'Cette facture a déjà été scannée', qrUuid: qrUuid, isDuplicate: true, existing: existing);
+        }
+      } catch (_) {
+        // If check fails, allow enqueue
+      }
+    }
+
+    return (valid: true, error: null, qrUuid: qrUuid, isDuplicate: false, existing: null);
+  }
+
   /// Submit data from the manual entry form to the server
   Future<void> submitManualEntry({
     required String qrUrl,

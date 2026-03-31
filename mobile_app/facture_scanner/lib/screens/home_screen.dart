@@ -7,8 +7,10 @@ import 'package:provider/provider.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/providers/scan_provider.dart';
 import '../core/providers/connectivity_provider.dart';
+import '../core/services/background_scan_queue.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
+import '../widgets/queue_status_banner.dart';
 import '../widgets/scan_result_dialog.dart';
 import '../widgets/stats_card.dart';
 import '../widgets/history_list.dart';
@@ -129,43 +131,86 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     
     if (result != null && mounted) {
-      // Use new client-side extraction flow when online
       if (connectivity.isOnline) {
-        final needsManualEntry = await scan.processQrCodeWithExtraction(
-          result,
-          isOnline: true,
-        );
+        // Validate + check duplicates before enqueuing
+        final validation = await scan.validateQrForQueue(result, checkServer: true);
         
-        if (needsManualEntry && mounted) {
-          // Navigate to manual entry screen
-          final manualResult = await Navigator.of(context).push<ManualEntryResult>(
-            MaterialPageRoute(
-              builder: (context) => ManualEntryScreen(
-                qrUrl: result,
-                prefillData: scan.extractedDgiData,
-                verificationDuration: scan.lastVerificationDuration,
-                timedOut: true,
+        if (!validation.valid) {
+          // Show error/duplicate via dialog
+          if (validation.isDuplicate) {
+            scan.resetState();
+            if (mounted) {
+              await showDialog<String>(
+                context: context,
+                builder: (context) => ScanResultDialog(
+                  state: ScanState.duplicate,
+                  message: validation.error,
+                  scanRecord: validation.existing,
+                ),
+              );
+              // Offer to scan again
+              if (mounted) _openScanner();
+            }
+          } else {
+            // Validation error
+            if (mounted) {
+              await showDialog<String>(
+                context: context,
+                builder: (context) => ScanResultDialog(
+                  state: ScanState.error,
+                  message: validation.error,
+                  scanRecord: null,
+                ),
+              );
+              if (mounted) _openScanner();
+            }
+          }
+          return;
+        }
+        
+        // Enqueue for background processing
+        final queue = context.read<BackgroundScanQueue>();
+        final itemId = await queue.enqueue(result, validation.qrUuid!);
+        
+        if (itemId == null && mounted) {
+          // Already in queue
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Text('Ce scan est déjà en cours de traitement'),
+                ],
               ),
+              backgroundColor: AppTheme.infoColor,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else if (mounted) {
+          // Enqueued - show brief confirmation and offer to scan again
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.queue_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Text('Scan ajouté - traitement en arrière-plan'),
+                ],
+              ),
+              backgroundColor: AppTheme.infoColor,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 2),
             ),
           );
           
-          if (manualResult != null && mounted) {
-            await scan.submitManualEntry(
-              qrUrl: result,
-              supplierName: manualResult.supplierName,
-              supplierCodeDgi: manualResult.supplierCodeDgi,
-              customerName: manualResult.customerName,
-              customerCodeDgi: manualResult.customerCodeDgi,
-              invoiceNumberDgi: manualResult.invoiceNumberDgi,
-              invoiceDate: manualResult.invoiceDate,
-              amountTtc: manualResult.amountTtc,
-              verificationDuration: manualResult.verificationDuration,
-            );
-          } else {
-            // User cancelled manual entry
-            scan.resetState();
-            return;
-          }
+          // Immediately offer to scan another
+          if (mounted) _openScanner();
         }
       } else {
         // Offline: use existing local extraction flow
@@ -174,23 +219,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           isOnline: false,
           localExtraction: true,
         );
-      }
-      
-      if (scan.state != ScanState.idle && scan.state != ScanState.manualEntry && mounted) {
-        final dialogResult = await showDialog<String>(
-          context: context,
-          builder: (context) => ScanResultDialog(
-            state: scan.state,
-            message: scan.message,
-            scanRecord: scan.lastScanResult,
-          ),
-        );
         
-        scan.resetState();
-        
-        // Si l'utilisateur veut scanner une autre facture
-        if (dialogResult == 'scan_again' && mounted) {
-          _openScanner();
+        if (scan.state != ScanState.idle && scan.state != ScanState.manualEntry && mounted) {
+          final dialogResult = await showDialog<String>(
+            context: context,
+            builder: (context) => ScanResultDialog(
+              state: scan.state,
+              message: scan.message,
+              scanRecord: scan.lastScanResult,
+            ),
+          );
+          
+          scan.resetState();
+          
+          if (dialogResult == 'scan_again' && mounted) {
+            _openScanner();
+          }
         }
       }
     }
@@ -491,6 +535,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         child: Column(
           children: [
             const ConnectivityBanner(),
+            const QueueStatusBanner(),
             Expanded(
               child: TabBarView(
                 controller: _tabController,

@@ -36,6 +36,9 @@ class DgiExtractorService {
   }) async {
     onProgress?.call('Chargement de la page DGI...');
 
+    // Normaliser l'URL en français pour que le parser reconnaisse les labels
+    final normalizedUrl = _normalizeDgiUrl(url);
+
     final completer = Completer<DgiExtractionResult>();
     DgiParsedData? parsedData;
     int extractionAttempts = 0;
@@ -127,8 +130,8 @@ class DgiExtractorService {
         ),
       );
 
-      // Charger l'URL
-      await controller.loadRequest(Uri.parse(url));
+      // Charger l'URL normalisée en français
+      await controller.loadRequest(Uri.parse(normalizedUrl));
 
       // Timer de sécurité global
       final timeoutTimer = Timer(
@@ -158,6 +161,15 @@ class DgiExtractorService {
       }
       return await completer.future;
     }
+  }
+
+  /// Normalise l'URL DGI pour forcer la version française.
+  /// Ex: /en/verification/... → /fr/verification/...
+  String _normalizeDgiUrl(String url) {
+    return url.replaceFirst(
+      RegExp(r'/(en|ar|es|de|pt|zh)/verification/'),
+      '/fr/verification/',
+    );
   }
 }
 
