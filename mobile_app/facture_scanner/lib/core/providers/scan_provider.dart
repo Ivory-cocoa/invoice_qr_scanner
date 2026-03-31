@@ -1,16 +1,19 @@
 /// Scan Provider
 /// Manages QR code scanning and invoice creation
 
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../services/dgi_extractor_service.dart';
+import '../services/dgi_parser_service.dart';
 import '../models/scan_record.dart';
 import 'auth_provider.dart';
 
-enum ScanState { idle, scanning, processing, success, error, duplicate, alreadyProcessed }
+enum ScanState { idle, scanning, processing, success, error, duplicate, alreadyProcessed, manualEntry }
 
 class ScanProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
@@ -36,6 +39,16 @@ class ScanProvider extends ChangeNotifier {
   // Progression de l'extraction DGI
   String? _extractionProgress;
   
+  // Timeout configurable pour la vérification DGI (en secondes)
+  static const String _timeoutKey = 'dgi_verification_timeout';
+  static const int defaultTimeout = 5;
+  int _verificationTimeout = defaultTimeout;
+  
+  // Données DGI extraites (pour le formulaire manuel)
+  DgiParsedData? _extractedDgiData;
+  String? _pendingQrUrl;
+  double _lastVerificationDuration = 0;
+  
   // Getters
   ScanState get state => _state;
   String? get message => _message;
@@ -46,6 +59,10 @@ class ScanProvider extends ChangeNotifier {
   Map<String, dynamic>? get stats => _stats;
   bool get hasPendingScans => _pendingScansCount > 0;
   String? get extractionProgress => _extractionProgress;
+  int get verificationTimeout => _verificationTimeout;
+  DgiParsedData? get extractedDgiData => _extractedDgiData;
+  String? get pendingQrUrl => _pendingQrUrl;
+  double get lastVerificationDuration => _lastVerificationDuration;
   
   // Stats avec compteurs locaux combinés
   // Retourne toujours les stats (même si vides) pour permettre l'affichage des compteurs locaux
@@ -139,8 +156,10 @@ class ScanProvider extends ChangeNotifier {
     }
     
     if (isOnline && !localExtraction) {
-      // Online mode: send to server immediately
-      await _processOnline(qrContent);
+      // Online mode uses processQrCodeWithExtraction() instead
+      _state = ScanState.error;
+      _message = 'Veuillez utiliser le scan en ligne avec extraction.';
+      notifyListeners();
     } else {
       // Offline or local extraction mode: extract locally and save
       await _processOffline(qrContent, qrUuid);
@@ -189,95 +208,259 @@ class ScanProvider extends ChangeNotifier {
       // Ignorer les erreurs - le doublon a déjà été signalé localement
     }
   }
-  
-  Future<void> _processOnline(String qrUrl) async {
+
+  /// Process QR code with client-side DGI extraction and configurable timeout.
+  /// If extraction takes longer than the timeout, switches to manual entry.
+  /// Returns true if manual entry is needed (caller should navigate to form).
+  Future<bool> processQrCodeWithExtraction(String qrContent, {bool isOnline = true}) async {
+    _state = ScanState.processing;
+    _message = null;
+    _lastScanResult = null;
+    _extractedDgiData = null;
+    _pendingQrUrl = null;
+    _lastVerificationDuration = 0;
+    notifyListeners();
+
+    // Validate URL
+    if (!isValidDgiUrl(qrContent)) {
+      _state = ScanState.error;
+      _message = 'QR-code non valide. Seules les factures DGI sont supportées.';
+      _localErrorCount++;
+      notifyListeners();
+      return false;
+    }
+
+    final qrUuid = extractUuidFromUrl(qrContent);
+    if (qrUuid == null) {
+      _state = ScanState.error;
+      _message = 'Impossible d\'extraire l\'identifiant du QR-code';
+      _localErrorCount++;
+      notifyListeners();
+      return false;
+    }
+
+    // Check local cache for duplicates
+    final cached = await _db.findInHistoryCache(qrUuid);
+    if (cached != null) {
+      _state = ScanState.duplicate;
+      _message = 'Cette facture a déjà été scannée';
+      _lastScanResult = cached;
+      _localDuplicateCount++;
+      if (isOnline) _reportDuplicateToServer(qrContent);
+      notifyListeners();
+      return false;
+    }
+
+    // Check pending scans
+    final isPending = await _db.isPendingScan(qrUuid);
+    if (isPending) {
+      _state = ScanState.duplicate;
+      _message = 'Ce scan est en attente de synchronisation';
+      _localDuplicateCount++;
+      notifyListeners();
+      return false;
+    }
+
+    if (!isOnline) {
+      await _processOffline(qrContent, qrUuid);
+      return false;
+    }
+
+    // Online: check server for duplicates first
     try {
-      final response = await _api.scanQrCode(qrUrl);
-      
+      final checkResponse = await _api.checkQrCode(qrContent);
+      if (!checkResponse.success && checkResponse.errorCode == 'DUPLICATE') {
+        _state = ScanState.duplicate;
+        _message = checkResponse.errorMessage ?? 'Cette facture a déjà été scannée';
+        _localDuplicateCount++;
+        if (checkResponse.data != null && checkResponse.data!.containsKey('existing_record')) {
+          final existing = checkResponse.data!['existing_record'];
+          _lastScanResult = ScanRecord.fromJson(existing);
+        }
+        notifyListeners();
+        return false;
+      }
+    } catch (_) {
+      // If check fails, continue with extraction
+    }
+
+    // Start client-side DGI extraction with timeout
+    _extractionProgress = 'Vérification DGI en cours...';
+    notifyListeners();
+
+    final stopwatch = Stopwatch()..start();
+    DgiExtractionResult? extractionResult;
+    bool timedOut = false;
+
+    try {
+      extractionResult = await _extractor.extractFromUrl(
+        qrContent,
+        onProgress: (msg) {
+          _extractionProgress = msg;
+          notifyListeners();
+        },
+      ).timeout(
+        Duration(seconds: _verificationTimeout),
+        onTimeout: () {
+          timedOut = true;
+          return DgiExtractionResult(
+            success: false,
+            error: 'Timeout: vérification DGI dépassée',
+          );
+        },
+      );
+    } catch (e) {
+      timedOut = true;
+      extractionResult = DgiExtractionResult(
+        success: false,
+        error: 'Erreur extraction: ${e.toString()}',
+      );
+    }
+
+    stopwatch.stop();
+    _lastVerificationDuration = stopwatch.elapsedMilliseconds / 1000.0;
+    _extractionProgress = null;
+
+    if (extractionResult != null && extractionResult.success && extractionResult.data != null && !timedOut) {
+      // Extraction succeeded within timeout - send to server automatically
+      return await _submitExtractedData(qrContent, extractionResult.data!, _lastVerificationDuration, false);
+    }
+
+    // Timeout or extraction failed - switch to manual entry
+    _extractedDgiData = extractionResult?.data;
+    _pendingQrUrl = qrContent;
+    _state = ScanState.manualEntry;
+    _message = timedOut
+        ? 'Vérification DGI trop lente (${_lastVerificationDuration.toStringAsFixed(1)}s). Saisie manuelle requise.'
+        : 'Site DGI indisponible. Saisie manuelle requise.';
+    notifyListeners();
+    return true; // Caller should navigate to ManualEntryScreen
+  }
+
+  /// Submit data from the manual entry form to the server
+  Future<void> submitManualEntry({
+    required String qrUrl,
+    required String supplierName,
+    String? supplierCodeDgi,
+    String? customerName,
+    String? customerCodeDgi,
+    required String invoiceNumberDgi,
+    String? invoiceDate,
+    required double amountTtc,
+    required double verificationDuration,
+  }) async {
+    _state = ScanState.processing;
+    _message = 'Création de la facture...';
+    notifyListeners();
+
+    try {
+      final response = await _api.scanWithData(
+        qrUrl: qrUrl,
+        supplierName: supplierName,
+        supplierCodeDgi: supplierCodeDgi,
+        customerName: customerName,
+        customerCodeDgi: customerCodeDgi,
+        invoiceNumberDgi: invoiceNumberDgi,
+        invoiceDate: invoiceDate,
+        amountTtc: amountTtc,
+        verificationDuration: verificationDuration,
+        isManualEntry: true,
+      );
+
       if (response.success && response.data != null) {
         _state = ScanState.success;
-        _message = response.data!['message'] ?? 'Facture créée avec succès';
-        _localSuccessCount++; // Incrémenter le compteur de succès
-        
-        // Create a ScanRecord from response if available
+        _message = response.data!['message'] ?? 'Facture créée avec succès (saisie manuelle)';
+        _localSuccessCount++;
+
         if (response.data!.containsKey('record')) {
-          final recordData = response.data!['record'];
-          final invoiceData = response.data!['invoice'];
-          
-          _lastScanResult = ScanRecord(
-            id: recordData['id'],
-            reference: recordData['reference'] ?? '',
-            qrUuid: extractUuidFromUrl(qrUrl) ?? '',
-            supplierName: invoiceData?['partner_name'] ?? '',
-            supplierCodeDgi: '',
-            invoiceNumberDgi: invoiceData?['ref'] ?? '',
-            invoiceDate: null,
-            amountTtc: (invoiceData?['amount_total'] as num?)?.toDouble() ?? 0,
-            currency: 'XOF',
-            state: 'done',
-            stateLabel: 'Facture créée',
-            invoiceId: invoiceData?['id'],
-            invoiceName: invoiceData?['name'],
-            invoiceState: invoiceData?['state'],
-            scanDate: DateTime.now(),
-            scannedBy: _auth?.user?.name ?? '',
-          );
+          _lastScanResult = ScanRecord.fromJson(response.data!['record']);
         }
-        
-        // Refresh history
         await loadHistory();
       } else if (response.errorCode == 'DUPLICATE') {
         _state = ScanState.duplicate;
         _message = response.errorMessage ?? 'Cette facture a déjà été scannée';
-        _localDuplicateCount++; // Incrémenter le compteur de doublons
-        
-        // Get existing record info
+        _localDuplicateCount++;
         if (response.data != null && response.data!.containsKey('existing_record')) {
-          final existing = response.data!['existing_record'];
-          _lastScanResult = ScanRecord(
-            id: existing['id'] ?? 0,
-            reference: existing['reference'] ?? '',
-            qrUuid: extractUuidFromUrl(qrUrl) ?? '',
-            supplierName: existing['supplier_name'] ?? '',
-            supplierCodeDgi: existing['supplier_code_dgi'] ?? '',
-            invoiceNumberDgi: existing['invoice_number_dgi'] ?? '',
-            amountTtc: (existing['amount_ttc'] as num?)?.toDouble() ?? 0,
-            currency: 'XOF',
-            state: 'done',
-            stateLabel: 'Doublon',
-            invoiceId: existing['invoice_id'],
-            invoiceName: existing['invoice_name'],
-            scanDate: existing['scan_date'] != null
-                ? DateTime.tryParse(existing['scan_date'])
-                : null,
-            scannedBy: existing['scanned_by'] ?? '',
-            duplicateCount: existing['duplicate_count'] ?? 1,
-            lastDuplicateAttempt: existing['last_duplicate_attempt'] != null
-                ? DateTime.tryParse(existing['last_duplicate_attempt'])
-                : DateTime.now(),
-          );
+          _lastScanResult = ScanRecord.fromJson(response.data!['existing_record']);
         }
       } else {
-        // Vérifier si c'est une erreur d'authentification
-        if (response.errorCode == 'AUTH_INVALID' || 
-            response.errorCode == 'AUTH_REQUIRED' ||
-            response.errorCode == 'TOKEN_EXPIRED') {
-          _state = ScanState.error;
-          _message = 'Session expirée. Veuillez vous reconnecter.';
-          // Notifier que l'authentification a expiré
-          _auth?.handleSessionExpired();
-        } else {
-          _state = ScanState.error;
-          _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
-          _localErrorCount++;
-        }
+        _state = ScanState.error;
+        _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
+        _localErrorCount++;
       }
     } catch (e) {
       _state = ScanState.error;
       _message = _getUserFriendlyMessage(null, e.toString());
       _localErrorCount++;
     }
-    
+
+    _extractedDgiData = null;
+    _pendingQrUrl = null;
+    notifyListeners();
+  }
+
+  /// Submit automatically extracted data to the server (non-manual)
+  Future<bool> _submitExtractedData(String qrUrl, DgiParsedData data, double duration, bool isManual) async {
+    try {
+      final response = await _api.scanWithData(
+        qrUrl: qrUrl,
+        supplierName: data.supplierName,
+        supplierCodeDgi: data.supplierCodeDgi,
+        customerName: data.customerName,
+        customerCodeDgi: data.customerCodeDgi,
+        invoiceNumberDgi: data.invoiceNumberDgi,
+        invoiceDate: data.invoiceDate,
+        amountTtc: data.amountTtc,
+        verificationDuration: duration,
+        isManualEntry: isManual,
+      );
+
+      if (response.success && response.data != null) {
+        _state = ScanState.success;
+        _message = response.data!['message'] ?? 'Facture créée avec succès';
+        _localSuccessCount++;
+
+        if (response.data!.containsKey('record')) {
+          _lastScanResult = ScanRecord.fromJson(response.data!['record']);
+        }
+        await loadHistory();
+      } else if (response.errorCode == 'DUPLICATE') {
+        _state = ScanState.duplicate;
+        _message = response.errorMessage ?? 'Cette facture a déjà été scannée';
+        _localDuplicateCount++;
+        if (response.data != null && response.data!.containsKey('existing_record')) {
+          _lastScanResult = ScanRecord.fromJson(response.data!['existing_record']);
+        }
+      } else {
+        _state = ScanState.error;
+        _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
+        _localErrorCount++;
+      }
+      notifyListeners();
+      return false; // No manual entry needed
+    } catch (e) {
+      _state = ScanState.error;
+      _message = _getUserFriendlyMessage(null, e.toString());
+      _localErrorCount++;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Get the configurable verification timeout (in seconds)
+  Future<void> loadVerificationTimeout() async {
+    final prefs = await SharedPreferences.getInstance();
+    _verificationTimeout = prefs.getInt(_timeoutKey) ?? defaultTimeout;
+    notifyListeners();
+  }
+
+  /// Set the verification timeout (in seconds)
+  Future<void> setVerificationTimeout(int seconds) async {
+    if (seconds < 1) seconds = 1;
+    if (seconds > 60) seconds = 60;
+    _verificationTimeout = seconds;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_timeoutKey, seconds);
     notifyListeners();
   }
 
@@ -354,13 +537,13 @@ class ScanProvider extends ChangeNotifier {
             'Sera synchronisée à l\'heure programmée.';
         _localSuccessCount++;
       } else {
-        // Fallback: sauvegarder juste l'URL (le serveur fera le fetch plus tard)
+        // Fallback: sauvegarder juste l'URL (extraction échouée)
         await _db.addPendingScan(qrUrl, qrUuid);
         await _updatePendingCount();
         
         _state = ScanState.success;
         _message = 'Scan enregistré localement (données non extraites).\n'
-            'Le serveur extraira les données lors de la synchronisation.';
+            'Veuillez rescanner cette facture pour extraire les données.';
       }
     } catch (e) {
       // Fallback en cas d'erreur: sauvegarder juste l'URL
@@ -368,7 +551,7 @@ class ScanProvider extends ChangeNotifier {
         await _db.addPendingScan(qrUrl, qrUuid);
         await _updatePendingCount();
         _state = ScanState.success;
-        _message = 'Scan enregistré localement. Sera synchronisé une fois en ligne.';
+        _message = 'Scan enregistré localement.\nVeuillez rescanner pour extraire les données.';
       } catch (e2) {
         _state = ScanState.error;
         _message = 'Erreur lors de l\'enregistrement local';
@@ -450,6 +633,7 @@ class ScanProvider extends ChangeNotifier {
   /// Initialize provider
   Future<void> init() async {
     await _updatePendingCount();
+    await loadVerificationTimeout();
     // Nettoyer les données de plus de 24h au démarrage
     await _db.cleanupOldData();
   }

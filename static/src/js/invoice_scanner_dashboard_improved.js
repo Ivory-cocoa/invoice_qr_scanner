@@ -26,6 +26,8 @@ export class InvoiceScannerDashboardImproved extends Component {
                 records_with_duplicates: 0,
                 error_scans: 0,
                 total_amount: 0,
+                avg_verification_duration: 0,
+                manual_entry_count: 0,
             },
             // Stats globales (all-time) pour correspondre à l'application mobile
             all_time_stats: {
@@ -36,6 +38,8 @@ export class InvoiceScannerDashboardImproved extends Component {
                 records_with_duplicates: 0,
                 error_scans: 0,
                 total_amount: 0,
+                avg_verification_duration: 0,
+                manual_entry_count: 0,
             },
             recent_scans: [],
             top_suppliers: [],
@@ -83,6 +87,8 @@ export class InvoiceScannerDashboardImproved extends Component {
                 records_with_duplicates: 0,
                 error_scans: 0,
                 total_amount: 0,
+                avg_verification_duration: 0,
+                manual_entry_count: 0,
             };
             this.state.stats = emptyStats;
             this.state.all_time_stats = emptyStats;
@@ -245,6 +251,14 @@ export class InvoiceScannerDashboardImproved extends Component {
     formatCurrency(value) {
         if (!value && value !== 0) return "0 FCFA";
         return new Intl.NumberFormat("fr-FR").format(value) + " FCFA";
+    }
+
+    formatDuration(seconds) {
+        if (!seconds) return "0s";
+        if (seconds < 60) return seconds.toFixed(1) + "s";
+        const mins = Math.floor(seconds / 60);
+        const secs = (seconds % 60).toFixed(0);
+        return mins + "m " + secs + "s";
     }
 
     truncate(text, length) {

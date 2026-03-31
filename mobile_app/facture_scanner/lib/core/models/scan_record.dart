@@ -34,6 +34,10 @@ class ScanRecord {
   final int? processedById;
   final DateTime? processedDate;
   
+  // Champs pour la vérification DGI
+  final double verificationDuration;
+  final bool isManualEntry;
+  
   ScanRecord({
     required this.id,
     required this.reference,
@@ -62,6 +66,8 @@ class ScanRecord {
     this.processedBy,
     this.processedById,
     this.processedDate,
+    this.verificationDuration = 0,
+    this.isManualEntry = false,
   });
   
   factory ScanRecord.fromJson(Map<String, dynamic> json) {
@@ -103,6 +109,8 @@ class ScanRecord {
       processedDate: json['processed_date'] != null
           ? DateTime.tryParse(json['processed_date'])
           : null,
+      verificationDuration: (json['verification_duration'] as num?)?.toDouble() ?? 0,
+      isManualEntry: json['is_manual_entry'] as bool? ?? false,
     );
   }
   
@@ -145,6 +153,8 @@ class ScanRecord {
       processedDate: map['processed_date'] != null
           ? DateTime.tryParse(map['processed_date'])
           : null,
+      verificationDuration: (map['verification_duration'] as num?)?.toDouble() ?? 0,
+      isManualEntry: map['is_manual_entry'] as bool? ?? false,
     );
   }
   
@@ -177,6 +187,8 @@ class ScanRecord {
       'processed_by': processedBy,
       'processed_by_id': processedById,
       'processed_date': processedDate?.toIso8601String(),
+      'verification_duration': verificationDuration,
+      'is_manual_entry': isManualEntry,
     };
   }
   

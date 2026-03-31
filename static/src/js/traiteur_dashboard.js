@@ -27,10 +27,14 @@ export class TraiteurDashboard extends Component {
                 processed_amount_period: 0,
                 all_processed_period: 0,
                 processing_rate: 0,
+                avg_verification_duration: 0,
+                manual_entry_count: 0,
             },
             all_time_stats: {
                 processed_all_time: 0,
                 processed_all_amount: 0,
+                avg_verification_duration: 0,
+                manual_entry_count: 0,
             },
             recent_processed: [],
             pending_scans: [],
@@ -144,6 +148,14 @@ export class TraiteurDashboard extends Component {
 
     formatCurrency(value) {
         return (value || 0).toLocaleString('fr-FR') + ' FCFA';
+    }
+
+    formatDuration(seconds) {
+        if (!seconds || seconds <= 0) return '0s';
+        if (seconds < 60) return seconds.toFixed(1) + 's';
+        const mins = Math.floor(seconds / 60);
+        const secs = (seconds % 60).toFixed(0);
+        return mins + 'min ' + secs + 's';
     }
 
     formatDate(isoDate) {

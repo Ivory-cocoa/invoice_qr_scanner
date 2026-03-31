@@ -14,6 +14,7 @@ import '../widgets/stats_card.dart';
 import '../widgets/history_list.dart';
 import 'scanner_screen.dart';
 import 'errors_screen.dart';
+import 'manual_entry_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -128,13 +129,54 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     
     if (result != null && mounted) {
-      await scan.processQrCode(
-        result,
-        isOnline: connectivity.isOnline,
-        localExtraction: !connectivity.isOnline,
-      );
+      // Use new client-side extraction flow when online
+      if (connectivity.isOnline) {
+        final needsManualEntry = await scan.processQrCodeWithExtraction(
+          result,
+          isOnline: true,
+        );
+        
+        if (needsManualEntry && mounted) {
+          // Navigate to manual entry screen
+          final manualResult = await Navigator.of(context).push<ManualEntryResult>(
+            MaterialPageRoute(
+              builder: (context) => ManualEntryScreen(
+                qrUrl: result,
+                prefillData: scan.extractedDgiData,
+                verificationDuration: scan.lastVerificationDuration,
+                timedOut: true,
+              ),
+            ),
+          );
+          
+          if (manualResult != null && mounted) {
+            await scan.submitManualEntry(
+              qrUrl: result,
+              supplierName: manualResult.supplierName,
+              supplierCodeDgi: manualResult.supplierCodeDgi,
+              customerName: manualResult.customerName,
+              customerCodeDgi: manualResult.customerCodeDgi,
+              invoiceNumberDgi: manualResult.invoiceNumberDgi,
+              invoiceDate: manualResult.invoiceDate,
+              amountTtc: manualResult.amountTtc,
+              verificationDuration: manualResult.verificationDuration,
+            );
+          } else {
+            // User cancelled manual entry
+            scan.resetState();
+            return;
+          }
+        }
+      } else {
+        // Offline: use existing local extraction flow
+        await scan.processQrCode(
+          result,
+          isOnline: false,
+          localExtraction: true,
+        );
+      }
       
-      if (scan.state != ScanState.idle && mounted) {
+      if (scan.state != ScanState.idle && scan.state != ScanState.manualEntry && mounted) {
         final dialogResult = await showDialog<String>(
           context: context,
           builder: (context) => ScanResultDialog(

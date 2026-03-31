@@ -198,6 +198,71 @@ class StatsCard extends StatelessWidget {
                   ],
                 ),
               ),
+              
+              // Durée moyenne de vérification
+              if ((stats['avg_verification_duration'] ?? 0) > 0) ...[
+                Divider(height: 1, color: AppTheme.getDivider(context)),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF5C6BC0).withOpacity(isDark ? 0.2 : 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.timer_rounded,
+                          color: Color(0xFF5C6BC0),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Durée moy. de vérification',
+                              style: TextStyle(
+                                color: AppTheme.getTextMuted(context),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _formatDuration(stats['avg_verification_duration']),
+                              style: const TextStyle(
+                                color: Color(0xFF5C6BC0),
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if ((stats['manual_entry_count'] ?? 0) > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.getWarning(context).withOpacity(isDark ? 0.2 : 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${stats['manual_entry_count']} manuel${(stats['manual_entry_count'] ?? 0) > 1 ? 's' : ''}',
+                            style: TextStyle(
+                              color: AppTheme.getWarning(context),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -253,6 +318,15 @@ class StatsCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatDuration(dynamic seconds) {
+    if (seconds == null || seconds == 0) return '0s';
+    final secs = (seconds as num).toDouble();
+    if (secs < 60) return '${secs.toStringAsFixed(1)}s';
+    final mins = (secs / 60).floor();
+    final remainSecs = (secs % 60).round();
+    return '${mins}min ${remainSecs}s';
   }
 
   String _formatAmount(dynamic amount) {

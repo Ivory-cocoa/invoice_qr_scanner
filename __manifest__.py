@@ -18,7 +18,7 @@
         API REST pour application mobile Flutter :
         - POST /api/v1/invoice-scanner/auth/login - Authentification
         - POST /api/v1/invoice-scanner/auth/logout - Déconnexion
-        - POST /api/v1/invoice-scanner/scan - Scanner et créer facture
+        - POST /api/v1/invoice-scanner/scan-with-data - Scanner avec données pré-extraites
         - GET /api/v1/invoice-scanner/history - Historique des scans
         - GET /api/v1/invoice-scanner/stats - Statistiques
         - GET /api/v1/invoice-scanner/invoice/<id> - Détails facture

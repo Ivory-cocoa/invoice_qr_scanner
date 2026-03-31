@@ -94,17 +94,37 @@ class ApiService {
     await prefs.remove(_userKey);
   }
   
-  /// Scan QR code and create invoice
-  Future<ApiResponse<Map<String, dynamic>>> scanQrCode(String qrUrl) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/scan', {
-      'qr_url': qrUrl,
-    });
-  }
-  
   /// Check if QR code already exists
   Future<ApiResponse<Map<String, dynamic>>> checkQrCode(String qrUrl) async {
     return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/check', {
       'qr_url': qrUrl,
+    });
+  }
+
+  /// Scan with pre-extracted DGI data (client-side extraction)
+  Future<ApiResponse<Map<String, dynamic>>> scanWithData({
+    required String qrUrl,
+    required String supplierName,
+    String? supplierCodeDgi,
+    String? customerName,
+    String? customerCodeDgi,
+    required String invoiceNumberDgi,
+    String? invoiceDate,
+    required double amountTtc,
+    double verificationDuration = 0,
+    bool isManualEntry = false,
+  }) async {
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/scan-with-data', {
+      'qr_url': qrUrl,
+      'supplier_name': supplierName,
+      if (supplierCodeDgi != null) 'supplier_code_dgi': supplierCodeDgi,
+      if (customerName != null) 'customer_name': customerName,
+      if (customerCodeDgi != null) 'customer_code_dgi': customerCodeDgi,
+      'invoice_number_dgi': invoiceNumberDgi,
+      if (invoiceDate != null) 'invoice_date': invoiceDate,
+      'amount_ttc': amountTtc,
+      'verification_duration': verificationDuration,
+      'is_manual_entry': isManualEntry,
     });
   }
   

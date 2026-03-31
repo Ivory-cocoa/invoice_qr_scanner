@@ -90,10 +90,23 @@
                     </div>
                 </div>
 
-                <!-- Montant total -->
-                <div class="scanner-dash__amount">
-                    <span class="scanner-dash__amount-label">Montant total TTC (période)</span>
-                    <span class="scanner-dash__amount-value" t-esc="formatCurrency(state.stats.total_amount)"/>
+                <!-- Montant total + Durée moyenne -->
+                <div class="scanner-dash__amount" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <span class="scanner-dash__amount-label">Montant total TTC (période)</span>
+                        <span class="scanner-dash__amount-value" t-esc="formatCurrency(state.stats.total_amount)"/>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="scanner-dash__amount-label">
+                            <i class="fa fa-clock-o"/> Durée moy. vérification
+                        </span>
+                        <span class="scanner-dash__amount-value" t-esc="formatDuration(state.stats.avg_verification_duration)"/>
+                        <t t-if="state.stats.manual_entry_count > 0">
+                            <span style="font-size: 12px; color: #94a3b8; display: block;">
+                                <i class="fa fa-pencil"/> <t t-esc="state.stats.manual_entry_count"/> saisie(s) manuelle(s)
+                            </span>
+                        </t>
+                    </div>
                 </div>
 
                 <!-- Totaux globaux (All-time) - Correspondance avec l'application mobile (cliquables) -->
@@ -125,6 +138,13 @@
                         <div class="alltime-kpi alltime-kpi--info alltime-kpi--clickable" t-on-click="viewAllTimeAmount" title="Cliquez pour voir le détail des montants">
                             <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.total_amount)"/>
                             <span class="alltime-kpi__label">Montant TTC</span>
+                        </div>
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value">
+                                <i class="fa fa-clock-o" style="font-size: 0.7em;"/>
+                                <t t-esc="formatDuration(state.all_time_stats.avg_verification_duration)"/>
+                            </span>
+                            <span class="alltime-kpi__label">Durée moy. vérification</span>
                         </div>
                     </div>
                 </div>

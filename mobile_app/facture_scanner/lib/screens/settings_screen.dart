@@ -1,8 +1,11 @@
 /// Settings Screen - Configuration de la synchronisation programmée
 /// Permet de configurer l'heure de synchronisation automatique
+/// et le timeout de vérification DGI
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../core/providers/scan_provider.dart';
 import '../core/services/database_service.dart';
 import '../core/services/scheduled_sync_service.dart';
 import '../core/theme/app_theme.dart';
@@ -291,6 +294,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'et les stocke localement. Le serveur n\'a plus besoin de '
                         'refaire l\'extraction lors de la synchronisation.',
                       ),
+                    ),
+                    const Divider(),
+                    Consumer<ScanProvider>(
+                      builder: (context, scan, _) {
+                        return ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.timer_rounded,
+                              color: AppTheme.primaryColor,
+                            ),
+                          ),
+                          title: const Text(
+                            'Délai de vérification DGI',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text(
+                                'Si la vérification prend plus de ${scan.verificationTimeout}s, '
+                                'un formulaire de saisie manuelle s\'affichera.',
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Text('1s'),
+                                  Expanded(
+                                    child: Slider(
+                                      value: scan.verificationTimeout.toDouble(),
+                                      min: 1,
+                                      max: 30,
+                                      divisions: 29,
+                                      label: '${scan.verificationTimeout}s',
+                                      activeColor: AppTheme.primaryColor,
+                                      onChanged: (value) {
+                                        scan.setVerificationTimeout(value.round());
+                                      },
+                                    ),
+                                  ),
+                                  const Text('30s'),
+                                ],
+                              ),
+                              Center(
+                                child: Text(
+                                  '${scan.verificationTimeout} secondes',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryColor,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

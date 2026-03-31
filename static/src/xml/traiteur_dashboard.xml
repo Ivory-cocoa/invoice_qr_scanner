@@ -111,6 +111,19 @@
                             <span class="alltime-kpi__value" t-esc="formatCurrency(state.all_time_stats.processed_all_amount)"/>
                             <span class="alltime-kpi__label">Montant total traité</span>
                         </div>
+                        <div class="alltime-kpi">
+                            <span class="alltime-kpi__value">
+                                <i class="fa fa-clock-o" style="font-size: 0.7em;"/>
+                                <t t-esc="formatDuration(state.all_time_stats.avg_verification_duration)"/>
+                            </span>
+                            <span class="alltime-kpi__label">Durée moy. vérification</span>
+                        </div>
+                        <t t-if="state.all_time_stats.manual_entry_count > 0">
+                            <div class="alltime-kpi alltime-kpi--warning">
+                                <span class="alltime-kpi__value" t-esc="formatNumber(state.all_time_stats.manual_entry_count)"/>
+                                <span class="alltime-kpi__label">Saisies manuelles</span>
+                            </div>
+                        </t>
                     </div>
                 </div>
 

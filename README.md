@@ -30,15 +30,7 @@ Module Odoo 17 pour créer des factures fournisseur en scannant les QR-codes des
 ./odoo.sh install invoice_qr_scanner
 ```
 
-### 2. Dépendances Python
-
-Le module nécessite `beautifulsoup4` pour parser les données DGI :
-
-```bash
-pip install beautifulsoup4
-```
-
-### 3. Application Flutter
+### 2. Application Flutter
 
 ```bash
 cd icp/invoice_qr_scanner/mobile_app/facture_scanner

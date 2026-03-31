@@ -209,6 +209,9 @@ class InvoiceScannerMobileAPI(http.Controller):
             'reprocess_attempt_count': record.reprocess_attempt_count,
             'last_reprocess_attempt': record.last_reprocess_attempt.isoformat() if record.last_reprocess_attempt else None,
             'last_reprocess_user': record.last_reprocess_user_id.name if record.last_reprocess_user_id else '',
+            # Durée de vérification et saisie manuelle
+            'verification_duration': record.verification_duration or 0,
+            'is_manual_entry': record.is_manual_entry or False,
         }
 
     def _format_invoice(self, invoice):
@@ -344,19 +347,33 @@ class InvoiceScannerMobileAPI(http.Controller):
 
     # ==================== ENDPOINTS SCAN ====================
 
-    @http.route('/api/v1/invoice-scanner/scan', type='http', auth='none',
+    @http.route('/api/v1/invoice-scanner/scan-with-data', type='http', auth='none',
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
-    def scan_qr_code(self, user=None, **kw):
-        """Scanner un QR-code et créer une facture.
+    def scan_with_data(self, user=None, **kw):
+        """Scanner un QR-code avec données pré-extraites côté client.
+        
+        Le client a déjà extrait les données DGI (via WebView ou saisie manuelle).
+        Le serveur valide, crée l'enregistrement et la facture sans appeler la DGI.
         
         Body JSON:
-        - qr_url: URL extraite du QR-code
+        - qr_url: URL extraite du QR-code (requis)
+        - qr_uuid: UUID extrait (optionnel, sera extrait de l'URL sinon)
+        - supplier_name: Nom du fournisseur (requis)
+        - supplier_code_dgi: Code DGI fournisseur (optionnel)
+        - customer_name: Nom du client (optionnel)
+        - customer_code_dgi: Code DGI client (optionnel)
+        - invoice_number_dgi: Numéro de facture DGI (requis)
+        - invoice_date: Date de facturation (DD/MM/YYYY ou YYYY-MM-DD)
+        - amount_ttc: Montant TTC (requis, nombre)
+        - verification_id: ID de vérification DGI (optionnel)
+        - is_manual_entry: Boolean (true si saisie manuelle)
+        - verification_duration: Durée de vérification en secondes (float)
         
         Returns:
         - scan_record: Enregistrement du scan
-        - invoice: Facture créée (si succès)
+        - invoice: Facture créée
         """
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200)
@@ -367,43 +384,146 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not qr_url:
             return api_error('VALIDATION_ERROR', 'URL du QR-code requise', status=400)
         
-        # Vérifier que l'URL est valide (DGI)
         if 'services.fne.dgi.gouv.ci' not in qr_url:
             return api_error('INVALID_URL', 'URL non reconnue. Seules les factures DGI sont supportées.', status=400)
         
-        # Acquérir un slot du sémaphore pour limiter les traitements concurrents
-        if not acquire_scan_slot():
-            _logger.warning("Scan rejeté (serveur occupé) pour user=%s", user.id)
-            return api_error(
-                'SERVER_BUSY',
-                'Le serveur traite actuellement plusieurs scans. Veuillez réessayer dans quelques secondes.',
-                status=503,
-                details=get_semaphore_status()
-            )
+        # Valider les champs requis
+        supplier_name = data.get('supplier_name', '').strip()
+        invoice_number_dgi = data.get('invoice_number_dgi', '').strip()
+        amount_ttc = data.get('amount_ttc')
+        
+        if not supplier_name:
+            return api_error('VALIDATION_ERROR', 'Le nom du fournisseur est requis', status=400)
+        if not invoice_number_dgi:
+            return api_error('VALIDATION_ERROR', 'Le numéro de facture DGI est requis', status=400)
+        if amount_ttc is None:
+            return api_error('VALIDATION_ERROR', 'Le montant TTC est requis', status=400)
         
         try:
-            # Traiter le scan
-            ScanRecord = request.env['invoice.scan.record'].sudo()
-            result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
-        finally:
-            release_scan_slot()
+            amount_ttc = float(str(amount_ttc).replace(' ', '').replace('\u00a0', ''))
+            if amount_ttc < 0:
+                return api_error('VALIDATION_ERROR', 'Le montant TTC doit être positif', status=400)
+        except (ValueError, TypeError):
+            return api_error('VALIDATION_ERROR', 'Montant TTC invalide', status=400)
         
-        if result.get('success'):
-            return api_response(result)
-        else:
-            # Pour les doublons, inclure les données de l'enregistrement existant
-            error_data = None
-            if result.get('error_code') == 'DUPLICATE' and result.get('existing_record'):
-                error_data = {
-                    'existing_record': result.get('existing_record'),
-                    'duplicate_count': result.get('duplicate_count', 0),
-                }
-            
+        # Parser la date
+        invoice_date = None
+        date_str = data.get('invoice_date', '').strip()
+        if date_str:
+            for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+                try:
+                    invoice_date = datetime.strptime(date_str, fmt).date()
+                    break
+                except ValueError:
+                    continue
+        
+        # Extraire l'UUID
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        qr_uuid = data.get('qr_uuid', '').strip() or ScanRecord.extract_uuid_from_url(qr_url)
+        
+        if not qr_uuid:
+            return api_error('INVALID_URL', 'Impossible d\'extraire l\'UUID du QR-code', status=400)
+        
+        # Vérifier les doublons
+        existing = ScanRecord.check_duplicate(qr_uuid)
+        if existing:
+            existing.write({
+                'duplicate_count': existing.duplicate_count + 1,
+                'last_duplicate_attempt': fields.Datetime.now(),
+                'last_duplicate_user_id': user.id,
+            })
+            existing.message_post(
+                body=f"Tentative de scan doublon #{existing.duplicate_count} par {user.name} (scan-with-data)",
+                message_type='notification'
+            )
             return api_error(
-                result.get('error_code', 'INVOICE_ERROR'),
-                result.get('error', 'Erreur lors du scan'),
+                'DUPLICATE',
+                'Cette facture a déjà été scannée',
                 status=400,
-                data=error_data
+                data={
+                    'existing_record': {
+                        'id': existing.id,
+                        'reference': existing.reference,
+                        'supplier_name': existing.supplier_name or '',
+                        'supplier_code_dgi': existing.supplier_code_dgi or '',
+                        'invoice_number_dgi': existing.invoice_number_dgi or '',
+                        'amount_ttc': existing.amount_ttc or 0,
+                        'invoice_id': existing.invoice_id.id if existing.invoice_id else None,
+                        'invoice_name': existing.invoice_id.name if existing.invoice_id else None,
+                        'scan_date': existing.scan_date.isoformat() if existing.scan_date else None,
+                        'scanned_by': existing.scanned_by.name if existing.scanned_by else '',
+                        'duplicate_count': existing.duplicate_count,
+                    },
+                    'duplicate_count': existing.duplicate_count,
+                }
+            )
+        
+        # Vérifier s'il existe un enregistrement en erreur
+        existing_error = ScanRecord.search([
+            ('qr_uuid', '=', qr_uuid),
+            ('state', '=', 'error'),
+            ('company_id', '=', request.env.company.id)
+        ], limit=1)
+        
+        # Préparer les valeurs
+        verification_duration = 0
+        try:
+            verification_duration = max(0, float(data.get('verification_duration', 0)))
+        except (ValueError, TypeError):
+            pass
+        
+        record_vals = {
+            'qr_url': qr_url,
+            'supplier_name': supplier_name,
+            'supplier_code_dgi': data.get('supplier_code_dgi', '').strip() or False,
+            'customer_name': data.get('customer_name', '').strip() or False,
+            'customer_code_dgi': data.get('customer_code_dgi', '').strip() or False,
+            'invoice_number_dgi': invoice_number_dgi,
+            'invoice_date': invoice_date,
+            'verification_id': data.get('verification_id', '').strip() or False,
+            'amount_ttc': amount_ttc,
+            'scanned_by': user.id,
+            'state': 'draft',
+            'error_message': False,
+            'is_manual_entry': bool(data.get('is_manual_entry', False)),
+            'verification_duration': verification_duration,
+        }
+        
+        if existing_error:
+            existing_error.write(record_vals)
+            record = existing_error
+        else:
+            record_vals['qr_uuid'] = qr_uuid
+            record = ScanRecord.create(record_vals)
+        
+        # Créer la facture
+        try:
+            invoice = record._create_invoice()
+            return api_response({
+                'success': True,
+                'message': 'Facture créée avec succès',
+                'record': {
+                    'id': record.id,
+                    'reference': record.reference,
+                },
+                'invoice': {
+                    'id': invoice.id,
+                    'name': invoice.name,
+                    'state': invoice.state,
+                    'amount_total': invoice.amount_total,
+                    'partner_name': invoice.partner_id.name,
+                },
+            })
+        except Exception as e:
+            _logger.error(f"Erreur création facture (scan-with-data): {e}")
+            record.write({
+                'state': 'error',
+                'error_message': str(e),
+            })
+            return api_error(
+                'INVOICE_ERROR',
+                f'Erreur lors de la création de la facture: {str(e)}',
+                status=500
             )
 
     @http.route('/api/v1/invoice-scanner/check', type='http', auth='none',
@@ -967,33 +1087,6 @@ class InvoiceScannerMobileAPI(http.Controller):
             'semaphore': get_semaphore_status(),
         })
 
-    @http.route('/api/v1/invoice-scanner/test-dgi', type='http', auth='none',
-                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
-    @api_exception_handler
-    def test_dgi_extraction(self, **kw):
-        """Endpoint de test pour vérifier l'extraction DGI (sans auth pour debug).
-        
-        Body JSON:
-        - qr_url: URL de vérification DGI
-        """
-        if request.httprequest.method == 'OPTIONS':
-            return Response(status=200)
-            
-        data = get_json_body()
-        qr_url = data.get('qr_url', '').strip() or data.get('qr_content', '').strip()
-        
-        if not qr_url:
-            return api_error('VALIDATION_ERROR', 'URL du QR-code requise (qr_url)', status=400)
-        
-        # Appeler la méthode d'extraction
-        ScanRecord = request.env['invoice.scan.record'].sudo()
-        dgi_data = ScanRecord.fetch_invoice_data_from_dgi(qr_url)
-        
-        return api_response({
-            'qr_url': qr_url,
-            'extraction_result': dgi_data
-        })
-
     @http.route('/api/v1/invoice-scanner/stats', type='http', auth='none',
                 methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
@@ -1041,6 +1134,22 @@ class InvoiceScannerMobileAPI(http.Controller):
         ])
         total_amount = sum(r.amount_ttc for r in records)
         
+        # Durée moyenne de vérification
+        records_with_duration = ScanRecord.search([
+            ('company_id', '=', company_id),
+            ('verification_duration', '>', 0),
+            ('state', 'in', ['done', 'processed']),
+        ])
+        avg_verification_duration = 0
+        manual_entry_count = ScanRecord.search_count([
+            ('company_id', '=', company_id),
+            ('is_manual_entry', '=', True),
+        ])
+        if records_with_duration:
+            avg_verification_duration = round(
+                sum(r.verification_duration for r in records_with_duration) / len(records_with_duration), 1
+            )
+        
         return api_response({
             'total_scans': total_scans,
             'successful_scans': successful_scans,
@@ -1051,6 +1160,8 @@ class InvoiceScannerMobileAPI(http.Controller):
             'records_with_duplicates': len(records_with_duplicates),
             'total_amount': total_amount,
             'currency': 'XOF',
+            'avg_verification_duration': avg_verification_duration,
+            'manual_entry_count': manual_entry_count,
         })
 
     # ==================== ENDPOINT SYNC OFFLINE ====================
@@ -1108,11 +1219,15 @@ class InvoiceScannerMobileAPI(http.Controller):
                     })
                     continue
                 
-                # Traiter le scan
-                result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
-                result['qr_url'] = qr_url
-                result['scanned_at'] = scanned_at
-                results.append(result)
+                # L'extraction DGI côté serveur a été supprimée.
+                # Les scans non parsés ne peuvent plus être traités.
+                results.append({
+                    'qr_url': qr_url,
+                    'scanned_at': scanned_at,
+                    'success': False,
+                    'error': 'Extraction DGI côté serveur non disponible. Veuillez rescanner avec la dernière version de l\'application.',
+                    'error_code': 'SERVER_EXTRACTION_REMOVED',
+                })
         finally:
             release_scan_slot()
         
@@ -1240,12 +1355,14 @@ class InvoiceScannerMobileAPI(http.Controller):
                 invoice_number_dgi = (parsed_data.get('invoice_number_dgi') or '').strip()
                 
                 if not supplier_name and not invoice_number_dgi:
-                    # Données insuffisantes - fallback au mode serveur
-                    result = ScanRecord.process_qr_scan(qr_url, user_id=user.id)
-                    result['qr_url'] = qr_url
-                    result['scanned_at'] = scanned_at
-                    result['note'] = 'Fallback serveur: données pré-parsées insuffisantes'
-                    results.append(result)
+                    # Données insuffisantes - extraction serveur supprimée, retourner une erreur
+                    results.append({
+                        'qr_url': qr_url,
+                        'scanned_at': scanned_at,
+                        'success': False,
+                        'error': 'Données pré-parsées insuffisantes. Veuillez rescanner avec la dernière version de l\'application.',
+                        'error_code': 'INSUFFICIENT_DATA',
+                    })
                     continue
                 
                 # Convertir la date si fournie (DD/MM/YYYY → date Python)
@@ -1458,8 +1575,6 @@ class InvoiceScannerMobileAPI(http.Controller):
             return 'parsing'
         elif any(k in msg_lower for k in ['facture', 'invoice', 'compte', 'journal', 'partner']):
             return 'invoice_creation'
-        elif 'playwright' in msg_lower:
-            return 'browser'
         else:
             return 'other'
 

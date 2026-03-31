@@ -2,8 +2,8 @@
 """
 Sémaphore pour le contrôle de concurrence des scans de factures.
 
-Limite le nombre de traitements lourds simultanés (fetch DGI, création factures)
-pour éviter l'épuisement des ressources serveur (CPU, RAM, réseau) qui cause
+Limite le nombre de traitements lourds simultanés (création factures, synchronisation)
+pour éviter l'épuisement des ressources serveur (CPU, RAM) qui cause
 des erreurs "Problème de serveur" côté mobile.
 
 Fonctionne par worker Odoo (threading.Semaphore) :

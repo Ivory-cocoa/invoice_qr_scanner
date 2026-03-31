@@ -4,9 +4,6 @@ Modèle pour enregistrer les scans de QR-code de factures
 """
 
 import logging
-import requests
-import sys
-from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 
@@ -14,9 +11,6 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
-
-# URL de base du service DGI
-DGI_BASE_URL = "https://www.services.fne.dgi.gouv.ci/fr/verification/"
 
 
 class InvoiceScanRecord(models.Model):
@@ -219,6 +213,21 @@ class InvoiceScanRecord(models.Model):
         string="Données brutes HTML",
         help="HTML récupéré du site DGI pour débogage"
     )
+    
+    # Durée de vérification et saisie manuelle
+    verification_duration = fields.Float(
+        string="Durée de vérification (s)",
+        help="Durée en secondes de la vérification DGI côté client",
+        readonly=True,
+    )
+    
+    is_manual_entry = fields.Boolean(
+        string="Saisie manuelle",
+        default=False,
+        readonly=True,
+        tracking=True,
+        help="Indique si les données ont été saisies manuellement par l'utilisateur"
+    )
 
     _sql_constraints = [
         ('qr_uuid_unique', 'unique(qr_uuid, company_id)', 
@@ -292,580 +301,6 @@ class InvoiceScanRecord(models.Model):
         match = re.search(pattern, url, re.IGNORECASE)
         return match.group(0).lower() if match else None
 
-    @api.model
-    def _normalize_dgi_url(self, url):
-        """Convertir l'URL DGI en version française pour avoir les labels FR.
-        
-        Les QR codes DGI peuvent encoder l'URL en anglais (/en/) ou en français (/fr/).
-        Nos regex d'extraction utilisent principalement les labels français,
-        donc on force la version française.
-        """
-        if url and '/en/verification/' in url:
-            url = url.replace('/en/verification/', '/fr/verification/')
-            _logger.info(f"DGI: URL normalisée en français: {url}")
-        return url
-
-    @api.model
-    def _extract_dgi_data_from_text(self, text_content, raw_html=''):
-        """Extraire les données de facture DGI depuis le texte rendu.
-        
-        Méthode utilitaire partagée entre l'approche Playwright et le fallback requests.
-        Supporte les labels en français ET en anglais (fallback).
-        
-        Args:
-            text_content: Texte brut de la page
-            raw_html: HTML brut (optionnel, pour debug)
-            
-        Returns:
-            dict: Données extraites de la facture
-        """
-        data = {
-            'raw_html': raw_html[:5000] if raw_html else '',
-            'text_content': text_content[:3000],
-            'success': True,
-        }
-        
-        # Fournisseur / Supplier (format: "NOM - CODE" sur plusieurs lignes)
-        supplier_match = re.search(
-            r'(?:FOURNISSEUR|SUPPLIER):\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
-            text_content, re.IGNORECASE | re.MULTILINE
-        )
-        if supplier_match:
-            data['supplier_name'] = supplier_match.group(1).strip()
-            data['supplier_code_dgi'] = supplier_match.group(2).strip()
-        
-        # Client / Customer (format: "NOM - CODE")
-        client_match = re.search(
-            r'(?:CLIENT|CUSTOMER):\s*\n*\s*([A-Z0-9\s\-\.&\']+?)\s*-\s*([A-Z0-9]+)',
-            text_content, re.IGNORECASE | re.MULTILINE
-        )
-        if client_match:
-            data['customer_name'] = client_match.group(1).strip()
-            data['customer_code_dgi'] = client_match.group(2).strip()
-        
-        # Numéro de facture / Invoice Number
-        invoice_match = re.search(
-            r'(?:NUMERO DE FACTURE|INVOICE NUMBER):\s*\n*\s*([A-Z0-9]+)',
-            text_content, re.IGNORECASE | re.MULTILINE
-        )
-        if invoice_match:
-            data['invoice_number_dgi'] = invoice_match.group(1).strip()
-        
-        # Date de facturation / Invoice Date (format: DD/MM/YYYY)
-        date_match = re.search(
-            r'(?:DATE DE FACTURATION|INVOICE DATE|BILLING DATE):\s*\n*\s*(\d{2}/\d{2}/\d{4})',
-            text_content, re.IGNORECASE | re.MULTILINE
-        )
-        if date_match:
-            date_str = date_match.group(1)
-            data['invoice_date'] = datetime.strptime(date_str, '%d/%m/%Y').date()
-        
-        # ID Vérification / Verification ID
-        verif_match = re.search(
-            r'(?:ID VERIFICATION|VERIFICATION ID):\s*\n*\s*([A-Z0-9\-]+)',
-            text_content, re.IGNORECASE | re.MULTILINE
-        )
-        if verif_match:
-            data['verification_id'] = verif_match.group(1).strip()
-        
-        # Montant TTC / Total Amount (format: "1 677 566 CFA" ou "1 677 566 FCFA")
-        amount_match = re.search(
-            r'(?:MONTANT TTC|TOTAL AMOUNT|AMOUNT INCLUDING TAX):\s*\n*\s*([\d\s]+)\s*(?:F?CFA)',
-            text_content, re.IGNORECASE | re.MULTILINE
-        )
-        if amount_match:
-            amount_str = amount_match.group(1).replace(' ', '').replace('\u00a0', '').strip()
-            data['amount_ttc'] = float(amount_str)
-        
-        _logger.info(f"DGI Data extracted: supplier={data.get('supplier_name')}, "
-                     f"amount={data.get('amount_ttc')}, invoice={data.get('invoice_number_dgi')}")
-        
-        # Vérifier que les champs minimaux obligatoires ont été extraits
-        missing_fields = []
-        if not data.get('supplier_name'):
-            missing_fields.append('fournisseur')
-        if not data.get('amount_ttc'):
-            missing_fields.append('montant TTC')
-        if not data.get('invoice_number_dgi'):
-            missing_fields.append('numéro de facture')
-        
-        if missing_fields:
-            _logger.warning(f"DGI: Données incomplètes - champs manquants: {', '.join(missing_fields)}")
-            # Log le début du texte pour diagnostiquer ce que la page a renvoyé
-            _logger.warning(f"DGI: Début du texte page (500 chars): {text_content[:500]}")
-            data['success'] = False
-            data['error'] = f"Données DGI incomplètes: {', '.join(missing_fields)} non trouvé(s). La page n'a peut-être pas fini de charger."
-            data['missing_fields'] = missing_fields
-        
-        return data
-
-    @api.model
-    def _fetch_dgi_with_requests(self, url):
-        """Tentative de récupération des données DGI via requests (sans navigateur).
-        
-        Certaines pages DGI peuvent renvoyer les données directement dans le HTML
-        ou via une API JSON interne. Cette méthode essaie d'abord sans Playwright.
-        
-        Args:
-            url: URL complète de vérification DGI
-            
-        Returns:
-            dict ou None: Données si trouvées, None si JS rendering nécessaire
-        """
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                              'AppleWebKit/537.36 (KHTML, like Gecko) '
-                              'Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
-            }
-            
-            # Extraire l'UUID pour tenter l'API directe
-            uuid = self.extract_uuid_from_url(url)
-            
-            # Tentative 1: API JSON directe (si le site expose une API)
-            if uuid:
-                api_urls = [
-                    f"https://www.services.fne.dgi.gouv.ci/api/verification/{uuid}",
-                    f"https://www.services.fne.dgi.gouv.ci/api/v1/verification/{uuid}",
-                ]
-                for api_url in api_urls:
-                    try:
-                        resp = requests.get(api_url, headers=headers, timeout=15, verify=True)
-                        if resp.status_code == 200:
-                            json_data = resp.json()
-                            if json_data and isinstance(json_data, dict):
-                                _logger.info(f"DGI API directe a retourné des données: {list(json_data.keys())}")
-                                # Mapper les données JSON vers notre format
-                                data = {'success': True, 'raw_html': '', 'text_content': str(json_data)[:3000]}
-                                # Essayer de mapper les clés communes
-                                for key in ['supplier_name', 'fournisseur', 'supplierName']:
-                                    if key in json_data:
-                                        data['supplier_name'] = json_data[key]
-                                for key in ['amount_ttc', 'montantTtc', 'montant_ttc', 'totalAmount']:
-                                    if key in json_data:
-                                        data['amount_ttc'] = float(str(json_data[key]).replace(' ', ''))
-                                for key in ['invoice_number', 'invoiceNumber', 'numero_facture']:
-                                    if key in json_data:
-                                        data['invoice_number_dgi'] = json_data[key]
-                                # Vérifier que les 3 champs obligatoires sont présents
-                                if data.get('supplier_name') and data.get('amount_ttc') and data.get('invoice_number_dgi'):
-                                    return data
-                                elif data.get('supplier_name') or data.get('amount_ttc'):
-                                    # Données partielles - marquer comme échec
-                                    missing = []
-                                    if not data.get('supplier_name'):
-                                        missing.append('fournisseur')
-                                    if not data.get('amount_ttc'):
-                                        missing.append('montant TTC')
-                                    if not data.get('invoice_number_dgi'):
-                                        missing.append('numéro de facture')
-                                    _logger.warning(f"DGI API: données partielles, champs manquants: {', '.join(missing)}")
-                                    # Continuer vers les autres stratégies
-                    except (requests.exceptions.RequestException, ValueError):
-                        continue
-            
-            # Tentative 2: HTML direct (SSR - Server Side Rendering)
-            resp = requests.get(url, headers=headers, timeout=30, verify=True)
-            if resp.status_code == 200:
-                text_content = BeautifulSoup(resp.text, 'html.parser').get_text(separator='\n')
-                if 'FOURNISSEUR' in text_content.upper() or 'NUMERO DE FACTURE' in text_content.upper():
-                    _logger.info("DGI: Données trouvées via requests (SSR), Playwright non nécessaire")
-                    return self._extract_dgi_data_from_text(text_content, resp.text)
-            
-            _logger.info("DGI: Données non trouvées via requests, Playwright nécessaire")
-            return None
-            
-        except Exception as e:
-            _logger.warning(f"Fallback requests DGI échoué (non bloquant): {e}")
-            return None
-
-    @api.model
-    def _launch_playwright_browser(self, playwright_instance, max_retries=3):
-        """Lancer le navigateur Playwright avec mécanisme de retry.
-        
-        Le navigateur Chromium peut crasher au lancement (SIGTRAP) lorsqu'il est
-        lancé depuis le processus Odoo à cause des limites de ressources.
-        Cette méthode réessaie plusieurs fois avec un délai croissant.
-        
-        Args:
-            playwright_instance: Instance Playwright (p)
-            max_retries: Nombre maximum de tentatives (défaut: 3)
-            
-        Returns:
-            Browser: Instance du navigateur lancé
-            
-        Raises:
-            Exception: Si toutes les tentatives échouent
-        """
-        import time
-        
-        last_error = None
-        for attempt in range(1, max_retries + 1):
-            try:
-                _logger.info(f"Lancement Chromium (tentative {attempt}/{max_retries})")
-                browser = playwright_instance.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-web-security',
-                        '--disable-gpu',
-                        '--disable-extensions',
-                        '--disable-software-rasterizer',
-                        '--disable-features=VizDisplayCompositor',
-                    ]
-                )
-                _logger.info(f"Chromium lancé avec succès (tentative {attempt})")
-                return browser
-            except Exception as e:
-                last_error = e
-                error_msg = str(e)
-                _logger.warning(
-                    f"Échec lancement Chromium (tentative {attempt}/{max_retries}): {error_msg}"
-                )
-                if attempt < max_retries:
-                    wait_time = attempt * 3  # 3s, 6s, 9s
-                    _logger.info(f"Attente de {wait_time}s avant nouvelle tentative...")
-                    time.sleep(wait_time)
-        
-        raise last_error
-
-    @api.model
-    def _fetch_dgi_via_subprocess(self, url):
-        """Exécuter Playwright dans un sous-processus Python séparé.
-        
-        Le processus Odoo applique des limites de ressources (RLIMIT_AS via
-        --limit-memory-hard) et des contraintes cgroup Docker qui empêchent
-        Chromium de démarrer correctement. Cette méthode lance un script Python
-        isolé en sous-processus qui n'hérite pas de ces restrictions.
-        
-        Args:
-            url: URL DGI à scraper
-            
-        Returns:
-            dict: Résultat de l'extraction (success, data, error)
-        """
-        import subprocess
-        import json
-        
-        # Script Python autonome exécuté dans un processus séparé
-        script = '''
-import json
-import sys
-import resource
-
-# Lever toutes les limites de ressources héritées
-try:
-    resource.setrlimit(resource.RLIMIT_AS, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
-except Exception:
-    pass
-
-url = sys.argv[1]
-
-# Normaliser l'URL en français pour avoir les labels FR
-if '/en/verification/' in url:
-    url = url.replace('/en/verification/', '/fr/verification/')
-
-try:
-    from playwright.sync_api import sync_playwright
-    
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-web-security',
-                '--disable-gpu',
-                '--disable-extensions',
-                '--disable-software-rasterizer',
-                '--disable-features=VizDisplayCompositor',
-            ]
-        )
-        
-        context = browser.new_context(
-            user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                       'AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/120.0.0.0 Safari/537.36',
-            viewport={'width': 1920, 'height': 1080},
-            locale='fr-FR',
-        )
-        page = context.new_page()
-        
-        page.goto(url, wait_until="networkidle", timeout=60000)
-        
-        # Attendre le chargement des données (FR + EN keywords)
-        max_attempts = 15
-        text_content = ""
-        data_found = False
-        for attempt in range(max_attempts):
-            page.wait_for_timeout(2000)
-            text_content = page.inner_text("body")
-            upper = text_content.upper()
-            if any(kw in upper for kw in ['FOURNISSEUR', 'NUMERO DE FACTURE', 'SUPPLIER', 'INVOICE NUMBER']):
-                data_found = True
-                break
-        
-        raw_html = page.content()[:5000]
-        
-        try:
-            context.close()
-        except Exception:
-            pass
-        try:
-            browser.close()
-        except Exception:
-            pass
-    
-    result = {
-        "success": True,
-        "text_content": text_content,
-        "raw_html": raw_html,
-        "data_found": data_found
-    }
-    if not data_found:
-        result["warning"] = f"Keywords not found after {max_attempts} attempts. Text start: " + text_content[:300]
-    print(json.dumps(result))
-
-except Exception as e:
-    print(json.dumps({
-        "success": False,
-        "error": str(e)
-    }))
-'''
-        
-        try:
-            _logger.info(f"DGI: Lancement du sous-processus Playwright pour: {url}")
-            result = subprocess.run(
-                [sys.executable, '-c', script, url],
-                capture_output=True,
-                text=True,
-                timeout=120,  # 2 minutes max
-                env={
-                    **__import__('os').environ,
-                    'PLAYWRIGHT_BROWSERS_PATH': '/opt/playwright-browsers',
-                },
-            )
-            
-            if result.returncode != 0:
-                stderr = result.stderr[:500] if result.stderr else 'No stderr'
-                _logger.error(f"DGI subprocess error (code {result.returncode}): {stderr}")
-                return None
-            
-            output = result.stdout.strip()
-            if not output:
-                _logger.error("DGI subprocess: sortie vide")
-                return None
-            
-            data = json.loads(output)
-            
-            if data.get('success'):
-                _logger.info("DGI: Données récupérées avec succès via subprocess")
-                return data
-            else:
-                _logger.warning(f"DGI subprocess echec: {data.get('error', 'Unknown')}")
-                return None
-                
-        except subprocess.TimeoutExpired:
-            _logger.error("DGI subprocess: timeout après 120s")
-            return None
-        except json.JSONDecodeError as e:
-            _logger.error(f"DGI subprocess: JSON invalide: {e}")
-            return None
-        except Exception as e:
-            _logger.error(f"DGI subprocess error: {e}")
-            return None
-
-    @api.model
-    def _fetch_dgi_via_daemon(self, url):
-        """Récupérer les données DGI via le daemon Playwright persistant.
-        
-        Le daemon tourne en arrière-plan avec son propre Chromium,
-        indépendant des limites mémoire d'Odoo. Communication via HTTP local.
-        
-        Args:
-            url: URL DGI à scraper
-            
-        Returns:
-            dict ou None: Données si trouvées, None si daemon indisponible
-        """
-        daemon_port = int(self.env['ir.config_parameter'].sudo().get_param(
-            'invoice_qr_scanner.playwright_daemon_port', '9222'
-        ))
-        daemon_url = f'http://127.0.0.1:{daemon_port}'
-        
-        try:
-            # Vérifier que le daemon est disponible
-            health_resp = requests.get(f'{daemon_url}/health', timeout=3)
-            if health_resp.status_code != 200:
-                _logger.warning("Daemon Playwright non disponible (health check échoué)")
-                return None
-                
-            health = health_resp.json()
-            if not health.get('browser_connected'):
-                _logger.warning("Daemon Playwright: navigateur non connecté")
-                return None
-            
-            # Envoyer la requête de fetch
-            _logger.info(f"DGI: Fetch via daemon Playwright pour: {url}")
-            resp = requests.post(
-                f'{daemon_url}/fetch',
-                json={'url': url},
-                timeout=120,  # 2 min max
-            )
-            
-            if resp.status_code == 503:
-                _logger.warning("Daemon Playwright: trop de scans en cours")
-                return None
-            
-            result = resp.json()
-            if result.get('success'):
-                _logger.info("DGI: Données récupérées via daemon Playwright")
-                return result
-            else:
-                _logger.warning(f"DGI daemon fetch échoué: {result.get('error', 'Unknown')}")
-                return None
-                
-        except requests.exceptions.ConnectionError:
-            _logger.info("Daemon Playwright non démarré (connexion refusée)")
-            return None
-        except requests.exceptions.Timeout:
-            _logger.warning("Daemon Playwright: timeout après 120s")
-            return None
-        except Exception as e:
-            _logger.warning(f"Erreur daemon Playwright: {e}")
-            return None
-
-    @api.model
-    def fetch_invoice_data_from_dgi(self, url):
-        """Récupérer les données de la facture depuis le site DGI.
-        
-        Stratégie en 4 étapes (du plus léger au plus lourd):
-        1. requests + BeautifulSoup (pas de navigateur)
-        2. Daemon Playwright persistant (navigateur partagé, sans crash)
-        3. Playwright en subprocess isolé (lance un nouveau navigateur)
-        4. Playwright in-process Odoo (peut crasher - dernier recours)
-        
-        Args:
-            url: URL complète de vérification DGI
-            
-        Returns:
-            dict: Données de la facture ou erreur
-        """
-        # Normaliser l'URL en français (les QR codes DGI peuvent avoir /en/)
-        url = self._normalize_dgi_url(url)
-        
-        # Étape 1: Essayer sans Playwright (requests + BeautifulSoup)
-        _logger.info(f"DGI: Tentative de récupération sans navigateur pour: {url}")
-        requests_result = self._fetch_dgi_with_requests(url)
-        if requests_result and requests_result.get('success'):
-            return requests_result
-        
-        # Étape 2: Utiliser le daemon Playwright persistant (recommandé)
-        _logger.info(f"DGI: Tentative via daemon Playwright pour: {url}")
-        daemon_result = self._fetch_dgi_via_daemon(url)
-        if daemon_result and daemon_result.get('success'):
-            text_content = daemon_result.get('text_content', '')
-            raw_html = daemon_result.get('raw_html', '')
-            return self._extract_dgi_data_from_text(text_content, raw_html)
-        
-        # Étape 3: Utiliser Playwright en subprocess isolé (fallback)
-        _logger.info(f"DGI: Fallback subprocess Playwright pour: {url}")
-        subprocess_result = self._fetch_dgi_via_subprocess(url)
-        if subprocess_result and subprocess_result.get('success'):
-            text_content = subprocess_result.get('text_content', '')
-            raw_html = subprocess_result.get('raw_html', '')
-            return self._extract_dgi_data_from_text(text_content, raw_html)
-        
-        # Étape 4: Dernier recours - Playwright en processus Odoo (peut crasher)
-        _logger.warning(f"DGI: Dernier recours - Playwright in-process pour: {url}")
-        browser = None
-        context = None
-        try:
-            from playwright.sync_api import sync_playwright
-            
-            with sync_playwright() as p:
-                # Lancement avec retry (3 tentatives)
-                browser = self._launch_playwright_browser(p, max_retries=3)
-                
-                # Créer un contexte avec un User-Agent réel
-                context = browser.new_context(
-                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                               'AppleWebKit/537.36 (KHTML, like Gecko) '
-                               'Chrome/120.0.0.0 Safari/537.36',
-                    viewport={'width': 1920, 'height': 1080},
-                    locale='fr-FR',
-                )
-                page = context.new_page()
-                
-                # Charger la page et attendre le rendu JavaScript
-                _logger.info(f"Chargement de l'URL DGI: {url}")
-                page.goto(url, wait_until="networkidle", timeout=60000)
-                
-                # Attendre et vérifier si les données sont chargées
-                max_attempts = 15
-                text_content = ""
-                for attempt in range(max_attempts):
-                    page.wait_for_timeout(2000)  # Attendre 2s
-                    text_content = page.inner_text("body")
-                    if 'FOURNISSEUR' in text_content.upper() or 'NUMERO DE FACTURE' in text_content.upper():
-                        _logger.info(f"Données DGI chargées après {(attempt + 1) * 2} secondes")
-                        break
-                    _logger.info(f"Tentative {attempt + 1}/{max_attempts} - Données non encore chargées. "
-                                f"Texte: {text_content[:200]}")
-                
-                raw_html = page.content()[:5000]
-                
-                # Fermeture propre dans le bloc try
-                try:
-                    context.close()
-                except Exception:
-                    pass
-                context = None
-                try:
-                    browser.close()
-                except Exception:
-                    pass
-                browser = None
-            
-            return self._extract_dgi_data_from_text(text_content, raw_html)
-            
-        except ImportError:
-            _logger.error("Playwright non installé. Installer avec: pip install playwright && playwright install chromium")
-            return {'success': False, 'error': 'Playwright non installé sur le serveur'}
-        except Exception as e:
-            error_msg = str(e)
-            _logger.error(f"Erreur lors de la récupération des données DGI: {error_msg}", exc_info=True)
-            
-            # Message d'erreur enrichi pour le diagnostic
-            if 'Target page, context or browser has been closed' in error_msg or 'SIGTRAP' in error_msg:
-                diagnostic = (
-                    f"Le navigateur du serveur n'a pas pu accéder au site DGI. "
-                    f"Veuillez réessayer dans quelques instants. "
-                    f"Si le problème persiste, contactez l'administrateur."
-                )
-                _logger.error(diagnostic)
-                return {'success': False, 'error': diagnostic}
-            
-            return {'success': False, 'error': 'Le site DGI est temporairement inaccessible. Veuillez réessayer.'}
-        finally:
-            # Nettoyage garanti même en cas d'exception
-            try:
-                if context:
-                    context.close()
-            except Exception:
-                pass
-            try:
-                if browser:
-                    browser.close()
-            except Exception:
-                pass
-
-    @api.model
     def check_duplicate(self, qr_uuid):
         """Vérifier si ce QR-code a déjà été scanné avec succès (facture créée).
         
@@ -1053,162 +488,6 @@ except Exception as e:
         })
         
         return invoice
-
-    @api.model
-    def process_qr_scan(self, qr_url, user_id=None):
-        """Traiter un scan de QR-code complet.
-        
-        Args:
-            qr_url: URL scannée depuis le QR-code
-            user_id: ID de l'utilisateur qui scanne (optionnel)
-            
-        Returns:
-            dict: Résultat du traitement
-        """
-        # Extraire l'UUID
-        qr_uuid = self.extract_uuid_from_url(qr_url)
-        if not qr_uuid:
-            return {
-                'success': False,
-                'error': 'URL invalide - Impossible d\'extraire l\'UUID',
-                'error_code': 'INVALID_URL'
-            }
-        
-        # Vérifier les doublons (scans réussis)
-        existing = self.check_duplicate(qr_uuid)
-        if existing:
-            # Incrémenter le compteur de doublons sur l'enregistrement original
-            existing.write({
-                'duplicate_count': existing.duplicate_count + 1,
-                'last_duplicate_attempt': fields.Datetime.now(),
-                'last_duplicate_user_id': user_id or self.env.user.id,
-            })
-            
-            # Log pour traçabilité
-            existing.message_post(
-                body=f"Tentative de scan doublon #{existing.duplicate_count} par {self.env['res.users'].browse(user_id or self.env.user.id).name}",
-                message_type='notification'
-            )
-            
-            return {
-                'success': False,
-                'error': 'Cette facture a déjà été scannée',
-                'error_code': 'DUPLICATE',
-                'duplicate_count': existing.duplicate_count,
-                'existing_record': {
-                    'id': existing.id,
-                    'reference': existing.reference,
-                    'supplier_name': existing.supplier_name or '',
-                    'supplier_code_dgi': existing.supplier_code_dgi or '',
-                    'invoice_number_dgi': existing.invoice_number_dgi or '',
-                    'amount_ttc': existing.amount_ttc or 0,
-                    'invoice_id': existing.invoice_id.id if existing.invoice_id else None,
-                    'invoice_name': existing.invoice_id.name if existing.invoice_id else None,
-                    'scan_date': existing.scan_date.isoformat() if existing.scan_date else None,
-                    'scanned_by': existing.scanned_by.name if existing.scanned_by else '',
-                    'duplicate_count': existing.duplicate_count,
-                    'last_duplicate_attempt': existing.last_duplicate_attempt.isoformat() if existing.last_duplicate_attempt else None,
-                }
-            }
-        
-        # Vérifier s'il existe un enregistrement en erreur pour ce QR-code
-        # (la contrainte unique empêche d'en créer un nouveau)
-        existing_error = self.search([
-            ('qr_uuid', '=', qr_uuid),
-            ('state', '=', 'error'),
-            ('company_id', '=', self.env.company.id)
-        ], limit=1)
-        
-        # Récupérer les données du site DGI (avec 1 retry si données incomplètes)
-        dgi_data = self.fetch_invoice_data_from_dgi(qr_url)
-        
-        if not dgi_data.get('success') and dgi_data.get('missing_fields'):
-            # Données incomplètes - réessayer une fois (la page DGI peut être lente)
-            _logger.info(f"DGI: Données incomplètes ({dgi_data.get('missing_fields')}), retry en cours...")
-            import time
-            time.sleep(3)
-            dgi_data_retry = self.fetch_invoice_data_from_dgi(qr_url)
-            if dgi_data_retry.get('success'):
-                dgi_data = dgi_data_retry
-                _logger.info("DGI: Retry réussi - données complètes obtenues")
-            else:
-                _logger.warning(f"DGI: Retry échoué - toujours incomplet: {dgi_data_retry.get('missing_fields')}")
-        
-        if not dgi_data.get('success'):
-            # Créer ou mettre à jour un enregistrement d'erreur
-            error_vals = {
-                'qr_url': qr_url,
-                'state': 'error',
-                'error_message': dgi_data.get('error', 'Erreur inconnue'),
-                'scanned_by': user_id or self.env.user.id,
-            }
-            if existing_error:
-                existing_error.write(error_vals)
-                record = existing_error
-            else:
-                error_vals['qr_uuid'] = qr_uuid
-                record = self.create(error_vals)
-            return {
-                'success': False,
-                'error': dgi_data.get('error'),
-                'error_code': 'DGI_INCOMPLETE' if dgi_data.get('missing_fields') else 'DGI_ERROR',
-                'missing_fields': dgi_data.get('missing_fields', []),
-                'record_id': record.id,
-            }
-        
-        # Créer ou mettre à jour l'enregistrement de scan
-        record_vals = {
-            'qr_url': qr_url,
-            'supplier_name': dgi_data.get('supplier_name'),
-            'supplier_code_dgi': dgi_data.get('supplier_code_dgi'),
-            'customer_name': dgi_data.get('customer_name'),
-            'customer_code_dgi': dgi_data.get('customer_code_dgi'),
-            'invoice_number_dgi': dgi_data.get('invoice_number_dgi'),
-            'invoice_date': dgi_data.get('invoice_date'),
-            'verification_id': dgi_data.get('verification_id'),
-            'amount_ttc': dgi_data.get('amount_ttc', 0),
-            'raw_html': dgi_data.get('raw_html'),
-            'scanned_by': user_id or self.env.user.id,
-            'state': 'draft',
-            'error_message': False,
-        }
-        
-        if existing_error:
-            existing_error.write(record_vals)
-            record = existing_error
-        else:
-            record_vals['qr_uuid'] = qr_uuid
-            record = self.create(record_vals)
-        
-        # Créer la facture
-        try:
-            invoice = record._create_invoice()
-            return {
-                'success': True,
-                'message': 'Facture créée avec succès',
-                'record': {
-                    'id': record.id,
-                    'reference': record.reference,
-                },
-                'invoice': {
-                    'id': invoice.id,
-                    'name': invoice.name,
-                    'state': invoice.state,
-                    'amount_total': invoice.amount_total,
-                    'partner_name': invoice.partner_id.name,
-                }
-            }
-        except Exception as e:
-            record.write({
-                'state': 'error',
-                'error_message': str(e)
-            })
-            return {
-                'success': False,
-                'error': f'Erreur lors de la création de la facture: {str(e)}',
-                'error_code': 'INVOICE_ERROR',
-                'record_id': record.id,
-            }
 
     def action_retry_create_invoice(self):
         """Réessayer de créer la facture après une erreur."""
@@ -1541,6 +820,16 @@ except Exception as e:
                 chart_scans = [total_scans] if period == 'day' else [0] * 12
                 chart_verified = [done_scans] if period == 'day' else [0] * 12
             
+            # Durée moyenne de vérification (période)
+            records_with_dur = self.search(period_domain + [('verification_duration', '>', 0), ('state', 'in', ['done', 'processed'])])
+            avg_verification_duration = round(sum(r.verification_duration for r in records_with_dur) / len(records_with_dur), 1) if records_with_dur else 0
+            manual_entry_count = self.search_count(period_domain + [('is_manual_entry', '=', True)])
+            
+            # Durée moyenne globale
+            all_time_dur_records = self.search(base_domain + [('verification_duration', '>', 0), ('state', 'in', ['done', 'processed'])])
+            all_time_avg_duration = round(sum(r.verification_duration for r in all_time_dur_records) / len(all_time_dur_records), 1) if all_time_dur_records else 0
+            all_time_manual = self.search_count(base_domain + [('is_manual_entry', '=', True)])
+            
             return {
                 'stats': {
                     'total_scans': total_scans,
@@ -1550,6 +839,8 @@ except Exception as e:
                     'records_with_duplicates': len(records_with_duplicates),
                     'error_scans': error_scans,
                     'total_amount': total_amount,
+                    'avg_verification_duration': avg_verification_duration,
+                    'manual_entry_count': manual_entry_count,
                 },
                 # Totaux globaux (all-time) pour correspondre à l'application mobile
                 'all_time_stats': {
@@ -1560,6 +851,8 @@ except Exception as e:
                     'records_with_duplicates': len(all_time_records_with_dup),
                     'error_scans': all_time_error,
                     'total_amount': all_time_amount,
+                    'avg_verification_duration': all_time_avg_duration,
+                    'manual_entry_count': all_time_manual,
                 },
                 'recent_scans': recent_scans_data,
                 'top_suppliers': top_suppliers,
@@ -1580,6 +873,8 @@ except Exception as e:
                 'records_with_duplicates': 0,
                 'error_scans': 0,
                 'total_amount': 0,
+                'avg_verification_duration': 0,
+                'manual_entry_count': 0,
             }
             return {
                 'stats': empty_stats,
@@ -1720,6 +1015,15 @@ except Exception as e:
             except Exception as e:
                 _logger.warning(f"Erreur top suppliers vérificateur: {e}")
             
+            # Durée moyenne de vérification (période)
+            verif_dur_records = self.search(period_domain + [('verification_duration', '>', 0), ('state', 'in', ['done', 'processed'])])
+            avg_verification_duration = round(sum(r.verification_duration for r in verif_dur_records) / len(verif_dur_records), 1) if verif_dur_records else 0
+            manual_entry_count = self.search_count(period_domain + [('is_manual_entry', '=', True)])
+            
+            # Durée moyenne globale
+            all_time_dur = self.search(base_domain + [('verification_duration', '>', 0), ('state', 'in', ['done', 'processed'])])
+            all_time_avg_dur = round(sum(r.verification_duration for r in all_time_dur) / len(all_time_dur), 1) if all_time_dur else 0
+            
             return {
                 'stats': {
                     'total_scans': total_scans,
@@ -1728,6 +1032,8 @@ except Exception as e:
                     'duplicates_by_others': last_dup_by_others,
                     'error_scans': error_scans,
                     'total_amount': total_amount,
+                    'avg_verification_duration': avg_verification_duration,
+                    'manual_entry_count': manual_entry_count,
                 },
                 'all_time_stats': {
                     'total_scans': all_time_total,
@@ -1735,6 +1041,8 @@ except Exception as e:
                     'duplicate_attempts': all_time_duplicates,
                     'error_scans': all_time_error,
                     'total_amount': all_time_amount,
+                    'avg_verification_duration': all_time_avg_dur,
+                    'manual_entry_count': self.search_count(base_domain + [('is_manual_entry', '=', True)]),
                 },
                 'recent_scans': recent_scans_data,
                 'top_suppliers': top_suppliers,
@@ -1747,7 +1055,8 @@ except Exception as e:
         except Exception as e:
             _logger.error(f"Erreur get_verificateur_dashboard_data: {e}")
             empty = {'total_scans': 0, 'successful_scans': 0, 'duplicate_attempts': 0,
-                     'duplicates_by_others': 0, 'error_scans': 0, 'total_amount': 0}
+                     'duplicates_by_others': 0, 'error_scans': 0, 'total_amount': 0,
+                     'avg_verification_duration': 0, 'manual_entry_count': 0}
             return {'stats': empty, 'all_time_stats': empty, 'recent_scans': [],
                     'top_suppliers': [], 'chart_data': {'labels': [], 'scans': [], 'duplicates': []}}
 
@@ -1886,6 +1195,18 @@ except Exception as e:
                     chart_labels.append(day.strftime('%d/%m'))
                     chart_processed.append(day_processed)
             
+            # Durée moyenne de vérification (globale, car traiteur ne scanne pas)
+            all_dur_records = self.search([
+                ('company_id', '=', company_id),
+                ('verification_duration', '>', 0),
+                ('state', 'in', ['done', 'processed']),
+            ])
+            avg_verification_duration = round(sum(r.verification_duration for r in all_dur_records) / len(all_dur_records), 1) if all_dur_records else 0
+            manual_entry_count = self.search_count([
+                ('company_id', '=', company_id),
+                ('is_manual_entry', '=', True),
+            ])
+            
             return {
                 'stats': {
                     'pending_count': pending_count,
@@ -1894,10 +1215,14 @@ except Exception as e:
                     'processed_amount_period': processed_amount_period,
                     'all_processed_period': all_processed_period,
                     'processing_rate': processing_rate,
+                    'avg_verification_duration': avg_verification_duration,
+                    'manual_entry_count': manual_entry_count,
                 },
                 'all_time_stats': {
                     'processed_all_time': processed_all_time,
                     'processed_all_amount': processed_all_amount,
+                    'avg_verification_duration': avg_verification_duration,
+                    'manual_entry_count': manual_entry_count,
                 },
                 'recent_processed': recent_processed_data,
                 'pending_scans': pending_scans_data,
@@ -1910,8 +1235,10 @@ except Exception as e:
             _logger.error(f"Erreur get_traiteur_dashboard_data: {e}")
             return {
                 'stats': {'pending_count': 0, 'pending_amount': 0, 'processed_period': 0,
-                          'processed_amount_period': 0, 'all_processed_period': 0, 'processing_rate': 0},
-                'all_time_stats': {'processed_all_time': 0, 'processed_all_amount': 0},
+                          'processed_amount_period': 0, 'all_processed_period': 0, 'processing_rate': 0,
+                          'avg_verification_duration': 0, 'manual_entry_count': 0},
+                'all_time_stats': {'processed_all_time': 0, 'processed_all_amount': 0,
+                                   'avg_verification_duration': 0, 'manual_entry_count': 0},
                 'recent_processed': [], 'pending_scans': [],
                 'chart_data': {'labels': [], 'processed': []},
             }

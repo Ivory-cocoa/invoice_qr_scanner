@@ -89,24 +89,6 @@ class TestInvoiceScanRecord(TransactionCase):
         uuid = ScanRecord.extract_uuid_from_url(None)
         self.assertIsNone(uuid)
 
-    def test_validate_dgi_url(self):
-        """Test de validation d'URL DGI."""
-        ScanRecord = self.env['invoice.scan.record']
-        
-        # URL valide
-        is_valid, error = ScanRecord.validate_dgi_url(self.valid_url)
-        self.assertTrue(is_valid)
-        self.assertIsNone(error)
-        
-        # URL non DGI
-        is_valid, error = ScanRecord.validate_dgi_url('https://google.com/test')
-        self.assertFalse(is_valid)
-        self.assertIsNotNone(error)
-        
-        # URL vide
-        is_valid, error = ScanRecord.validate_dgi_url('')
-        self.assertFalse(is_valid)
-
     def test_uuid_uniqueness_constraint(self):
         """Test de la contrainte d'unicité UUID par société."""
         self.env['invoice.scan.record'].create({
