@@ -22,30 +22,6 @@
                                     </div>
                                 </div>
                             </setting>
-                            
-                            <setting id="invoice_qr_auto_create_supplier"
-                                     title="Créer automatiquement le fournisseur"
-                                     help="Si activé, un nouveau fournisseur sera créé si non trouvé dans Odoo.">
-                                <div class="content-group">
-                                    <div class="row mt-2">
-                                        <field name="invoice_qr_auto_create_supplier"/>
-                                        <label for="invoice_qr_auto_create_supplier" string="Créer automatiquement le fournisseur"/>
-                                    </div>
-                                </div>
-                            </setting>
-                            
-                            <setting id="invoice_qr_default_expense_account"
-                                     string="Compte de dépense par défaut"
-                                     help="Compte comptable utilisé pour les lignes de factures scannées.">
-                                <div class="content-group">
-                                    <div class="row mt-2">
-                                        <label string="Compte" for="invoice_qr_default_expense_account_id" class="col-lg-3 o_light_label"/>
-                                        <field name="invoice_qr_default_expense_account_id" 
-                                               class="col-lg-6"
-                                               options="{'no_create': True}"/>
-                                    </div>
-                                </div>
-                            </setting>
                         </block>
                         
                     </app>
