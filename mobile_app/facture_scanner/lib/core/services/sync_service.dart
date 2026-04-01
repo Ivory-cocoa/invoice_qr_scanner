@@ -58,12 +58,24 @@ class SyncService {
       totalDuplicates += unparsedResult.duplicateCount;
       totalErrors += unparsedResult.errorCount;
       
-      // Cleanup synced scans
+      // Cleanup synced and permanently failed scans
       await _db.deleteSyncedScans();
       
       _isSyncing = false;
       
-      if (totalSynced + totalDuplicates + totalErrors == 0) {
+      final totalProcessed = totalSynced + totalDuplicates + totalErrors;
+      
+      if (totalProcessed == 0) {
+        // Check if API calls failed entirely (scans exist but couldn't be sent)
+        if (!parsedResult.success || !unparsedResult.success) {
+          final errorMsg = parsedResult.message.isNotEmpty
+              ? parsedResult.message
+              : unparsedResult.message;
+          return SyncResult(
+            success: false,
+            message: errorMsg.isNotEmpty ? errorMsg : 'Erreur de synchronisation',
+          );
+        }
         return SyncResult(
           success: true,
           message: 'Aucun scan à synchroniser',
@@ -71,9 +83,33 @@ class SyncService {
         );
       }
       
+      // Build descriptive message based on actual results
+      String message;
+      bool success;
+      
+      if (totalErrors > 0 && totalSynced == 0 && totalDuplicates == 0) {
+        success = false;
+        message = '$totalErrors erreur(s) de synchronisation';
+      } else if (totalSynced > 0 && totalErrors > 0) {
+        success = true;
+        message = '$totalSynced synchronisé(s), $totalErrors erreur(s)';
+      } else if (totalSynced > 0) {
+        success = true;
+        message = '$totalSynced scan(s) synchronisé(s)';
+        if (totalDuplicates > 0) {
+          message += ', $totalDuplicates doublon(s)';
+        }
+      } else {
+        success = true;
+        message = 'Synchronisation terminée';
+        if (totalDuplicates > 0) {
+          message = '$totalDuplicates doublon(s) détecté(s)';
+        }
+      }
+      
       return SyncResult(
-        success: true,
-        message: 'Synchronisation terminée',
+        success: success,
+        message: message,
         syncedCount: totalSynced,
         duplicateCount: totalDuplicates,
         errorCount: totalErrors,

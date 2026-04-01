@@ -253,12 +253,12 @@ class DatabaseService {
     );
   }
   
-  /// Mark scan as failed with error
+  /// Mark scan as permanently failed with error (synced=2)
   Future<void> markScanFailed(int id, String error) async {
     final db = await database;
     await db.update(
       'pending_scans',
-      {'sync_error': error},
+      {'synced': 2, 'sync_error': error},
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -285,13 +285,13 @@ class DatabaseService {
     return result.first['count'] as int? ?? 0;
   }
   
-  /// Delete synced scans (cleanup)
+  /// Delete synced and permanently failed scans (cleanup)
   Future<void> deleteSyncedScans() async {
     final db = await database;
     await db.delete(
       'pending_scans',
-      where: 'synced = ?',
-      whereArgs: [1],
+      where: 'synced != ?',
+      whereArgs: [0],
     );
   }
   
