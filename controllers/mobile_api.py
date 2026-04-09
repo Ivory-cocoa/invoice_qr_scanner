@@ -26,6 +26,7 @@ from functools import wraps
 
 from odoo import http, _, fields
 from odoo.http import request, Response
+from odoo.exceptions import AccessError, AccessDenied
 import json
 
 from .scan_semaphore import (
@@ -109,6 +110,13 @@ def api_exception_handler(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
+        except (AccessError, AccessDenied) as e:
+            _logger.warning(f"Accès refusé API invoice-scanner: {e}")
+            return api_error(
+                'ACCESS_DENIED',
+                "Accès non autorisé",
+                status=403
+            )
         except Exception as e:
             _logger.error(f"Erreur API invoice-scanner: {e}", exc_info=True)
             return api_error(
@@ -496,6 +504,16 @@ class InvoiceScannerMobileAPI(http.Controller):
             record_vals['qr_uuid'] = qr_uuid
             record = ScanRecord.create(record_vals)
         
+        # Acquérir un slot du sémaphore pour la création de facture
+        if not acquire_scan_slot():
+            _logger.warning("scan-with-data rejeté (serveur occupé) pour user=%s", user.id)
+            return api_error(
+                'SERVER_BUSY',
+                'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
+                status=503,
+                details=get_semaphore_status()
+            )
+        
         # Créer la facture
         try:
             invoice = record._create_invoice()
@@ -525,6 +543,8 @@ class InvoiceScannerMobileAPI(http.Controller):
                 f'Erreur lors de la création de la facture: {str(e)}',
                 status=500
             )
+        finally:
+            release_scan_slot()
 
     @http.route('/api/v1/invoice-scanner/check', type='http', auth='none',
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
@@ -750,8 +770,11 @@ class InvoiceScannerMobileAPI(http.Controller):
         else:
             data = dict(request.httprequest.args)
         
-        page = max(1, int(data.get('page', 1)))
-        limit = min(100, max(1, int(data.get('limit', 20))))
+        try:
+            page = max(1, int(data.get('page', 1)))
+            limit = min(100, max(1, int(data.get('limit', 20))))
+        except (ValueError, TypeError):
+            page, limit = 1, 20
         
         ScanRecord = request.env['invoice.scan.record'].sudo()
         
@@ -853,6 +876,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not record.exists():
             return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
         
+        if record.company_id.id != request.env.company.id:
+            return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
+        
         if record.state not in ('done',):
             return api_error(
                 'INVALID_STATE',
@@ -895,6 +921,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         record = ScanRecord.browse(record_id)
         
         if not record.exists():
+            return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
+        
+        if record.company_id.id != request.env.company.id:
             return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
         
         if record.state != 'processed':
@@ -941,7 +970,10 @@ class InvoiceScannerMobileAPI(http.Controller):
             
         data = get_json_body()
         record_ids = data.get('record_ids', [])
-        max_records = min(200, max(1, int(data.get('max_records', 50))))
+        try:
+            max_records = min(200, max(1, int(data.get('max_records', 50))))
+        except (ValueError, TypeError):
+            max_records = 50
         
         ScanRecord = request.env['invoice.scan.record'].sudo()
         
@@ -1021,8 +1053,11 @@ class InvoiceScannerMobileAPI(http.Controller):
         else:
             data = dict(request.httprequest.args)
         
-        page = max(1, int(data.get('page', 1)))
-        limit = min(100, max(1, int(data.get('limit', 20))))
+        try:
+            page = max(1, int(data.get('page', 1)))
+            limit = min(100, max(1, int(data.get('limit', 20))))
+        except (ValueError, TypeError):
+            page, limit = 1, 20
         state = data.get('state')
         
         ScanRecord = request.env['invoice.scan.record'].sudo()
@@ -1030,7 +1065,10 @@ class InvoiceScannerMobileAPI(http.Controller):
         # Construire le domaine
         domain = [('company_id', '=', request.env.company.id)]
         if state:
-            domain.append(('state', '=', state))
+            # Valider la valeur du state
+            valid_states = ('draft', 'done', 'processed', 'error')
+            if state in valid_states:
+                domain.append(('state', '=', state))
         
         # Comptage total
         total_count = ScanRecord.search_count(domain)
@@ -1067,6 +1105,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         invoice = request.env['account.move'].sudo().browse(invoice_id)
         
         if not invoice.exists():
+            return api_error('NOT_FOUND', 'Facture non trouvée', status=404)
+        
+        if invoice.company_id.id != request.env.company.id:
             return api_error('NOT_FOUND', 'Facture non trouvée', status=404)
         
         return api_response(self._format_invoice(invoice))
@@ -1483,8 +1524,11 @@ class InvoiceScannerMobileAPI(http.Controller):
         else:
             data = dict(request.httprequest.args)
         
-        page = max(1, int(data.get('page', 1)))
-        limit = min(100, max(1, int(data.get('limit', 20))))
+        try:
+            page = max(1, int(data.get('page', 1)))
+            limit = min(100, max(1, int(data.get('limit', 20))))
+        except (ValueError, TypeError):
+            page, limit = 1, 20
         date_from = data.get('date_from')
         date_to = data.get('date_to')
         retry_possible = data.get('retry_possible')
@@ -1599,6 +1643,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not record.exists():
             return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
         
+        if record.company_id.id != request.env.company.id:
+            return api_error('NOT_FOUND', 'Enregistrement non trouvé', status=404)
+        
         if record.state != 'error':
             return api_error('INVALID_STATE', f'L\'enregistrement n\'est pas en erreur (état: {record.state})', status=400)
         
@@ -1651,7 +1698,10 @@ class InvoiceScannerMobileAPI(http.Controller):
             
         data = get_json_body()
         record_ids = data.get('record_ids', [])
-        max_records = min(50, max(1, int(data.get('max_records', 10))))
+        try:
+            max_records = min(50, max(1, int(data.get('max_records', 10))))
+        except (ValueError, TypeError):
+            max_records = 10
         
         ScanRecord = request.env['invoice.scan.record'].sudo()
         

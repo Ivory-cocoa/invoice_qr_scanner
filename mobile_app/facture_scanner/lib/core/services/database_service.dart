@@ -295,6 +295,29 @@ class DatabaseService {
     );
   }
   
+  /// Update an unparsed scan with extracted DGI data (convert parsed=0 → parsed=1)
+  /// Used during sync when we extract DGI data for previously unparsed scans.
+  Future<void> updateScanWithParsedData(int id, DgiParsedData data) async {
+    final db = await database;
+    await db.update(
+      'pending_scans',
+      {
+        'parsed': 1,
+        'supplier_name': data.supplierName,
+        'supplier_code_dgi': data.supplierCodeDgi,
+        'customer_name': data.customerName,
+        'customer_code_dgi': data.customerCodeDgi,
+        'invoice_number_dgi': data.invoiceNumberDgi,
+        'invoice_date': data.invoiceDate,
+        'verification_id': data.verificationId,
+        'amount_ttc': data.amountTtc,
+        'raw_text': data.rawText,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ==================== SCAN HISTORY CACHE ====================
   
   /// Cache scan history from server

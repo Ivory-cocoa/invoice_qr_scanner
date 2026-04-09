@@ -45,6 +45,7 @@
                            decoration-warning="duplicate_count > 0"
                            optional="hide"/>
                     <field name="scanned_by" string="Scanné par" optional="hide"/>
+                    <field name="is_manual_entry" string="Saisie manuelle" widget="boolean" optional="hide"/>
                     <!-- Actions par ligne -->
                     <button name="action_mark_processed" type="object"
                             string="✅ Traiter" title="Marquer comme traité"
@@ -132,11 +133,26 @@
                                 <field name="last_duplicate_user_id" readonly="1"/>
                             </group>
                         </group>
+                        <group string="Tentatives de retraitement" invisible="reprocess_attempt_count == 0">
+                            <group>
+                                <field name="reprocess_attempt_count" readonly="1"/>
+                                <field name="last_reprocess_attempt" readonly="1"/>
+                                <field name="last_reprocess_user_id" readonly="1"/>
+                            </group>
+                        </group>
                         <group string="Traitement" invisible="state not in ('done', 'processed')">
                             <group>
                                 <field name="is_processed" readonly="1" widget="boolean_toggle"/>
                                 <field name="processed_by" readonly="1" invisible="not processed_by"/>
                                 <field name="processed_date" readonly="1" invisible="not processed_date"/>
+                            </group>
+                        </group>
+                        <group string="Informations techniques">
+                            <group>
+                                <field name="verification_duration" readonly="1" 
+                                       widget="float_time"
+                                       invisible="verification_duration == 0"/>
+                                <field name="is_manual_entry" readonly="1"/>
                             </group>
                         </group>
                         <group string="Erreur" invisible="state != 'error'">
@@ -173,9 +189,10 @@
                     <separator/>
                     <filter string="Factures créées" name="filter_done" domain="[('state', '=', 'done')]"/>
                     <filter string="Traités" name="filter_processed" domain="[('state', '=', 'processed')]"/>
-                    <filter string="Non traités" name="filter_not_processed" domain="[('state', '=', 'done')]"/>
+                    <filter string="Non traités (en attente)" name="filter_not_processed" domain="[('state', '=', 'done'), ('processed_by', '=', False)]"/>
                     <filter string="Erreurs" name="filter_error" domain="[('state', '=', 'error')]"/>
-                    <filter string="Avec doublons" name="filter_duplicate" domain="[('duplicate_count', '>', 0)]"/>
+                    <filter string="Saisie manuelle" name="filter_manual" domain="[('is_manual_entry', '=', True)]"/>
+                    <filter string="Avec doublons" name="filter_duplicate" domain="[('duplicate_count', '&gt;', 0)]"/>
                     <separator/>
                     <filter string="Aujourd'hui" name="filter_today" 
                             domain="[('scan_date', '>=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
@@ -218,6 +235,8 @@
                     <field name="scan_date"/>
                     <field name="duplicate_count"/>
                     <field name="is_processed"/>
+                    <field name="is_manual_entry"/>
+                    <field name="scanned_by"/>
                     <templates>
                         <t t-name="kanban-box">
                             <div class="oe_kanban_global_click">
@@ -227,22 +246,31 @@
                                             <field name="reference"/>
                                         </strong>
                                     </div>
-                                    <field name="state" widget="label_selection" 
-                                           options="{'classes': {'draft': 'info', 'done': 'success', 'processed': 'warning', 'error': 'danger'}}"/>
+                                    <field name="state" widget="badge" 
+                                           decoration-success="state == 'done'"
+                                           decoration-warning="state == 'processed'"
+                                           decoration-danger="state == 'error'"
+                                           decoration-info="state == 'draft'"/>
                                 </div>
                                 <div class="o_kanban_record_body">
-                                    <field name="supplier_name"/>
-                                    <div class="text-muted">
+                                    <div><strong><field name="supplier_name"/></strong></div>
+                                    <div class="text-muted mt-1">
                                         <field name="amount_ttc" widget="monetary"/> 
                                         <field name="currency_id"/>
                                     </div>
-                                    <div t-if="record.duplicate_count.raw_value > 0" class="text-warning">
+                                    <div t-if="record.is_manual_entry.raw_value" class="text-info mt-1">
+                                        <i class="fa fa-keyboard-o"/> Saisie manuelle
+                                    </div>
+                                    <div t-if="record.duplicate_count.raw_value > 0" class="text-warning mt-1">
                                         <i class="fa fa-copy"/> <field name="duplicate_count"/> doublons
                                     </div>
                                 </div>
-                                <div class="o_kanban_record_bottom">
+                                <div class="o_kanban_record_bottom mt-2">
                                     <div class="oe_kanban_bottom_left text-muted">
-                                        <field name="scan_date" widget="date"/>
+                                        <i class="fa fa-clock-o"/> <field name="scan_date" widget="date"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right text-muted">
+                                        <i class="fa fa-user"/> <field name="scanned_by"/>
                                     </div>
                                 </div>
                             </div>
@@ -253,12 +281,41 @@
         </record>
 
         <!-- ============================================================ -->
+        <!-- PIVOT VIEW -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_pivot" model="ir.ui.view">
+            <field name="name">invoice.scan.record.pivot</field>
+            <field name="model">invoice.scan.record</field>
+            <field name="arch" type="xml">
+                <pivot string="Analyse des scans" sample="1">
+                    <field name="scan_date" type="row" interval="month"/>
+                    <field name="state" type="col"/>
+                    <field name="amount_ttc" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
+        <!-- GRAPH VIEW -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_graph" model="ir.ui.view">
+            <field name="name">invoice.scan.record.graph</field>
+            <field name="model">invoice.scan.record</field>
+            <field name="arch" type="xml">
+                <graph string="Scans de factures" type="bar" sample="1">
+                    <field name="scan_date" interval="day"/>
+                    <field name="amount_ttc" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
         <!-- ACTION -->
         <!-- ============================================================ -->
         <record id="action_invoice_scan_record" model="ir.actions.act_window">
             <field name="name">Scans de factures</field>
             <field name="res_model">invoice.scan.record</field>
-            <field name="view_mode">tree,kanban,form</field>
+            <field name="view_mode">tree,kanban,form,pivot,graph</field>
             <field name="search_view_id" ref="view_invoice_scan_record_search"/>
             <field name="context">{'search_default_filter_today': 1}</field>
             <field name="help" type="html">

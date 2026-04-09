@@ -13,12 +13,16 @@
                         
                         <block title="Configuration des factures scannées" name="invoice_qr_scanner_settings">
                             <setting id="invoice_qr_auto_validate" 
-                                     title="Valider automatiquement les factures créées par scan QR"
+                                     string="Validation automatique des factures"
                                      help="Si activé, les factures créées par scan QR seront automatiquement validées. Sinon, elles resteront en brouillon pour validation manuelle.">
                                 <div class="content-group">
                                     <div class="row mt-2">
                                         <field name="invoice_qr_auto_validate"/>
-                                        <label for="invoice_qr_auto_validate" string="Valider automatiquement les factures"/>
+                                        <label for="invoice_qr_auto_validate" string="Valider automatiquement les factures créées par scan QR"/>
+                                    </div>
+                                    <div class="text-muted mt-1">
+                                        Recommandé pour un flux de travail automatisé. 
+                                        Désactivez si vous souhaitez vérifier manuellement chaque facture avant validation.
                                     </div>
                                 </div>
                             </setting>

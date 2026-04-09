@@ -40,6 +40,7 @@
         'security/ir.model.access.csv',
         # Data
         'data/ir_sequence_data.xml',
+        'data/ir_cron_data.xml',
         'data/res_users_data.xml',
         # Views
         'views/invoice_scan_record_views.xml',

@@ -329,12 +329,17 @@ class InvoiceScanRecord(models.Model):
             if partner:
                 return partner
         
-        # Chercher par nom
+        # Chercher par nom exact d'abord, puis ilike en fallback
         if self.supplier_name:
             partner = Partner.search([
-                ('name', 'ilike', self.supplier_name),
+                ('name', '=ilike', self.supplier_name),
                 ('supplier_rank', '>', 0)
             ], limit=1)
+            if not partner:
+                partner = Partner.search([
+                    ('name', 'ilike', self.supplier_name),
+                    ('supplier_rank', '>', 0)
+                ], limit=1)
             if partner:
                 # Mettre à jour le code DGI si absent
                 if self.supplier_code_dgi and not partner.dgi_code:
@@ -440,6 +445,10 @@ class InvoiceScanRecord(models.Model):
         if self.invoice_id:
             raise UserError(_("Une facture existe déjà pour ce scan."))
         
+        # Valider le montant
+        if not self.amount_ttc or self.amount_ttc <= 0:
+            raise UserError(_("Le montant TTC doit être supérieur à zéro pour créer une facture."))
+        
         # Obtenir le fournisseur
         partner = self._get_or_create_supplier()
         self.partner_id = partner
@@ -453,7 +462,7 @@ class InvoiceScanRecord(models.Model):
         # Configuration : valider automatiquement ou pas
         auto_validate = self.env['ir.config_parameter'].sudo().get_param(
             'invoice_qr_scanner.auto_validate_invoice', 'True'
-        ) == 'True'
+        ) in ('True', 'true', '1')
         
         # Créer la facture en deux étapes pour éviter les contraintes de ligne
         # Étape 1: Créer la facture sans lignes
@@ -480,7 +489,14 @@ class InvoiceScanRecord(models.Model):
         
         # Valider si configuré
         if auto_validate and invoice.state == 'draft':
-            invoice.action_post()
+            try:
+                invoice.action_post()
+            except Exception as e:
+                _logger.warning(
+                    "Impossible de valider automatiquement la facture %s (scan %s): %s. "
+                    "La facture reste en brouillon.",
+                    invoice.name, self.reference, e
+                )
         
         self.write({
             'invoice_id': invoice.id,
@@ -526,11 +542,6 @@ class InvoiceScanRecord(models.Model):
         Returns:
             dict: Données du dashboard
         """
-        import logging
-        from datetime import datetime, timedelta
-        
-        _logger = logging.getLogger(__name__)
-        
         try:
             company_id = self.env.company.id
             today = fields.Date.today()
@@ -640,6 +651,7 @@ class InvoiceScanRecord(models.Model):
                     'totalScans': total_scans,
                     'successfulScans': successful_scans,
                     'processedScans': processed_scans,
+                    'pendingScans': total_scans - successful_scans - error_scans,
                     'duplicateAttempts': duplicate_attempts,
                     'recordsWithDuplicates': len(records_with_duplicates),
                     'errorScans': error_scans,
@@ -678,6 +690,7 @@ class InvoiceScanRecord(models.Model):
                 'top_users': [],
                 'chart_data': {'daily': [], 'states': []},
             }
+
     @api.model
     def get_dashboard_stats(self, date_start=None, date_end=None, period='month'):
         """Récupérer les statistiques pour le dashboard OWL.
@@ -690,11 +703,6 @@ class InvoiceScanRecord(models.Model):
         Returns:
             dict: Données formatées pour le dashboard OWL
         """
-        import logging
-        from datetime import datetime, timedelta
-        
-        _logger = logging.getLogger(__name__)
-        
         try:
             company_id = self.env.company.id
             today = fields.Date.today()
@@ -898,8 +906,6 @@ class InvoiceScanRecord(models.Model):
         Returns:
             dict: Données du dashboard vérificateur
         """
-        from datetime import datetime, timedelta
-        
         try:
             company_id = self.env.company.id
             user_id = self.env.user.id
@@ -1074,8 +1080,6 @@ class InvoiceScanRecord(models.Model):
         Returns:
             dict: Données du dashboard traiteur
         """
-        from datetime import datetime, timedelta
-        
         try:
             company_id = self.env.company.id
             user_id = self.env.user.id
