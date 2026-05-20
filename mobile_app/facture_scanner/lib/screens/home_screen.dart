@@ -626,6 +626,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 if (value == 'clear_offline') _clearOfflineData();
                 if (value == 'mark_all_processed') _markAllProcessed();
                 if (value == 'settings') Navigator.pushNamed(context, '/settings');
+                if (value == 'ot_links') Navigator.pushNamed(context, '/ot-links');
               },
               itemBuilder: (context) => [
                 PopupMenuItem(
@@ -653,6 +654,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ),
                 const PopupMenuDivider(),
+                if (auth.user?.isOtManager == true)
+                  PopupMenuItem(
+                    value: 'ot_links',
+                    child: Row(
+                      children: [
+                        Icon(Icons.link, color: AppTheme.getPrimary(context), size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Mes liaisons OT',
+                          style: TextStyle(
+                            color: AppTheme.getTextPrimary(context),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 PopupMenuItem(
                   value: 'mark_all_processed',
                   child: Row(

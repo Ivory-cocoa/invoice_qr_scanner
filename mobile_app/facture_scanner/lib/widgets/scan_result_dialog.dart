@@ -3,10 +3,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../core/providers/scan_provider.dart';
+import '../core/providers/auth_provider.dart';
 import '../core/models/scan_record.dart';
 import '../core/theme/app_theme.dart';
+import '../screens/link_to_ot_screen.dart';
 
 class ScanResultDialog extends StatelessWidget {
   final ScanState state;
@@ -334,49 +337,104 @@ class ScanResultDialog extends StatelessWidget {
   Widget _buildActions(BuildContext context) {
     final isDark = AppTheme.isDark(context);
     final primaryColor = AppTheme.getPrimary(context);
-    
+
+    // Bouton "Lier à un OT" : visible pour les Gestionnaires OT après un scan
+    // réussi OU un doublon, dès que l'on a une référence de scan.
+    final auth = context.read<AuthProvider>();
+    final user = auth.user;
+    final canLinkToOt = user != null &&
+        user.isOtManager &&
+        scanRecord != null &&
+        scanRecord!.id > 0 &&
+        (state == ScanState.success ||
+            state == ScanState.duplicate ||
+            state == ScanState.alreadyProcessed);
+
     // Tous les états ont maintenant les deux boutons
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey.shade300),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        if (canLinkToOt) ...[
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final result = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => LinkToOtScreen(
+                      scanId: scanRecord!.id,
+                      invoiceLabel: scanRecord!.invoiceNumberDgi.isNotEmpty
+                          ? 'Facture ${scanRecord!.invoiceNumberDgi}'
+                              ' • ${scanRecord!.supplierName}'
+                          : scanRecord!.supplierName,
+                    ),
+                  ),
+                );
+                if (result == true && context.mounted) {
+                  Navigator.of(context).pop('linked_to_ot');
+                }
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(color: primaryColor),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            ),
-            child: Text(
-              state == ScanState.success ? 'Fermer' : 'Compris',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppTheme.getTextSecondary(context),
+              icon: Icon(Icons.link, color: primaryColor),
+              label: Text(
+                'Lier à un OT',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: primaryColor,
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: ElevatedButton.icon(
-            onPressed: () => Navigator.of(context).pop('scan_again'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              foregroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          const SizedBox(height: 8),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey.shade300),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  state == ScanState.success ? 'Fermer' : 'Compris',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.getTextSecondary(context),
+                  ),
+                ),
               ),
             ),
-            icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-            label: const Text(
-              'Scanner une autre',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop('scan_again'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                label: const Text(
+                  'Scanner une autre',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );

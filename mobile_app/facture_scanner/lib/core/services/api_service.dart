@@ -252,6 +252,62 @@ class ApiService {
     return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/traiteur/stats', {});
   }
 
+  // ==================== ENDPOINTS GESTIONNAIRE OT ====================
+
+  /// Liste des types de coût disponibles pour potting.cost.line
+  Future<ApiResponse<Map<String, dynamic>>> getOtCostTypes() async {
+    return await _get<Map<String, dynamic>>('/api/v1/invoice-scanner/ot/cost-types');
+  }
+
+  /// Liste des OTs ouverts (avec recherche optionnelle)
+  Future<ApiResponse<Map<String, dynamic>>> listOts({String? search, int limit = 100}) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (search != null && search.isNotEmpty) {
+      params['search'] = search;
+    }
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/list',
+      queryParams: params,
+    );
+  }
+
+  /// Coûts existants d'un OT (état 'estimated', sans scan lié) pour le mode link_existing
+  Future<ApiResponse<Map<String, dynamic>>> getOtExistingCosts(int otId) async {
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/$otId/existing-costs',
+    );
+  }
+
+  /// Lier un scan à un OT (création nouvelle ligne ou liaison à existante)
+  Future<ApiResponse<Map<String, dynamic>>> linkScanToOt({
+    required int scanId,
+    required int otId,
+    required String mode, // 'create' | 'link_existing'
+    String? costType,
+    int? costLineId,
+    String? description,
+  }) async {
+    final body = <String, dynamic>{
+      'ot_id': otId,
+      'mode': mode,
+      if (costType != null) 'cost_type': costType,
+      if (costLineId != null) 'cost_line_id': costLineId,
+      if (description != null && description.isNotEmpty) 'description': description,
+    };
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan/$scanId/link-ot',
+      body,
+    );
+  }
+
+  /// Liaisons effectuées par l'utilisateur courant
+  Future<ApiResponse<Map<String, dynamic>>> getMyOtLinks({int limit = 50}) async {
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/my-links',
+      queryParams: {'limit': '$limit'},
+    );
+  }
+
   /// Health check
   Future<bool> healthCheck() async {
     try {
@@ -342,6 +398,77 @@ class ApiService {
         success: false,
         errorCode: 'PARSE_ERROR',
         errorMessage: 'Réponse invalide du serveur. Vérifiez l\'URL et la connexion.',
+      );
+    } catch (e) {
+      return ApiResponse<T>(
+        success: false,
+        errorCode: 'UNKNOWN_ERROR',
+        errorMessage: 'Erreur: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Generic GET request (returns ApiResponse with parsed JSON body)
+  Future<ApiResponse<T>> _get<T>(
+    String endpoint, {
+    Map<String, String>? queryParams,
+    bool authenticated = true,
+  }) async {
+    try {
+      var uri = Uri.parse('$baseUrl$endpoint');
+      if (queryParams != null && queryParams.isNotEmpty) {
+        uri = uri.replace(queryParameters: queryParams);
+      }
+      final headers = <String, String>{
+        'Accept': 'application/json',
+        if (authenticated && _token != null) 'Authorization': 'Bearer $_token',
+      };
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      final contentType = response.headers['content-type'] ?? '';
+      final bodyText = response.body.trimLeft();
+      if (!contentType.contains('application/json') && bodyText.startsWith('<')) {
+        return ApiResponse<T>(
+          success: false,
+          errorCode: 'SERVER_ERROR',
+          errorMessage:
+              'Réponse inattendue du serveur (${response.statusCode}).',
+        );
+      }
+      final jsonResponse = jsonDecode(response.body);
+      if (response.statusCode == 200 && jsonResponse['success'] == true) {
+        return ApiResponse<T>(
+          success: true,
+          data: jsonResponse['data'] as T?,
+          message: jsonResponse['message'],
+        );
+      }
+      final error = jsonResponse['error'];
+      return ApiResponse<T>(
+        success: false,
+        errorCode: error?['code'] ?? 'UNKNOWN_ERROR',
+        errorMessage: error?['message'] ?? 'Une erreur est survenue',
+        data: jsonResponse['data'] as T?,
+      );
+    } on SocketException {
+      return ApiResponse<T>(
+        success: false,
+        errorCode: 'NETWORK_ERROR',
+        errorMessage: 'Pas de connexion internet',
+      );
+    } on TimeoutException {
+      return ApiResponse<T>(
+        success: false,
+        errorCode: 'TIMEOUT',
+        errorMessage: 'Le serveur ne répond pas',
+      );
+    } on FormatException {
+      return ApiResponse<T>(
+        success: false,
+        errorCode: 'PARSE_ERROR',
+        errorMessage: 'Réponse invalide du serveur.',
       );
     } catch (e) {
       return ApiResponse<T>(

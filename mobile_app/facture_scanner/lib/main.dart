@@ -20,6 +20,7 @@ import 'screens/home_screen.dart';
 import 'screens/traiteur_home_screen.dart';
 import 'screens/manager_home_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/my_ot_links_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +70,7 @@ class FactureScannerApp extends StatelessWidget {
           '/login': (context) => const LoginScreen(),
           '/home': (context) => const RoleBasedHomeScreen(),
           '/settings': (context) => const SettingsScreen(),
+          '/ot-links': (context) => const MyOtLinksScreen(),
         },
       ),
     );

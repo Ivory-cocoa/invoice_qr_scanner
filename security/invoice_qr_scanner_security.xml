@@ -33,11 +33,19 @@
             <field name="comment">Peut scanner des QR-codes de factures existantes pour les marquer comme traitées</field>
         </record>
 
+        <!-- Groupe Gestionnaire OT : peut lier des scans aux Ordres de Transit -->
+        <record id="group_invoice_scanner_ot_manager" model="res.groups">
+            <field name="name">Gestionnaire OT</field>
+            <field name="category_id" ref="module_category_invoice_qr_scanner"/>
+            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_user'))]"/>
+            <field name="comment">Peut scanner des factures et les lier à des Ordres de Transit (OT) comme coûts opérationnels.</field>
+        </record>
+
         <!-- Groupe Manager -->
         <record id="group_invoice_scanner_manager" model="res.groups">
             <field name="name">Responsable Scanner</field>
             <field name="category_id" ref="module_category_invoice_qr_scanner"/>
-            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_verificateur')), (4, ref('group_invoice_scanner_traiteur'))]"/>
+            <field name="implied_ids" eval="[(4, ref('group_invoice_scanner_verificateur')), (4, ref('group_invoice_scanner_traiteur')), (4, ref('group_invoice_scanner_ot_manager'))]"/>
             <field name="comment">Accès complet : configuration, historique complet, suppression</field>
         </record>
 
@@ -71,6 +79,14 @@
             <field name="model_id" ref="model_invoice_scan_record"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="groups" eval="[(4, ref('group_invoice_scanner_manager'))]"/>
+        </record>
+
+        <!-- Règle : Gestionnaires OT voient tous les scans (pour pouvoir les rattacher a posteriori) -->
+        <record id="rule_invoice_scan_record_ot_manager" model="ir.rule">
+            <field name="name">Invoice Scan Record: All records (Gestionnaire OT)</field>
+            <field name="model_id" ref="model_invoice_scan_record"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_invoice_scanner_ot_manager'))]"/>
         </record>
 
     </data>

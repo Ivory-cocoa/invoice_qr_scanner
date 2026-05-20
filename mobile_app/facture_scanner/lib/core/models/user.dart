@@ -5,15 +5,17 @@ class User {
   final String email;
   final String login;
   final String role; // 'verificateur', 'traiteur', 'manager', 'user'
-  
+  final bool isOtManager;
+
   User({
     required this.id,
     required this.name,
     required this.email,
     required this.login,
     this.role = 'user',
+    this.isOtManager = false,
   });
-  
+
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'] as int,
@@ -21,9 +23,10 @@ class User {
       email: json['email'] as String? ?? '',
       login: json['login'] as String? ?? '',
       role: json['role'] as String? ?? 'user',
+      isOtManager: json['is_ot_manager'] as bool? ?? false,
     );
   }
-  
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -31,13 +34,14 @@ class User {
       'email': email,
       'login': login,
       'role': role,
+      'is_ot_manager': isOtManager,
     };
   }
-  
+
   bool get isVerificateur => role == 'verificateur' || role == 'manager';
   bool get isTraiteur => role == 'traiteur' || role == 'manager';
   bool get isManager => role == 'manager';
-  
+
   String get roleLabel {
     switch (role) {
       case 'verificateur': return 'Vérificateur';
@@ -46,7 +50,7 @@ class User {
       default: return 'Utilisateur';
     }
   }
-  
+
   @override
   String toString() => 'User($name - $roleLabel)';
 }

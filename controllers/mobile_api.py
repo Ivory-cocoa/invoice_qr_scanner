@@ -290,7 +290,11 @@ class InvoiceScannerMobileAPI(http.Controller):
         is_manager = user.has_group('invoice_qr_scanner.group_invoice_scanner_manager')
         is_verificateur = user.has_group('invoice_qr_scanner.group_invoice_scanner_verificateur')
         is_traiteur = user.has_group('invoice_qr_scanner.group_invoice_scanner_traiteur')
-        has_access = is_manager or is_verificateur or is_traiteur or user.has_group('invoice_qr_scanner.group_invoice_scanner_user')
+        is_ot_manager = user.has_group('invoice_qr_scanner.group_invoice_scanner_ot_manager')
+        has_access = (
+            is_manager or is_verificateur or is_traiteur or is_ot_manager
+            or user.has_group('invoice_qr_scanner.group_invoice_scanner_user')
+        )
         
         if not has_access:
             return api_error('ACCESS_DENIED', 'Accès non autorisé au scanner de factures', status=403)
@@ -330,6 +334,10 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'email': user.email or '',
                 'login': user.login,
                 'role': user_role,
+                'is_ot_manager': is_ot_manager,
+                'is_manager': is_manager,
+                'is_verificateur': is_verificateur,
+                'is_traiteur': is_traiteur,
             }
         })
 
