@@ -308,6 +308,10 @@ class InvoiceScannerMobileAPI(http.Controller):
             user_role = 'verificateur'
         elif is_traiteur:
             user_role = 'traiteur'
+        elif is_ot_manager:
+            # Utilisateur uniquement Gestionnaire OT : rôle dédié
+            # pour router vers OtManagerHomeScreen côté mobile.
+            user_role = 'ot_manager'
         else:
             user_role = 'user'
         

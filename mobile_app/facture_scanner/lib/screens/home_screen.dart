@@ -17,6 +17,7 @@ import '../widgets/history_list.dart';
 import 'scanner_screen.dart';
 import 'errors_screen.dart';
 import 'manual_entry_screen.dart';
+import 'invoice_picker_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -776,6 +777,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             
             const SizedBox(height: 16),
             
+            // Carte OT proéminente pour les utilisateurs cumul (vérificateur + gestionnaire OT)
+            _buildOtManagerCard(),
+            
             // Alerte erreurs non traitées (si présentes)
             _buildErrorsAlert(),
             
@@ -855,6 +859,128 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+  
+  /// Carte proéminente "Liaison OT" pour les utilisateurs cumul.
+  /// Affichée uniquement si l'utilisateur a le profil Gestionnaire OT
+  /// ET qu'il n'est pas déjà sur l'écran dédié (rôle != 'ot_manager').
+  Widget _buildOtManagerCard() {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final user = auth.user;
+        if (user == null || !user.isOtManager) {
+          return const SizedBox.shrink();
+        }
+        final isDark = AppTheme.isDark(context);
+        final primary = AppTheme.getPrimary(context);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Material(
+            color: isDark ? AppTheme.darkSurfaceElevated : Colors.white,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+            elevation: 2.5,
+            shadowColor: primary.withOpacity(0.18),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: primary.withOpacity(isDark ? 0.22 : 0.14),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.link_rounded,
+                            color: primary, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Liaison Facture ↔ OT',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.getTextPrimary(context),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Rattachez vos factures aux OTs',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.getTextSecondary(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const InvoicePickerScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.folder_open_rounded, size: 18),
+                          label: const Text('Factures à lier'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primary,
+                            side: BorderSide(color: primary, width: 1.4),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            textStyle: const TextStyle(
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/ot-links');
+                          },
+                          icon: const Icon(Icons.list_alt_rounded, size: 18),
+                          label: const Text('Mes liaisons'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primary,
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            textStyle: const TextStyle(
+                                fontWeight: FontWeight.w700),
+                            elevation: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },

@@ -300,11 +300,49 @@ class ApiService {
     );
   }
 
+  /// Lier un scan à PLUSIEURS OTs en une seule opération.
+  /// `links` : liste de Map contenant ot_id, mode, cost_type?, cost_line_id?, amount?, description?
+  Future<ApiResponse<Map<String, dynamic>>> linkScanToOts({
+    required int scanId,
+    required List<Map<String, dynamic>> links,
+  }) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan/$scanId/link-ots',
+      {'links': links},
+    );
+  }
+
   /// Liaisons effectuées par l'utilisateur courant
   Future<ApiResponse<Map<String, dynamic>>> getMyOtLinks({int limit = 50}) async {
     return await _get<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/ot/my-links',
       queryParams: {'limit': '$limit'},
+    );
+  }
+
+  /// Liste paginée des scans liables à un OT (factures déjà scannées avec succès)
+  Future<ApiResponse<Map<String, dynamic>>> getLinkableScans({
+    String? search,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+    };
+    if (search != null && search.trim().isNotEmpty) {
+      params['search'] = search.trim();
+    }
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/scans-linkable',
+      queryParams: params,
+    );
+  }
+
+  /// Statistiques pour le tableau de bord Gestionnaire OT
+  Future<ApiResponse<Map<String, dynamic>>> getOtStats() async {
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/stats',
     );
   }
 

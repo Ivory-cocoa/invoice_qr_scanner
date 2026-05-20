@@ -356,7 +356,7 @@ class ScanResultDialog extends StatelessWidget {
         if (canLinkToOt) ...[
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: ElevatedButton.icon(
               onPressed: () async {
                 final result = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(
@@ -366,6 +366,9 @@ class ScanResultDialog extends StatelessWidget {
                           ? 'Facture ${scanRecord!.invoiceNumberDgi}'
                               ' • ${scanRecord!.supplierName}'
                           : scanRecord!.supplierName,
+                      invoiceAmount: scanRecord!.amountTtc > 0
+                          ? scanRecord!.amountTtc
+                          : null,
                     ),
                   ),
                 );
@@ -373,24 +376,26 @@ class ScanResultDialog extends StatelessWidget {
                   Navigator.of(context).pop('linked_to_ot');
                 }
               },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                side: BorderSide(color: primaryColor),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: 2,
               ),
-              icon: Icon(Icons.link, color: primaryColor),
-              label: Text(
-                'Lier à un OT',
+              icon: const Icon(Icons.link_rounded, size: 22),
+              label: const Text(
+                'Lier cette facture à un ou plusieurs OTs',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: primaryColor,
+                  fontSize: 15,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
         ],
         Row(
           children: [

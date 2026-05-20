@@ -21,6 +21,8 @@ import 'screens/traiteur_home_screen.dart';
 import 'screens/manager_home_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/my_ot_links_screen.dart';
+import 'screens/ot_manager_home_screen.dart';
+import 'screens/invoice_picker_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,6 +73,8 @@ class FactureScannerApp extends StatelessWidget {
           '/home': (context) => const RoleBasedHomeScreen(),
           '/settings': (context) => const SettingsScreen(),
           '/ot-links': (context) => const MyOtLinksScreen(),
+          '/ot-home': (context) => const OtManagerHomeScreen(),
+          '/invoice-picker': (context) => const InvoicePickerScreen(),
         },
       ),
     );
@@ -91,6 +95,8 @@ class RoleBasedHomeScreen extends StatelessWidget {
         return const TraiteurHomeScreen();
       case 'manager':
         return const ManagerHomeScreen();
+      case 'ot_manager':
+        return const OtManagerHomeScreen();
       case 'verificateur':
       default:
         return const HomeScreen();
