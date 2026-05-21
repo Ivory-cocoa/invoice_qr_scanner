@@ -358,6 +358,39 @@ class ApiService {
     );
   }
 
+  // ===========================================================================
+  // Consultation OT par QR-Code (écran "Détail OT")
+  // ===========================================================================
+
+  /// Autocomplete / recherche d'OTs (toutes ressources, tous états).
+  Future<ApiResponse<Map<String, dynamic>>> searchOts({
+    String? query,
+    int limit = 20,
+  }) async {
+    final params = <String, String>{'limit': '$limit'};
+    if (query != null && query.isNotEmpty) params['q'] = query;
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/search',
+      queryParams: params,
+    );
+  }
+
+  /// Détail complet des coûts opérationnels (+ scans + paiements) d'un OT.
+  Future<ApiResponse<Map<String, dynamic>>> getOtCostScans(int otId) async {
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/$otId/cost-scans',
+    );
+  }
+
+  /// Résout un payload QR (`ICP-OT:<ref>|<token>`) et renvoie le même
+  /// payload que [getOtCostScans].
+  Future<ApiResponse<Map<String, dynamic>>> getOtByQr(String payload) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/by-qr',
+      {'payload': payload},
+    );
+  }
+
   /// Health check
   Future<bool> healthCheck() async {
     try {

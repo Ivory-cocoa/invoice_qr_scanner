@@ -18,6 +18,7 @@ import 'scanner_screen.dart';
 import 'errors_screen.dart';
 import 'manual_entry_screen.dart';
 import 'invoice_picker_screen.dart';
+import 'ot_cost_scans_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -1255,6 +1256,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 onTap: () => Navigator.pushNamed(context, '/settings'),
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionCard(
+                icon: Icons.local_shipping_rounded,
+                title: 'Consulter un OT',
+                subtitle: 'Scanner / rechercher',
+                color: AppTheme.infoColor,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OtCostScansScreen()),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: SizedBox()),
           ],
         ),
       ],

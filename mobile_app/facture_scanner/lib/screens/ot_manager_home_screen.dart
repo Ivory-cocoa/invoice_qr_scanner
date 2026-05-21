@@ -28,6 +28,7 @@ import 'invoice_picker_screen.dart';
 import 'link_to_ot_screen.dart';
 import 'manual_entry_screen.dart';
 import 'my_ot_links_screen.dart';
+import 'ot_cost_scans_screen.dart';
 import 'scanner_screen.dart';
 
 class OtManagerHomeScreen extends StatefulWidget {
@@ -374,6 +375,19 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                             'Choisir une facture dans l\'historique et la lier à un ou plusieurs OTs',
                         color: AppTheme.accentColor,
                         onTap: _pickAndLink,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPrimaryAction(
+                        icon: Icons.local_shipping_rounded,
+                        title: 'Consulter un OT',
+                        subtitle:
+                            'Scanner le QR-code d\'un OT ou le rechercher pour voir ses coûts et paiements',
+                        color: AppTheme.infoColor,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const OtCostScansScreen(),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Mon activité'),
