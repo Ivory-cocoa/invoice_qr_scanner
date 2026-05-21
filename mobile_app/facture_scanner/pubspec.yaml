@@ -36,6 +36,8 @@ dependencies:
   workmanager: ^0.9.0
   # URL launcher for opening DGI links
   url_launcher: ^6.2.5
+  # Partage système (WhatsApp, SMS, email, …)
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:

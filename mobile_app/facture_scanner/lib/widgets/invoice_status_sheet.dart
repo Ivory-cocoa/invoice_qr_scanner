@@ -17,6 +17,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../core/services/share_service.dart';
 import '../core/theme/app_theme.dart';
 
 /// Action choisie par l'utilisateur dans le bottom sheet.
@@ -105,7 +106,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              _buildHeader(kase, invoiceNum, supplier),
+              _buildHeader(context, kase, invoiceNum, supplier),
               const Divider(height: 1),
               Flexible(
                 child: SingleChildScrollView(
@@ -149,7 +150,8 @@ class _InvoiceStatusSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(_Case kase, String invoiceNum, String supplier) {
+  Widget _buildHeader(
+      BuildContext context, _Case kase, String invoiceNum, String supplier) {
     final IconData icon;
     final Color color;
     final String title;
@@ -213,6 +215,21 @@ class _InvoiceStatusSheet extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+          IconButton(
+            tooltip: 'Partager',
+            icon: const Icon(Icons.share_outlined, color: AppTheme.textMedium),
+            onPressed: () async {
+              try {
+                await shareScanStatus(status);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur partage : $e')),
+                  );
+                }
+              }
+            },
           ),
         ],
       ),
