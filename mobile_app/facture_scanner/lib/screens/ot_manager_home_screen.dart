@@ -22,6 +22,7 @@ import '../core/providers/scan_provider.dart';
 import '../core/services/api_service.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
+import '../widgets/invoice_status_sheet.dart';
 import '../widgets/scan_result_dialog.dart';
 import 'invoice_picker_screen.dart';
 import 'link_to_ot_screen.dart';
@@ -151,12 +152,36 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
         : (record.supplierName.isNotEmpty
             ? record.supplierName
             : 'Facture scannée');
+
+    // 1. Récupérer le statut OT (existence + liaisons + montant restant)
+    //    pour décider du parcours utilisateur (Cas A/B/C).
+    final double fallbackAmount =
+        record.amountTtc > 0 ? record.amountTtc : 0.0;
+    final statusResp = await _api.getScanOtStatus(record.id);
+    if (!mounted) return;
+
+    double? amountToAllocate = fallbackAmount > 0 ? fallbackAmount : null;
+    if (statusResp.success && statusResp.data != null) {
+      final result = await showInvoiceStatusSheet(
+        context,
+        status: statusResp.data!,
+      );
+      if (!mounted) return;
+      if (result.action == InvoiceStatusAction.close) {
+        _loadStats();
+        return;
+      }
+      amountToAllocate = result.amountToAllocate ?? amountToAllocate;
+    }
+    // En cas d'échec API, on continue vers l'écran de liaison directement
+    // (comportement legacy) avec le montant facture.
+
     final linked = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => LinkToOtScreen(
           scanId: record.id,
           invoiceLabel: invoiceLabel,
-          invoiceAmount: record.amountTtc > 0 ? record.amountTtc : null,
+          invoiceAmount: amountToAllocate,
         ),
       ),
     );

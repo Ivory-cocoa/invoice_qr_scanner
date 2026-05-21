@@ -208,13 +208,14 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         backgroundColor: AppTheme.getPrimary(context),
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               // Info banner
               if (widget.timedOut)
                 Container(
@@ -487,6 +488,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

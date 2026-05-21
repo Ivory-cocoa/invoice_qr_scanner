@@ -270,41 +270,43 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
           ],
         ],
       ),
-      body: Column(
-        children: [
-          const ConnectivityBanner(),
-          
-          // Filtre
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.surfaceLight,
-            child: Row(
-              children: [
-                FilterChip(
-                  label: const Text('Retry possible'),
-                  selected: _onlyRetryPossible,
-                  onSelected: (selected) {
-                    setState(() => _onlyRetryPossible = selected);
-                    _loadErrors(refresh: true);
-                  },
-                  selectedColor: AppTheme.primaryLight.withOpacity(isDark ? 0.4 : 0.3),
-                ),
-                const SizedBox(width: 8),
-                if (_selectedIds.isNotEmpty)
-                  Chip(
-                    label: Text('${_selectedIds.length} sélectionné(s)'),
-                    deleteIcon: const Icon(Icons.clear, size: 18),
-                    onDeleted: () => setState(() => _selectedIds.clear()),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const ConnectivityBanner(),
+
+            // Filtre
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.surfaceLight,
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('Retry possible'),
+                    selected: _onlyRetryPossible,
+                    onSelected: (selected) {
+                      setState(() => _onlyRetryPossible = selected);
+                      _loadErrors(refresh: true);
+                    },
+                    selectedColor: AppTheme.primaryLight.withOpacity(isDark ? 0.4 : 0.3),
                   ),
-              ],
+                  const SizedBox(width: 8),
+                  if (_selectedIds.isNotEmpty)
+                    Chip(
+                      label: Text('${_selectedIds.length} sélectionné(s)'),
+                      deleteIcon: const Icon(Icons.clear, size: 18),
+                      onDeleted: () => setState(() => _selectedIds.clear()),
+                    ),
+                ],
+              ),
             ),
-          ),
-          
-          // Liste des erreurs
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
+
+            // Liste des erreurs
+            Expanded(
+              child: _buildContent(),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: _selectedIds.isNotEmpty
           ? FloatingActionButton.extended(

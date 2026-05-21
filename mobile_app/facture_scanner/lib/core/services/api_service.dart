@@ -312,6 +312,18 @@ class ApiService {
     );
   }
 
+  /// Statut OT d'une facture scannée : existence + liaisons + montant restant.
+  ///
+  /// Réponse :
+  ///   { scan_id, reference, supplier_name, invoice_number_dgi, invoice_date,
+  ///     invoice_amount, currency, invoice_id, invoice_name,
+  ///     links: [...], links_count, total_linked_amount, remaining_amount }
+  Future<ApiResponse<Map<String, dynamic>>> getScanOtStatus(int scanId) async {
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan/$scanId/status',
+    );
+  }
+
   /// Liaisons effectuées par l'utilisateur courant
   Future<ApiResponse<Map<String, dynamic>>> getMyOtLinks({int limit = 50}) async {
     return await _get<Map<String, dynamic>>(

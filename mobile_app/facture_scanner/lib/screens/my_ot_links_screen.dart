@@ -54,9 +54,10 @@ class _MyOtLinksScreenState extends State<MyOtLinksScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
                 ? ListView(children: [
@@ -126,6 +127,7 @@ class _MyOtLinksScreenState extends State<MyOtLinksScreen> {
                           );
                         },
                       ),
+        ),
       ),
     );
   }

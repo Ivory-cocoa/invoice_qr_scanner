@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../core/services/api_service.dart';
 import '../core/theme/app_theme.dart';
+import '../widgets/invoice_status_sheet.dart';
 import 'link_to_ot_screen.dart';
 
 class InvoicePickerScreen extends StatefulWidget {
@@ -102,12 +103,33 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
     final label = invoiceNum.isNotEmpty
         ? 'Facture $invoiceNum${supplier.isNotEmpty ? ' • $supplier' : ''}'
         : (supplier.isNotEmpty ? supplier : 'Facture');
+    final scanId = scan['id'] as int;
+    final fallbackAmount = (scan['amount_ttc'] as num?)?.toDouble();
+
+    // Récupérer le statut OT pour présenter le sheet (Cas A/B/C) avant
+    // d'ouvrir l'écran de liaison.
+    final statusResp = await _api.getScanOtStatus(scanId);
+    if (!mounted) return;
+
+    double? amountToAllocate = fallbackAmount;
+    if (statusResp.success && statusResp.data != null) {
+      final result = await showInvoiceStatusSheet(
+        context,
+        status: statusResp.data!,
+      );
+      if (!mounted) return;
+      if (result.action == InvoiceStatusAction.close) {
+        return;
+      }
+      amountToAllocate = result.amountToAllocate ?? amountToAllocate;
+    }
+
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => LinkToOtScreen(
-          scanId: scan['id'] as int,
+          scanId: scanId,
           invoiceLabel: label,
-          invoiceAmount: (scan['amount_ttc'] as num?)?.toDouble(),
+          invoiceAmount: amountToAllocate,
         ),
       ),
     );
@@ -147,43 +169,45 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
       appBar: AppBar(
         title: const Text('Sélectionner une facture'),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                hintText: 'Rechercher (fournisseur, n° facture, ref)',
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: _searchCtrl.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear_rounded),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _onSearchChanged('');
-                        },
-                      ),
-                filled: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Rechercher (fournisseur, n° facture, ref)',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchCtrl.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear_rounded),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _onSearchChanged('');
+                          },
+                        ),
+                  filled: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _load(reset: true),
-              color: primary,
-              child: _buildList(primary),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => _load(reset: true),
+                color: primary,
+                child: _buildList(primary),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
