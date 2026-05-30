@@ -24,6 +24,8 @@ import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 
+import psycopg2
+
 from odoo import http, _, fields
 from odoo.http import request, Response
 from odoo.exceptions import AccessError, AccessDenied
@@ -177,7 +179,28 @@ class InvoiceScannerMobileAPI(http.Controller):
             ], limit=1)
             
             if token_record and token_record.user_id.active:
-                token_record.write({'last_used': fields.Datetime.now()})
+                # Throttle `last_used` writes : inutile de toucher la ligne
+                # \u00e0 chaque requ\u00eate (cr\u00e9e des conflits "could not serialize
+                # access due to concurrent update" quand plusieurs requ\u00eates
+                # mobiles partagent le m\u00eame token). On \u00e9crit au max une fois
+                # par minute, et on isole l'\u00e9criture dans un savepoint pour
+                # qu'une collision ne corrompe pas la transaction principale.
+                now = fields.Datetime.now()
+                last_used = token_record.last_used
+                if not last_used or (now - last_used).total_seconds() >= 60:
+                    try:
+                        with request.env.cr.savepoint():
+                            token_record.write({'last_used': now})
+                    except psycopg2.errors.SerializationFailure:
+                        # Une autre requ\u00eate vient de mettre \u00e0 jour
+                        # `last_used` : ignorer silencieusement.
+                        _logger.debug(
+                            "last_used skipped (concurrent update) for token %s",
+                            token_record.id,
+                        )
+                    except Exception as e:
+                        _logger.warning("Erreur MAJ last_used token %s: %s",
+                                        token_record.id, e)
                 return token_record.user_id
             
             return False
