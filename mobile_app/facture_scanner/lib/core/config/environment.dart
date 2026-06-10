@@ -3,7 +3,7 @@
 /// Environnements disponibles:
 /// - development: http://192.168.5.159:8069 (icp_dev_db) - Réseau local développement
 /// - staging: http://192.168.5.85:8069 (icp_test_db) 
-/// - production: http://192.168.5.86:8069 (icp_db)
+/// - production: https://odoo.ivorycocoa.ci (odoo.ivorycocoa.ci)
 
 enum Environment {
   development,
@@ -44,8 +44,8 @@ class EnvironmentConfig {
 
   static const EnvironmentConfig production = EnvironmentConfig(
     name: 'Production',
-    apiBaseUrl: 'http://192.168.5.86:8069',
-    databaseName: 'icp_db',
+    apiBaseUrl: 'https://odoo.ivorycocoa.ci',
+    databaseName: 'odoo.ivorycocoa.ci',
     enableLogging: false,
     enableCrashlytics: true,
   );
@@ -67,9 +67,9 @@ class EnvironmentConfig {
 /// MODIFIER ICI POUR CHANGER D'ENVIRONNEMENT
 class AppConfig {
   // ========================================
-  // ENVIRONNEMENT ACTUEL: DÉVELOPPEMENT
+  // ENVIRONNEMENT ACTUEL: PRODUCTION
   // ========================================
-  static const Environment currentEnvironment = Environment.development;
+  static const Environment currentEnvironment = Environment.production;
   
   static EnvironmentConfig get config => 
       EnvironmentConfig.fromEnvironment(currentEnvironment);
@@ -81,8 +81,8 @@ class AppConfig {
   static bool get enableCrashlytics => config.enableCrashlytics;
   
   // Version de l'application
-  static const String appVersion = '1.0.0';
-  static const int buildNumber = 1;
+  static const String appVersion = '2.0.1';
+  static const int buildNumber = 2;
   
   // Nom de l'application
   static const String appName = 'Facture Scanner';
