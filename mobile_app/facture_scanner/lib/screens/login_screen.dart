@@ -74,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     
     // Sauvegarder l'URL du serveur si modifiée
     if (_serverController.text.isNotEmpty) {
-      auth.setServerUrl(_serverController.text.trim());
+      await auth.setServerUrl(_serverController.text.trim());
     }
 
     final success = await auth.login(
@@ -316,24 +316,36 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               // Bouton configuration serveur
               _buildServerToggle(),
               
-              // Champ serveur (collapsible)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                height: _showServerConfig ? 90 : 0,
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: _buildTextField(
-                      controller: _serverController,
-                      label: 'URL du serveur',
-                      hint: 'https://odoo.example.com',
-                      icon: Icons.cloud_outlined,
-                      keyboardType: TextInputType.url,
+              // Champ serveur (collapsible) + avertissement HTTP non sécurisé
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _serverController,
+                builder: (context, value, _) {
+                  final insecure = _isUrlInsecure(value.text);
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    height: _showServerConfig ? (insecure ? 178 : 90) : 0,
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildTextField(
+                              controller: _serverController,
+                              label: 'URL du serveur',
+                              hint: 'https://odoo.example.com',
+                              icon: Icons.cloud_outlined,
+                              keyboardType: TextInputType.url,
+                            ),
+                            if (insecure) _buildInsecureWarning(),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
               
               const SizedBox(height: 32),
@@ -412,6 +424,48 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           borderSide: BorderSide(color: AppTheme.getError(context), width: 2),
         ),
+      ),
+    );
+  }
+
+  /// Détecte une URL non sécurisée (http en clair hors réseau local privé).
+  bool _isUrlInsecure(String url) {
+    final u = url.trim().toLowerCase();
+    if (!u.startsWith('http://')) return false;
+    final isLocal = u.contains('localhost') ||
+        u.contains('127.0.0.1') ||
+        u.contains('//192.168.') ||
+        u.contains('//10.') ||
+        u.contains('//172.');
+    return !isLocal;
+  }
+
+  Widget _buildInsecureWarning() {
+    final warning = AppTheme.getWarning(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: warning.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(color: warning.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: warning, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Connexion non sécurisée (HTTP). Utilisez https:// pour '
+              'protéger vos identifiants.',
+              style: TextStyle(
+                color: warning,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

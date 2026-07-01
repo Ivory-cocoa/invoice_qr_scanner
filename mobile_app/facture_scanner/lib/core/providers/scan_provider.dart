@@ -89,6 +89,23 @@ class ScanProvider extends ChangeNotifier {
   void updateAuth(AuthProvider auth) {
     _auth = auth;
   }
+
+  // Garde contre les notifications après démontage : les callbacks
+  // asynchrones (extraction DGI, report doublon) peuvent se terminer après
+  // dispose(). Empêche "notifyListeners called after dispose".
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
   
   /// Extract UUID from DGI URL
   String? extractUuidFromUrl(String url) {

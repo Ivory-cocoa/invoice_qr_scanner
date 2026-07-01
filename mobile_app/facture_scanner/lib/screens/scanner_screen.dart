@@ -1,6 +1,8 @@
 /// Scanner Screen - Design Professionnel ICP
 /// Interface de scan QR moderne avec overlay personnalisé
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -18,6 +20,8 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   MobileScannerController? _controller;
   bool _isFlashOn = false;
   bool _hasScanned = false;
+  String? _errorFlash;
+  Timer? _resetTimer;
   late AnimationController _animationController;
   late Animation<double> _scanLineAnimation;
 
@@ -49,32 +53,68 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
   @override
   void dispose() {
+    _resetTimer?.cancel();
     _animationController.dispose();
+    // Arrêter le flux caméra AVANT de disposer le contrôleur pour éviter
+    // qu'un dernier `onDetect` ne se déclenche après la libération.
     _controller?.dispose();
     super.dispose();
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_hasScanned) return;
-    
+    // Garde atomique : ignore toute détection après le premier scan réussi
+    // ou après démontage du widget (évite "setState after dispose").
+    if (_hasScanned || !mounted) return;
+
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
-    
+
     final String? value = barcodes.first.rawValue;
     if (value == null || value.isEmpty) return;
-    
-    setState(() => _hasScanned = true);
-    
+
+    // Validation immédiate : seuls les QR-codes DGI sont acceptés. En cas de
+    // QR non reconnu, on affiche un retour visuel sans quitter le scanner,
+    // pour permettre de rescanner un code correct tout de suite.
+    if (!_isDgiUrl(value)) {
+      _hasScanned = true;
+      HapticFeedback.vibrate();
+      if (mounted) {
+        setState(() => _errorFlash = 'QR-code non reconnu. Scannez une facture DGI.');
+      }
+      _resetTimer?.cancel();
+      _resetTimer = Timer(const Duration(milliseconds: 1800), () {
+        if (!mounted) return;
+        setState(() {
+          _hasScanned = false;
+          _errorFlash = null;
+        });
+      });
+      return;
+    }
+
+    _hasScanned = true;
+    if (mounted) setState(() => _errorFlash = null);
+
     // Feedback haptique
     HapticFeedback.mediumImpact();
-    
-    // Retourner le résultat
-    Navigator.of(context).pop(value);
+
+    // Arrêter la caméra immédiatement puis retourner le résultat
+    _controller?.stop();
+    if (mounted) {
+      Navigator.of(context).pop(value);
+    }
   }
 
+  /// Un QR-code DGI valide contient le domaine de vérification officiel.
+  bool _isDgiUrl(String value) => value.contains('services.fne.dgi.gouv.ci');
+
   void _toggleFlash() async {
-    await _controller?.toggleTorch();
-    setState(() => _isFlashOn = !_isFlashOn);
+    try {
+      await _controller?.toggleTorch();
+      if (mounted) setState(() => _isFlashOn = !_isFlashOn);
+    } catch (_) {
+      // Certains appareils n'ont pas de flash : ignorer silencieusement.
+    }
   }
 
   @override
@@ -103,7 +143,53 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           
           // Instructions en bas
           _buildInstructions(size),
+
+          // Retour visuel transitoire pour un QR non reconnu
+          if (_errorFlash != null) _buildErrorFlash(size),
         ],
+      ),
+    );
+  }
+
+  Widget _buildErrorFlash(Size size) {
+    return Positioned(
+      top: size.height * 0.5 + size.width * 0.4,
+      left: 24,
+      right: 24,
+      child: AnimatedOpacity(
+        opacity: _errorFlash != null ? 1 : 0,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppTheme.errorColor.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  _errorFlash!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

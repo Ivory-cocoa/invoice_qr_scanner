@@ -48,8 +48,27 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AuthProvider>().addListener(_onAuthStateChanged);
       _loadStats();
     });
+  }
+
+  @override
+  void dispose() {
+    // Retrait sûr du listener (le provider survit à l'écran).
+    try {
+      context.read<AuthProvider>().removeListener(_onAuthStateChanged);
+    } catch (_) {}
+    super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated && mounted) {
+      // Session expirée : rediriger vers la connexion.
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
   }
 
   Future<void> _loadStats() async {

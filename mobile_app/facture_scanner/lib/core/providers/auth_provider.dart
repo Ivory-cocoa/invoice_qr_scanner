@@ -24,6 +24,8 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _state == AuthState.loading;
   
   AuthProvider() {
+    // Brancher la déconnexion automatique sur expiration de token (401).
+    ApiService.onUnauthorized = handleSessionExpired;
     _checkAuth();
   }
   
@@ -84,15 +86,18 @@ class AuthProvider extends ChangeNotifier {
   
   /// Gérer l'expiration de session (appelé par d'autres providers)
   void handleSessionExpired() {
+    // Éviter les déclenchements multiples si plusieurs requêtes 401 arrivent
+    // simultanément.
+    if (_state == AuthState.unauthenticated && _user == null) return;
+
     _user = null;
     _errorMessage = 'Votre session a expiré. Veuillez vous reconnecter.';
     _state = AuthState.unauthenticated;
-    
-    // Nettoyer les données locales de manière asynchrone
-    _api.logout();
-    _db.clearAllData();
-    
     notifyListeners();
+
+    // Nettoyer les données locales de manière asynchrone (non bloquant).
+    _api.logout().catchError((_) {});
+    _db.clearAllData().catchError((_) {});
   }
   
   void clearError() {

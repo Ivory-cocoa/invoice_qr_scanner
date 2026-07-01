@@ -16,6 +16,8 @@ dependencies:
   http: ^1.2.0
   # Local storage
   shared_preferences: ^2.2.2
+  # Secure storage (chiffré) pour le token d'authentification
+  flutter_secure_storage: ^9.2.2
   # SQLite for offline storage
   sqflite: ^2.3.2
   path: ^1.9.0

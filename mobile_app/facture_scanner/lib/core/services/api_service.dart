@@ -4,8 +4,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../config/environment.dart';
 import '../models/api_response.dart';
@@ -15,7 +17,17 @@ class ApiService {
   static const String _baseUrlKey = 'api_base_url';
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'current_user';
-  
+
+  // Stockage sécurisé (chiffré via Keystore/Keychain) pour le token.
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+
+  /// Callback global déclenché lorsqu'une réponse 401 est reçue (token
+  /// expiré/invalide). Permet à l'AuthProvider de forcer la déconnexion sans
+  /// couplage direct entre les services et les providers.
+  static void Function()? onUnauthorized;
+
   // Default URL from environment configuration
   static String get _defaultBaseUrl => AppConfig.apiBaseUrl;
   
@@ -38,8 +50,26 @@ class ApiService {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _baseUrl = prefs.getString(_baseUrlKey) ?? _defaultBaseUrl;
-    _token = prefs.getString(_tokenKey);
-    
+
+    // Lecture du token depuis le stockage sécurisé, avec migration depuis
+    // l'ancien stockage en clair (SharedPreferences) le cas échéant.
+    try {
+      _token = await _secureStorage.read(key: _tokenKey);
+      final legacyToken = prefs.getString(_tokenKey);
+      if (_token == null && legacyToken != null) {
+        _token = legacyToken;
+        await _secureStorage.write(key: _tokenKey, value: legacyToken);
+        await prefs.remove(_tokenKey);
+      } else if (legacyToken != null) {
+        // Nettoyer l'ancien token en clair une fois migré.
+        await prefs.remove(_tokenKey);
+      }
+    } catch (e) {
+      // Repli sur SharedPreferences si le stockage sécurisé échoue.
+      debugPrint('SecureStorage indisponible, repli SharedPreferences: $e');
+      _token = prefs.getString(_tokenKey);
+    }
+
     final userJson = prefs.getString(_userKey);
     if (userJson != null) {
       try {
@@ -50,13 +80,51 @@ class ApiService {
       }
     }
   }
+
+  /// Persiste le token de manière sécurisée (avec repli SharedPreferences).
+  Future<void> _persistToken(String token) async {
+    try {
+      await _secureStorage.write(key: _tokenKey, value: token);
+    } catch (e) {
+      debugPrint('SecureStorage write échoué, repli SharedPreferences: $e');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_tokenKey, token);
+    }
+  }
+
+  /// Supprime le token de tous les stockages.
+  Future<void> _clearToken() async {
+    try {
+      await _secureStorage.delete(key: _tokenKey);
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+  }
   
   /// Set API base URL
   Future<void> setBaseUrl(String url) async {
+    var cleaned = url.trim();
     // Ensure URL doesn't end with /
-    _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    if (cleaned.endsWith('/')) {
+      cleaned = cleaned.substring(0, cleaned.length - 1);
+    }
+    _baseUrl = cleaned;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_baseUrlKey, _baseUrl!);
+  }
+
+  /// Indique si l'URL configurée n'est pas sécurisée (http en clair).
+  /// Utilisé pour avertir l'utilisateur, surtout hors réseau local.
+  bool get isInsecureUrl {
+    final u = baseUrl.toLowerCase();
+    if (!u.startsWith('http://')) return false;
+    // Autoriser sans avertissement les adresses de réseau local privé.
+    final isLocal = u.contains('localhost') ||
+        u.contains('127.0.0.1') ||
+        u.contains('192.168.') ||
+        u.contains('10.') ||
+        u.contains('172.');
+    return !isLocal;
   }
   
   /// Login with credentials
@@ -72,7 +140,7 @@ class ApiService {
       
       // Save to storage
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, _token!);
+      if (_token != null) await _persistToken(_token!);
       await prefs.setString(_userKey, jsonEncode(_currentUser!.toJson()));
     }
     
@@ -89,8 +157,8 @@ class ApiService {
     _token = null;
     _currentUser = null;
     
+    await _clearToken();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
   }
   
@@ -457,9 +525,14 @@ class ApiService {
       } else {
         // Erreur - extraire le code et message d'erreur
         final error = jsonResponse['error'];
+        final errorCode = error?['code'] ?? 'UNKNOWN_ERROR';
+        // Token expiré/invalide : déclencher la déconnexion globale.
+        if (response.statusCode == 401 && authenticated) {
+          onUnauthorized?.call();
+        }
         return ApiResponse<T>(
           success: false,
-          errorCode: error?['code'] ?? 'UNKNOWN_ERROR',
+          errorCode: errorCode,
           errorMessage: error?['message'] ?? 'Une erreur est survenue',
           data: jsonResponse['data'] as T?, // Inclure les données (ex: existing_record pour les doublons)
         );
@@ -529,6 +602,9 @@ class ApiService {
         );
       }
       final error = jsonResponse['error'];
+      if (response.statusCode == 401 && authenticated) {
+        onUnauthorized?.call();
+      }
       return ApiResponse<T>(
         success: false,
         errorCode: error?['code'] ?? 'UNKNOWN_ERROR',
