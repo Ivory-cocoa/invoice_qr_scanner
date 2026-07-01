@@ -32,7 +32,7 @@ class DatabaseService {
     
     final db = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -109,6 +109,15 @@ class DatabaseService {
         duplicate_count INTEGER DEFAULT 0,
         last_duplicate_attempt TEXT,
         last_duplicate_user TEXT,
+        reprocess_attempt_count INTEGER DEFAULT 0,
+        last_reprocess_attempt TEXT,
+        last_reprocess_user TEXT,
+        is_processed INTEGER DEFAULT 0,
+        processed_by TEXT,
+        processed_by_id INTEGER,
+        processed_date TEXT,
+        verification_duration REAL DEFAULT 0,
+        is_manual_entry INTEGER DEFAULT 0,
         cached_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
@@ -168,6 +177,28 @@ class DatabaseService {
           'auto_sync_enabled': 1,
         });
       } catch (_) {}
+    }
+    if (oldVersion < 5) {
+      // Colonnes manquantes du cache d'historique : sans elles, la mise en
+      // cache lève "no column named ..." et vide l'historique affiché.
+      const historyColumns = <String>[
+        'ALTER TABLE scan_history ADD COLUMN reprocess_attempt_count INTEGER DEFAULT 0',
+        'ALTER TABLE scan_history ADD COLUMN last_reprocess_attempt TEXT',
+        'ALTER TABLE scan_history ADD COLUMN last_reprocess_user TEXT',
+        'ALTER TABLE scan_history ADD COLUMN is_processed INTEGER DEFAULT 0',
+        'ALTER TABLE scan_history ADD COLUMN processed_by TEXT',
+        'ALTER TABLE scan_history ADD COLUMN processed_by_id INTEGER',
+        'ALTER TABLE scan_history ADD COLUMN processed_date TEXT',
+        'ALTER TABLE scan_history ADD COLUMN verification_duration REAL DEFAULT 0',
+        'ALTER TABLE scan_history ADD COLUMN is_manual_entry INTEGER DEFAULT 0',
+      ];
+      for (final stmt in historyColumns) {
+        try {
+          await db.execute(stmt);
+        } catch (_) {
+          // Colonne déjà présente : ignorer.
+        }
+      }
     }
   }
   
@@ -328,12 +359,24 @@ class DatabaseService {
     for (final record in records) {
       batch.insert(
         'scan_history',
-        record.toMap(),
+        _sanitizeForSqlite(record.toMap()),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
     
-    await batch.commit(noResult: true);
+    // continueOnError : une ligne problématique ne doit pas faire échouer
+    // tout le lot ni propager une exception jusqu'à l'appelant.
+    await batch.commit(noResult: true, continueOnError: true);
+  }
+  
+  /// Convertit une map pour un stockage SQLite sûr : sqflite n'accepte que
+  /// num / String / Uint8List / null. Les booléens (is_processed,
+  /// is_manual_entry) sont convertis en 0/1.
+  Map<String, dynamic> _sanitizeForSqlite(Map<String, dynamic> map) {
+    return map.map((key, value) {
+      if (value is bool) return MapEntry(key, value ? 1 : 0);
+      return MapEntry(key, value);
+    });
   }
   
   /// Get cached scan history
@@ -345,7 +388,17 @@ class DatabaseService {
       limit: limit,
     );
     
-    return results.map((map) => ScanRecord.fromMap(map)).toList();
+    // Ignorer silencieusement une éventuelle ligne corrompue plutôt que de
+    // faire échouer tout le chargement de l'historique.
+    final records = <ScanRecord>[];
+    for (final map in results) {
+      try {
+        records.add(ScanRecord.fromMap(map));
+      } catch (_) {
+        // Ligne illisible : on la saute.
+      }
+    }
+    return records;
   }
   
   /// Check if QR code exists in history cache

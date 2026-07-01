@@ -650,10 +650,16 @@ class ScanProvider extends ChangeNotifier {
               .map((json) => ScanRecord.fromJson(json))
               .toList();
           
+          // Afficher immédiatement les données du serveur.
           _history = records;
           
-          // Cache the history
-          await _db.cacheScanHistory(records);
+          // Mettre en cache SÉPARÉMENT : une éventuelle erreur d'écriture du
+          // cache ne doit JAMAIS écraser l'historique déjà chargé du serveur.
+          try {
+            await _db.cacheScanHistory(records);
+          } catch (_) {
+            // Échec du cache local ignoré : l'historique reste affiché.
+          }
         } else {
           // Échec de la requête serveur (token pas encore prêt au démarrage,
           // erreur réseau transitoire, etc.) : retomber sur le cache local

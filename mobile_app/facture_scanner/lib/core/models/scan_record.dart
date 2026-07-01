@@ -1,4 +1,14 @@
 /// Scan Record Model
+
+/// Convertit une valeur potentiellement issue de SQLite (int 0/1), d'un JSON
+/// (bool) ou d'une chaîne en booléen Dart, de façon tolérante.
+bool _asBool(dynamic value, {bool fallback = false}) {
+  if (value is bool) return value;
+  if (value is num) return value != 0;
+  if (value is String) return value == 'true' || value == '1';
+  return fallback;
+}
+
 class ScanRecord {
   final int id;
   final String reference;
@@ -147,14 +157,16 @@ class ScanRecord {
           ? DateTime.tryParse(map['last_reprocess_attempt'])
           : null,
       lastReprocessUser: map['last_reprocess_user'] as String?,
-      isProcessed: map['is_processed'] as bool? ?? (map['state'] == 'processed'),
+      isProcessed: map.containsKey('is_processed') && map['is_processed'] != null
+          ? _asBool(map['is_processed'])
+          : (map['state'] == 'processed'),
       processedBy: map['processed_by'] as String?,
       processedById: map['processed_by_id'] as int?,
       processedDate: map['processed_date'] != null
           ? DateTime.tryParse(map['processed_date'])
           : null,
       verificationDuration: (map['verification_duration'] as num?)?.toDouble() ?? 0,
-      isManualEntry: map['is_manual_entry'] as bool? ?? false,
+      isManualEntry: _asBool(map['is_manual_entry']),
     );
   }
   
