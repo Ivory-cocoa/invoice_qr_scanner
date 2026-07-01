@@ -8,6 +8,7 @@ import '../core/providers/auth_provider.dart';
 import '../core/providers/scan_provider.dart';
 import '../core/providers/connectivity_provider.dart';
 import '../core/services/background_scan_queue.dart';
+import '../core/ot_link_flow.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
 import '../widgets/queue_status_banner.dart';
@@ -16,7 +17,6 @@ import '../widgets/stats_card.dart';
 import '../widgets/history_list.dart';
 import 'scanner_screen.dart';
 import 'errors_screen.dart';
-import 'manual_entry_screen.dart';
 import 'invoice_picker_screen.dart';
 import 'ot_cost_scans_screen.dart';
 
@@ -35,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _initializeAndLoad();
     
     // Écouter les changements d'état d'authentification et de connectivité
@@ -42,6 +43,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context.read<AuthProvider>().addListener(_onAuthStateChanged);
       context.read<ConnectivityProvider>().addListener(_onConnectivityChanged);
     });
+  }
+  
+  /// Recharge l'historique à chaque ouverture de l'onglet « Historique ».
+  /// Garantit un affichage à jour même si le premier chargement au démarrage
+  /// a échoué (token/connectivité pas encore prêts).
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    if (_tabController.index != 1 || !mounted) return;
+    final scan = context.read<ScanProvider>();
+    if (scan.isLoadingHistory) return;
+    final connectivity = context.read<ConnectivityProvider>();
+    scan.loadHistory(isOnline: connectivity.isOnline);
   }
   
   void _onAuthStateChanged() {
@@ -118,6 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (_) {
       // Ignorer si le context n'est plus disponible
     }
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -142,16 +156,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           if (validation.isDuplicate) {
             scan.resetState();
             if (mounted) {
-              await showDialog<String>(
+              final existing = validation.existing;
+              final dialogResult = await showDialog<String>(
                 context: context,
                 builder: (context) => ScanResultDialog(
                   state: ScanState.duplicate,
                   message: validation.error,
-                  scanRecord: validation.existing,
+                  scanRecord: existing,
                 ),
               );
-              // Offer to scan again
-              if (mounted) _openScanner();
+              // Gestionnaire OT / Responsable : lier ce doublon à un OT.
+              if (dialogResult == 'link_to_ot' &&
+                  existing != null &&
+                  existing.id > 0 &&
+                  mounted) {
+                await startOtLinkFlow(context, existing);
+              } else if (mounted) {
+                // Offer to scan again
+                _openScanner();
+              }
             }
           } else {
             // Validation error
@@ -223,18 +246,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         );
         
         if (scan.state != ScanState.idle && scan.state != ScanState.manualEntry && mounted) {
+          final record = scan.lastScanResult;
           final dialogResult = await showDialog<String>(
             context: context,
             builder: (context) => ScanResultDialog(
               state: scan.state,
               message: scan.message,
-              scanRecord: scan.lastScanResult,
+              scanRecord: record,
             ),
           );
           
           scan.resetState();
           
-          if (dialogResult == 'scan_again' && mounted) {
+          if (dialogResult == 'link_to_ot' &&
+              record != null &&
+              record.id > 0 &&
+              mounted) {
+            await startOtLinkFlow(context, record);
+          } else if (dialogResult == 'scan_again' && mounted) {
             _openScanner();
           }
         }

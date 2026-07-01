@@ -12,6 +12,7 @@ import '../core/providers/scan_provider.dart';
 import '../core/providers/connectivity_provider.dart';
 import '../core/theme/app_theme.dart';
 import '../core/models/scan_record.dart';
+import '../core/ot_link_flow.dart';
 import '../widgets/connectivity_banner.dart';
 import '../widgets/scan_result_dialog.dart';
 import 'scanner_screen.dart';
@@ -106,18 +107,24 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       await scan.processQrCodeAsTraiteur(result);
 
       if (scan.state != ScanState.idle && mounted) {
+        final record = scan.lastScanResult;
         final dialogResult = await showDialog<String>(
           context: context,
           builder: (context) => ScanResultDialog(
             state: scan.state,
             message: scan.message,
-            scanRecord: scan.lastScanResult,
+            scanRecord: record,
           ),
         );
 
         scan.resetState();
 
-        if (dialogResult == 'scan_again' && mounted) {
+        if (dialogResult == 'link_to_ot' &&
+            record != null &&
+            record.id > 0 &&
+            mounted) {
+          await startOtLinkFlow(context, record);
+        } else if (dialogResult == 'scan_again' && mounted) {
           _openScanner();
         }
       }

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/services/background_scan_queue.dart';
+import '../core/providers/auth_provider.dart';
+import '../core/ot_link_flow.dart';
 import '../core/theme/app_theme.dart';
 import '../screens/manual_entry_screen.dart';
 
@@ -177,8 +179,16 @@ class QueueStatusBanner extends StatelessWidget {
 
   Widget _buildCompletedCard(
       BuildContext context, BackgroundScanQueue queue, QueueItem item) {
+    // Le gestionnaire OT peut lier directement la facture créée à un OT
+    // depuis la carte de succès (le scan en ligne ne passe pas par un dialogue).
+    final record = item.scanRecord;
+    final canLinkToOt = context.read<AuthProvider>().user?.isOtManager == true &&
+        record != null &&
+        record.id > 0;
     return _AutoDismissCard(
       key: ValueKey(item.id),
+      // Laisser plus de temps pour lier à un OT quand l'action est proposée.
+      dismissDelay: Duration(seconds: canLinkToOt ? 12 : 5),
       onDismissed: () => queue.removeItem(item.id),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -205,6 +215,15 @@ class QueueStatusBanner extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (canLinkToOt) ...[
+              _OtLinkShortcutButton(
+                onTap: () async {
+                  await startOtLinkFlow(context, record);
+                  queue.removeItem(item.id);
+                },
+              ),
+              const SizedBox(width: 8),
+            ],
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               onPressed: () => queue.removeItem(item.id),
@@ -306,6 +325,42 @@ class QueueStatusBanner extends StatelessWidget {
   }
 }
 
+/// Bouton raccourci "Lier à un OT" sur la carte de succès (gestionnaire OT)
+class _OtLinkShortcutButton extends StatelessWidget {
+  final Future<void> Function() onTap;
+  const _OtLinkShortcutButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.primaryColor,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.link_rounded, color: Colors.white, size: 16),
+              SizedBox(width: 4),
+              Text(
+                'Lier à un OT',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Bouton raccourci "Saisie manuelle" dans la bannière active
 class _ManualEntryShortcutButton extends StatelessWidget {
   final VoidCallback onTap;
@@ -342,15 +397,17 @@ class _ManualEntryShortcutButton extends StatelessWidget {
   }
 }
 
-/// Carte qui s'auto-supprime après 5 secondes
+/// Carte qui s'auto-supprime après un délai (5 secondes par défaut)
 class _AutoDismissCard extends StatefulWidget {
   final Widget child;
   final VoidCallback onDismissed;
+  final Duration dismissDelay;
 
   const _AutoDismissCard({
     super.key,
     required this.child,
     required this.onDismissed,
+    this.dismissDelay = const Duration(seconds: 5),
   });
 
   @override
@@ -363,7 +420,7 @@ class _AutoDismissCardState extends State<_AutoDismissCard> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(seconds: 5), widget.onDismissed);
+    _timer = Timer(widget.dismissDelay, widget.onDismissed);
   }
 
   @override

@@ -654,6 +654,11 @@ class ScanProvider extends ChangeNotifier {
           
           // Cache the history
           await _db.cacheScanHistory(records);
+        } else {
+          // Échec de la requête serveur (token pas encore prêt au démarrage,
+          // erreur réseau transitoire, etc.) : retomber sur le cache local
+          // pour éviter de laisser l'historique définitivement vide.
+          _history = await _db.getCachedHistory();
         }
       } else {
         // Load from cache

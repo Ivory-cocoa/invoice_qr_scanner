@@ -9,7 +9,6 @@ import '../core/providers/scan_provider.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/models/scan_record.dart';
 import '../core/theme/app_theme.dart';
-import '../screens/link_to_ot_screen.dart';
 
 class ScanResultDialog extends StatelessWidget {
   final ScanState state;
@@ -357,25 +356,9 @@ class ScanResultDialog extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () async {
-                final result = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => LinkToOtScreen(
-                      scanId: scanRecord!.id,
-                      invoiceLabel: scanRecord!.invoiceNumberDgi.isNotEmpty
-                          ? 'Facture ${scanRecord!.invoiceNumberDgi}'
-                              ' • ${scanRecord!.supplierName}'
-                          : scanRecord!.supplierName,
-                      invoiceAmount: scanRecord!.amountTtc > 0
-                          ? scanRecord!.amountTtc
-                          : null,
-                    ),
-                  ),
-                );
-                if (result == true && context.mounted) {
-                  Navigator.of(context).pop('linked_to_ot');
-                }
-              },
+              // On délègue au caller : il lancera le parcours unifié
+              // (statut OT → sheet Cas A/B/C → écran de liaison).
+              onPressed: () => Navigator.of(context).pop('link_to_ot'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
                 foregroundColor: Colors.white,

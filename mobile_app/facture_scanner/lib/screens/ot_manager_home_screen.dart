@@ -20,12 +20,10 @@ import '../core/providers/auth_provider.dart';
 import '../core/providers/connectivity_provider.dart';
 import '../core/providers/scan_provider.dart';
 import '../core/services/api_service.dart';
+import '../core/ot_link_flow.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
-import '../widgets/invoice_status_sheet.dart';
-import '../widgets/scan_result_dialog.dart';
 import 'invoice_picker_screen.dart';
-import 'link_to_ot_screen.dart';
 import 'manual_entry_screen.dart';
 import 'my_ot_links_screen.dart';
 import 'ot_cost_scans_screen.dart';
@@ -166,46 +164,9 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
   }
 
   Future<void> _pushLinkToOt(ScanRecord record) async {
-    final invoiceLabel = (record.invoiceNumberDgi.isNotEmpty)
-        ? 'Facture ${record.invoiceNumberDgi}'
-            '${record.supplierName.isNotEmpty ? ' • ${record.supplierName}' : ''}'
-        : (record.supplierName.isNotEmpty
-            ? record.supplierName
-            : 'Facture scannée');
-
-    // 1. Récupérer le statut OT (existence + liaisons + montant restant)
-    //    pour décider du parcours utilisateur (Cas A/B/C).
-    final double fallbackAmount =
-        record.amountTtc > 0 ? record.amountTtc : 0.0;
-    final statusResp = await _api.getScanOtStatus(record.id);
-    if (!mounted) return;
-
-    double? amountToAllocate = fallbackAmount > 0 ? fallbackAmount : null;
-    if (statusResp.success && statusResp.data != null) {
-      final result = await showInvoiceStatusSheet(
-        context,
-        status: statusResp.data!,
-      );
-      if (!mounted) return;
-      if (result.action == InvoiceStatusAction.close) {
-        _loadStats();
-        return;
-      }
-      amountToAllocate = result.amountToAllocate ?? amountToAllocate;
-    }
-    // En cas d'échec API, on continue vers l'écran de liaison directement
-    // (comportement legacy) avec le montant facture.
-
-    final linked = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => LinkToOtScreen(
-          scanId: record.id,
-          invoiceLabel: invoiceLabel,
-          invoiceAmount: amountToAllocate,
-        ),
-      ),
-    );
-    if (mounted && linked == true) _loadStats();
+    // Parcours unifié : statut OT → sheet Cas A/B/C → écran de liaison.
+    await startOtLinkFlow(context, record);
+    if (mounted) _loadStats();
   }
 
   Future<void> _pickAndLink() async {

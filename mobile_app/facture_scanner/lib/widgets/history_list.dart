@@ -23,7 +23,26 @@ class HistoryList extends StatelessWidget {
         }
         
         if (scan.history.isEmpty) {
-          return _buildEmptyState(context);
+          // État vide RAFRAÎCHISSABLE : permet à l'utilisateur de retenter
+          // le chargement (pull-to-refresh) même quand l'historique est vide,
+          // au cas où le premier chargement aurait échoué.
+          return RefreshIndicator(
+            onRefresh: () => scan.loadHistory(
+              forceRefresh: true,
+              isOnline: connectivity.isOnline,
+            ),
+            color: AppTheme.getPrimary(context),
+            backgroundColor: AppTheme.getSurfaceElevated(context),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: _buildEmptyState(context),
+                ),
+              ),
+            ),
+          );
         }
         
         return RefreshIndicator(
