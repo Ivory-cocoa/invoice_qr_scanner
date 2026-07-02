@@ -145,8 +145,8 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
                     Expanded(
                       child: Text(
                         record.reference,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                        style: TextStyle(
+                          color: AppTheme.getTextPrimary(context),
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
@@ -161,10 +161,10 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
                 // Fournisseur
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.business_rounded,
                       size: 14,
-                      color: AppTheme.textMuted,
+                      color: AppTheme.getTextMuted(context),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
@@ -172,8 +172,8 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
                         record.supplierName.isNotEmpty
                             ? record.supplierName
                             : 'Fournisseur inconnu',
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
+                        style: TextStyle(
+                          color: AppTheme.getTextSecondary(context),
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -192,8 +192,8 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
                       record.scanDate != null
                           ? dateFormat.format(record.scanDate!)
                           : 'Date inconnue',
-                      style: const TextStyle(
-                        color: AppTheme.textMuted,
+                      style: TextStyle(
+                        color: AppTheme.getTextMuted(context),
                         fontSize: 12,
                       ),
                     ),
@@ -218,7 +218,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
             duration: const Duration(milliseconds: 300),
             child: Icon(
               Icons.keyboard_arrow_down_rounded,
-              color: AppTheme.textMuted,
+              color: AppTheme.getTextMuted(context),
               size: 24,
             ),
           ),
@@ -397,23 +397,23 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(item.icon, size: 16, color: AppTheme.textMuted),
+          Icon(item.icon, size: 16, color: AppTheme.getTextMuted(context)),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 item.label,
-                style: const TextStyle(
-                  color: AppTheme.textMuted,
+                style: TextStyle(
+                  color: AppTheme.getTextMuted(context),
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               Text(
                 item.value,
-                style: const TextStyle(
-                  color: AppTheme.textPrimary,
+                style: TextStyle(
+                  color: AppTheme.getTextPrimary(context),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -534,7 +534,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
       case 'error':
         return AppTheme.getError(context);
       default:
-        return AppTheme.textPrimary;
+        return AppTheme.getTextPrimary(context);
     }
   }
 }

@@ -76,6 +76,9 @@ class ScanResultDialog extends StatelessWidget {
                       ),
                     
                     if (scanRecord != null) _buildRecordDetails(context),
+
+                    if (scanRecord != null && scanRecord!.hasOtLinks)
+                      _buildOtLinksSection(context),
                     
                     const SizedBox(height: 24),
                     
@@ -267,6 +270,106 @@ class ScanResultDialog extends StatelessWidget {
     );
   }
   
+  /// Section listant les Ordres de Transit (OT) auxquels le scan est rattaché.
+  /// Un scan pouvant être lié à plusieurs OT, chaque lien est affiché sous
+  /// forme de puce (référence OT + type de coût + montant).
+  Widget _buildOtLinksSection(BuildContext context) {
+    final links = scanRecord!.otLinks;
+    final primaryColor = AppTheme.getPrimary(context);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: primaryColor.withOpacity(AppTheme.isDark(context) ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primaryColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.local_shipping_rounded, size: 18, color: primaryColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  links.length > 1
+                      ? 'Lié à ${links.length} Ordres de Transit'
+                      : 'Lié à un Ordre de Transit',
+                  style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: links.map((link) => _buildOtChip(context, link)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Puce représentant un lien scan → OT.
+  Widget _buildOtChip(BuildContext context, OtLink link) {
+    final primaryColor = AppTheme.getPrimary(context);
+    final ref = link.otReference.isNotEmpty
+        ? link.otReference
+        : 'OT #${link.otId ?? '?'}';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.getSurfaceElevated(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: primaryColor.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.tag_rounded, size: 14, color: primaryColor),
+              const SizedBox(width: 4),
+              Text(
+                ref,
+                style: TextStyle(
+                  color: AppTheme.getTextPrimary(context),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          if (link.costType.isNotEmpty || link.amount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                [
+                  if (link.costType.isNotEmpty) link.costType,
+                  if (link.amount > 0) link.formattedAmount,
+                ].join(' • '),
+                style: TextStyle(
+                  color: AppTheme.getTextSecondary(context),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDetailRow(
     BuildContext context,
     String label,

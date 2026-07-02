@@ -340,9 +340,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: AppTheme.textLight),
+            Icon(Icons.error_outline, size: 64, color: AppTheme.getTextMuted(context)),
             const SizedBox(height: 16),
-            Text(_errorMessage!, style: AppTheme.bodyLarge),
+            Text(_errorMessage!, style: AppTheme.bodyLarge.copyWith(color: AppTheme.getTextPrimary(context))),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () => _loadErrors(refresh: true),
@@ -361,13 +361,13 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
           children: [
             const Icon(Icons.check_circle_outline, size: 64, color: AppTheme.successColor),
             const SizedBox(height: 16),
-            const Text('Aucune erreur', style: AppTheme.headingSmall),
+            Text('Aucune erreur', style: AppTheme.headingSmall.copyWith(color: AppTheme.getTextPrimary(context))),
             const SizedBox(height: 8),
             Text(
               _onlyRetryPossible 
                   ? 'Aucune erreur avec retry possible'
                   : 'Tous les scans ont réussi',
-              style: AppTheme.bodyLarge.copyWith(color: AppTheme.textLight),
+              style: AppTheme.bodyLarge.copyWith(color: AppTheme.getTextMuted(context)),
             ),
           ],
         ),
@@ -451,7 +451,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       children: [
                         Text(
                           error.reference,
-                          style: AppTheme.headingSmall.copyWith(fontSize: 16),
+                          style: AppTheme.headingSmall.copyWith(fontSize: 16, color: AppTheme.getTextPrimary(context)),
                         ),
                         const SizedBox(height: 6),
                         Row(
@@ -607,9 +607,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         minChildSize: 0.5,
         maxChildSize: 0.95,
         builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          decoration: BoxDecoration(
+            color: AppTheme.getSurfaceElevated(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
             children: [
@@ -619,7 +619,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppTheme.getDivider(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -776,10 +776,10 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isError ? AppTheme.errorLight : Colors.grey.shade50,
+        color: isError ? AppTheme.getErrorLight(context) : AppTheme.getSurfaceLight(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isError ? AppTheme.errorColor.withOpacity(0.3) : Colors.grey.shade200,
+          color: isError ? AppTheme.errorColor.withOpacity(0.3) : AppTheme.getDivider(context),
         ),
       ),
       child: Column(
@@ -799,7 +799,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
               Text(
                 title,
                 style: TextStyle(
-                  color: isError ? AppTheme.errorColor : AppTheme.textDark,
+                  color: isError ? AppTheme.errorColor : AppTheme.getTextPrimary(context),
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                 ),
@@ -811,7 +811,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             Text(
               content,
               style: TextStyle(
-                color: isError ? AppTheme.textDark : AppTheme.textMedium,
+                color: isError ? AppTheme.getTextPrimary(context) : AppTheme.getTextSecondary(context),
                 fontSize: 14,
                 height: 1.5,
               ),
@@ -832,8 +832,8 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             width: 100,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppTheme.textMuted,
+              style: TextStyle(
+                color: AppTheme.getTextMuted(context),
                 fontSize: 13,
               ),
             ),
@@ -842,16 +842,16 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             child: selectable
                 ? SelectableText(
                     value.isNotEmpty ? value : '-',
-                    style: const TextStyle(
-                      color: AppTheme.textDark,
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                   )
                 : Text(
                     value.isNotEmpty ? value : '-',
-                    style: const TextStyle(
-                      color: AppTheme.textDark,
+                    style: TextStyle(
+                      color: AppTheme.getTextPrimary(context),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -924,13 +924,13 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: AppTheme.textLight),
+          Icon(icon, size: 16, color: AppTheme.getTextMuted(context)),
           const SizedBox(width: 8),
-          Text('$label: ', style: AppTheme.bodyMedium.copyWith(color: AppTheme.textLight)),
+          Text('$label: ', style: AppTheme.bodyMedium.copyWith(color: AppTheme.getTextMuted(context))),
           Expanded(
             child: Text(
               value.isNotEmpty ? value : '-',
-              style: AppTheme.bodyMedium,
+              style: AppTheme.bodyMedium.copyWith(color: AppTheme.getTextSecondary(context)),
               overflow: TextOverflow.ellipsis,
             ),
           ),

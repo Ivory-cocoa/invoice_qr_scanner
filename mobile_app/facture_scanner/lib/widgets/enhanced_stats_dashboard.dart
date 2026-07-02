@@ -56,7 +56,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         final stats = scan.stats;
 
         if (stats == null) {
-          return _buildLoadingSkeleton();
+          return _buildLoadingSkeleton(context);
         }
 
         final total = (stats['total_scans'] as num?)?.toInt() ?? 0;
@@ -74,7 +74,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             );
           },
           child: Container(
-            decoration: AppTheme.cardDecoration,
+            decoration: AppTheme.getCardDecoration(context),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -86,23 +86,23 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                   padding: const EdgeInsets.all(16),
                   child: widget.compact
                       ? _buildCompactKPIs(success, duplicates, errors)
-                      : _buildFullKPIs(success, duplicates, errors),
+                      : _buildFullKPIs(context, success, duplicates, errors),
                 ),
 
                 // Graphique circulaire
                 if (widget.showChart && total > 0) ...[
                   const Divider(height: 1),
-                  _buildPieChart(success, duplicates, errors),
+                  _buildPieChart(context, success, duplicates, errors),
                 ],
 
                 // Montant total
                 const Divider(height: 1),
-                _buildAmountSection(amount),
+                _buildAmountSection(context, amount),
 
                 // Taux de réussite
                 if (!widget.compact) ...[
                   const Divider(height: 1),
-                  _buildSuccessRateSection(total, success),
+                  _buildSuccessRateSection(context, total, success),
                 ],
               ],
             ),
@@ -228,13 +228,14 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildFullKPIs(int success, int duplicates, int errors) {
+  Widget _buildFullKPIs(BuildContext context, int success, int duplicates, int errors) {
     return Column(
       children: [
         Row(
           children: [
             Expanded(
               child: _buildKPICard(
+                context: context,
                 value: success,
                 label: 'Scans réussis',
                 subtitle: 'Factures créées',
@@ -245,6 +246,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             const SizedBox(width: 12),
             Expanded(
               child: _buildKPICard(
+                context: context,
                 value: duplicates,
                 label: 'Doublons',
                 subtitle: 'Déjà enregistrés',
@@ -256,6 +258,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         ),
         const SizedBox(height: 12),
         _buildKPICard(
+          context: context,
           value: errors,
           label: 'Erreurs',
           subtitle: 'Scans échoués',
@@ -314,6 +317,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
   }
 
   Widget _buildKPICard({
+    required BuildContext context,
     required int value,
     required String label,
     required String subtitle,
@@ -359,7 +363,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                     Text(
                       label,
                       style: TextStyle(
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.getTextPrimary(context),
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -367,7 +371,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: AppTheme.textMuted,
+                        color: AppTheme.getTextMuted(context),
                         fontSize: 12,
                       ),
                     ),
@@ -381,7 +385,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildPieChart(int success, int duplicates, int errors) {
+  Widget _buildPieChart(BuildContext context, int success, int duplicates, int errors) {
     final total = success + duplicates + errors;
     if (total == 0) return const SizedBox.shrink();
 
@@ -419,6 +423,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildLegendItem(
+                  context,
                   'Réussis',
                   success,
                   total,
@@ -426,6 +431,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                 ),
                 const SizedBox(height: 10),
                 _buildLegendItem(
+                  context,
                   'Doublons',
                   duplicates,
                   total,
@@ -433,6 +439,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                 ),
                 const SizedBox(height: 10),
                 _buildLegendItem(
+                  context,
                   'Erreurs',
                   errors,
                   total,
@@ -446,7 +453,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildLegendItem(String label, int value, int total, Color color) {
+  Widget _buildLegendItem(BuildContext context, String label, int value, int total, Color color) {
     final percentage = total > 0 ? (value / total * 100) : 0.0;
 
     return Row(
@@ -463,10 +470,10 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: AppTheme.textPrimary,
+              color: AppTheme.getTextPrimary(context),
             ),
           ),
         ),
@@ -482,7 +489,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildAmountSection(double amount) {
+  Widget _buildAmountSection(BuildContext context, double amount) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -511,10 +518,10 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Montant total facturé',
                   style: TextStyle(
-                    color: AppTheme.textMuted,
+                    color: AppTheme.getTextMuted(context),
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -543,7 +550,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildSuccessRateSection(int total, int success) {
+  Widget _buildSuccessRateSection(BuildContext context, int total, int success) {
     final rate = total > 0 ? (success / total * 100) : 0.0;
 
     return Padding(
@@ -554,10 +561,10 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Taux de réussite',
                 style: TextStyle(
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.getTextPrimary(context),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -590,7 +597,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                 child: LinearProgressIndicator(
                   value: value,
                   minHeight: 10,
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: AppTheme.getDivider(context),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     _getRateColor(value * 100),
                   ),
@@ -609,18 +616,20 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     return AppTheme.errorColor;
   }
 
-  Widget _buildLoadingSkeleton() {
+  Widget _buildLoadingSkeleton(BuildContext context) {
+    final bool dark = AppTheme.isDark(context);
+    final Color placeholder = dark ? AppTheme.darkSurfaceElevated : Colors.white;
     return Container(
-      decoration: AppTheme.cardDecoration,
+      decoration: AppTheme.getCardDecoration(context),
       child: Shimmer.fromColors(
-        baseColor: Colors.grey.shade300,
-        highlightColor: Colors.grey.shade100,
+        baseColor: dark ? AppTheme.darkDivider : Colors.grey.shade300,
+        highlightColor: dark ? AppTheme.darkSurfaceElevated : Colors.grey.shade100,
         child: Column(
           children: [
             Container(
               height: 80,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: placeholder,
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(16)),
               ),
@@ -635,7 +644,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                         child: Container(
                           height: 100,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: placeholder,
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
@@ -645,7 +654,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                         child: Container(
                           height: 100,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: placeholder,
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
@@ -656,7 +665,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                   Container(
                     height: 60,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: placeholder,
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),

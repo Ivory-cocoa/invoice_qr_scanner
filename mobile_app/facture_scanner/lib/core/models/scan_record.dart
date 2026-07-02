@@ -1,5 +1,7 @@
 /// Scan Record Model
 
+import 'dart:convert';
+
 /// Convertit une valeur potentiellement issue de SQLite (int 0/1), d'un JSON
 /// (bool) ou d'une chaîne en booléen Dart, de façon tolérante.
 bool _asBool(dynamic value, {bool fallback = false}) {
@@ -7,6 +9,98 @@ bool _asBool(dynamic value, {bool fallback = false}) {
   if (value is num) return value != 0;
   if (value is String) return value == 'true' || value == '1';
   return fallback;
+}
+
+/// Lien d'un scan vers un Ordre de Transit (OT).
+///
+/// Un scan peut être rattaché à PLUSIEURS OT (une ligne de coût par OT dans
+/// `potting.cost.line`). Cet objet représente une de ces liaisons.
+class OtLink {
+  final int? costLineId;
+  final int? otId;
+  final String otReference;
+  final String costType;
+  final String costTypeCode;
+  final double amount;
+  final String currency;
+  final String state;
+  final String stateLabel;
+
+  const OtLink({
+    this.costLineId,
+    this.otId,
+    required this.otReference,
+    this.costType = '',
+    this.costTypeCode = '',
+    this.amount = 0,
+    this.currency = 'XOF',
+    this.state = '',
+    this.stateLabel = '',
+  });
+
+  factory OtLink.fromJson(Map<String, dynamic> json) {
+    return OtLink(
+      costLineId: json['cost_line_id'] as int?,
+      otId: json['ot_id'] as int?,
+      otReference: json['ot_reference'] as String? ?? '',
+      costType: json['cost_type'] as String? ?? '',
+      costTypeCode: json['cost_type_code'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      currency: json['currency'] as String? ?? 'XOF',
+      state: json['state'] as String? ?? '',
+      stateLabel: json['state_label'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'cost_line_id': costLineId,
+        'ot_id': otId,
+        'ot_reference': otReference,
+        'cost_type': costType,
+        'cost_type_code': costTypeCode,
+        'amount': amount,
+        'currency': currency,
+        'state': state,
+        'state_label': stateLabel,
+      };
+
+  /// Montant formaté avec séparateurs de milliers.
+  String get formattedAmount {
+    final formatted = amount.toStringAsFixed(0).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]} ',
+        );
+    return '$formatted $currency';
+  }
+}
+
+/// Décode une liste d'`OtLink` depuis une valeur pouvant être :
+/// - une `List` (réponse JSON de l'API),
+/// - une `String` JSON (valeur relue du cache SQLite),
+/// - `null`.
+List<OtLink> _parseOtLinks(dynamic value) {
+  if (value == null) return const [];
+  dynamic decoded = value;
+  if (value is String) {
+    if (value.trim().isEmpty) return const [];
+    try {
+      decoded = jsonDecode(value);
+    } catch (_) {
+      return const [];
+    }
+  }
+  if (decoded is! List) return const [];
+  final result = <OtLink>[];
+  for (final item in decoded) {
+    if (item is Map) {
+      try {
+        result.add(OtLink.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {
+        // Élément illisible : on l'ignore.
+      }
+    }
+  }
+  return result;
 }
 
 class ScanRecord {
@@ -47,6 +141,9 @@ class ScanRecord {
   // Champs pour la vérification DGI
   final double verificationDuration;
   final bool isManualEntry;
+
+  // Liens vers les Ordres de Transit (OT) — un scan peut être lié à plusieurs OT
+  final List<OtLink> otLinks;
   
   ScanRecord({
     required this.id,
@@ -78,7 +175,11 @@ class ScanRecord {
     this.processedDate,
     this.verificationDuration = 0,
     this.isManualEntry = false,
+    this.otLinks = const [],
   });
+
+  /// Vrai si le scan est rattaché à au moins un Ordre de Transit.
+  bool get hasOtLinks => otLinks.isNotEmpty;
   
   factory ScanRecord.fromJson(Map<String, dynamic> json) {
     return ScanRecord(
@@ -121,6 +222,7 @@ class ScanRecord {
           : null,
       verificationDuration: (json['verification_duration'] as num?)?.toDouble() ?? 0,
       isManualEntry: json['is_manual_entry'] as bool? ?? false,
+      otLinks: _parseOtLinks(json['ot_links']),
     );
   }
   
@@ -167,6 +269,7 @@ class ScanRecord {
           : null,
       verificationDuration: (map['verification_duration'] as num?)?.toDouble() ?? 0,
       isManualEntry: _asBool(map['is_manual_entry']),
+      otLinks: _parseOtLinks(map['ot_links']),
     );
   }
   
@@ -201,6 +304,8 @@ class ScanRecord {
       'processed_date': processedDate?.toIso8601String(),
       'verification_duration': verificationDuration,
       'is_manual_entry': isManualEntry,
+      // Sérialisé en chaîne JSON pour le cache SQLite.
+      'ot_links': jsonEncode(otLinks.map((e) => e.toJson()).toList()),
     };
   }
   

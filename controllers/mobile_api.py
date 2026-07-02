@@ -208,6 +208,43 @@ class InvoiceScannerMobileAPI(http.Controller):
             _logger.error(f"Erreur vérification token: {e}")
             return False
 
+    def _get_scan_ot_links(self, record):
+        """Retourne la liste des OT (Ordres de Transit) liés à un scan.
+
+        Le lien est porté par `potting.cost.line.scan_record_id` (module
+        `potting_management`). Ce module étant OPTIONNEL du point de vue de
+        `invoice_qr_scanner`, on effectue une recherche SOUPLE : si le modèle
+        n'est pas présent dans le registre, on renvoie une liste vide sans
+        jamais casser l'endpoint.
+        """
+        env = request.env
+        if 'potting.cost.line' not in env:
+            return []
+        try:
+            lines = env['potting.cost.line'].sudo().search(
+                [('scan_record_id', '=', record.id)],
+                order='date desc, id desc',
+            )
+        except Exception as e:  # pragma: no cover - robustesse défensive
+            _logger.warning("Lecture des OT liés au scan %s impossible: %s",
+                            record.id, e)
+            return []
+        links = []
+        for line in lines:
+            ot = line.transit_order_id
+            links.append({
+                'cost_line_id': line.id,
+                'ot_id': ot.id if ot else None,
+                'ot_reference': (ot.ot_reference or ot.name or '') if ot else '',
+                'cost_type': line.cost_type_id.name or '',
+                'cost_type_code': line.cost_type_id.code or '',
+                'amount': line.amount or 0.0,
+                'currency': line.currency_id.name if line.currency_id else 'XOF',
+                'state': line.state,
+                'state_label': dict(line._fields['state'].selection).get(line.state, ''),
+            })
+        return links
+
     def _format_scan_record(self, record):
         """Formater un enregistrement de scan pour l'API."""
         return {
@@ -243,6 +280,8 @@ class InvoiceScannerMobileAPI(http.Controller):
             # Durée de vérification et saisie manuelle
             'verification_duration': record.verification_duration or 0,
             'is_manual_entry': record.is_manual_entry or False,
+            # Liens vers les Ordres de Transit (OT) — module potting_management
+            'ot_links': self._get_scan_ot_links(record),
         }
 
     def _format_invoice(self, invoice):

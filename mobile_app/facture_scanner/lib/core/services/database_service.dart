@@ -32,7 +32,7 @@ class DatabaseService {
     
     final db = await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -118,6 +118,7 @@ class DatabaseService {
         processed_date TEXT,
         verification_duration REAL DEFAULT 0,
         is_manual_entry INTEGER DEFAULT 0,
+        ot_links TEXT,
         cached_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
@@ -198,6 +199,14 @@ class DatabaseService {
         } catch (_) {
           // Colonne déjà présente : ignorer.
         }
+      }
+    }
+    if (oldVersion < 6) {
+      // Liens OT (Ordres de Transit) sérialisés en JSON dans le cache.
+      try {
+        await db.execute('ALTER TABLE scan_history ADD COLUMN ot_links TEXT');
+      } catch (_) {
+        // Colonne déjà présente : ignorer.
       }
     }
   }

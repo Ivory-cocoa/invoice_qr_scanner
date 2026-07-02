@@ -78,5 +78,37 @@ void main() {
         expect(map.containsKey(key), isTrue, reason: 'clé manquante: $key');
       }
     });
+
+    test('ot_links sérialisé en chaîne JSON pour SQLite', () {
+      final r = ScanRecord.fromJson({
+        'id': 3,
+        'reference': 'SCAN/2026/00003',
+        'qr_uuid': 'uuid-3',
+        'state': 'processed',
+        'ot_links': [
+          {
+            'cost_line_id': 10,
+            'ot_id': 5,
+            'ot_reference': 'OT/2026/0005',
+            'cost_type': 'Manutention',
+            'amount': 150000.0,
+            'currency': 'XOF',
+            'state': 'confirmed',
+            'state_label': 'Confirmé',
+          }
+        ],
+      });
+      expect(r.hasOtLinks, isTrue);
+      expect(r.otLinks.first.otReference, 'OT/2026/0005');
+      // toMap doit sérialiser en String (contrainte sqflite).
+      final map = r.toMap();
+      expect(map['ot_links'], isA<String>());
+      // Round-trip depuis la ligne SQLite (String) -> liste.
+      final r2 = ScanRecord.fromMap(map);
+      expect(r2.otLinks.length, 1);
+      expect(r2.otLinks.first.costType, 'Manutention');
+      expect(r2.otLinks.first.amount, 150000.0);
+    });
   });
 }
+

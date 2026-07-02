@@ -89,9 +89,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: mediaHeight * 0.85),
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: AppTheme.getSurfaceElevated(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -102,7 +102,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppTheme.getDivider(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -115,6 +115,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _buildSummaryCard(
+                        context: context,
                         kase: kase,
                         invoiceAmount: invoiceAmount,
                         linkedAmount: linkedAmount,
@@ -125,14 +126,15 @@ class _InvoiceStatusSheet extends StatelessWidget {
                         const SizedBox(height: 16),
                         Text(
                           'Liaisons existantes ($linksCount)',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: AppTheme.textMedium,
+                            color: AppTheme.getTextSecondary(context),
                           ),
                         ),
                         const SizedBox(height: 8),
                         ...links.map((l) => _buildLinkCard(
+                              context,
                               l as Map<String, dynamic>,
                               currency: currency,
                             )),
@@ -192,10 +194,10 @@ class _InvoiceStatusSheet extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.textDark,
+                    color: AppTheme.getTextPrimary(context),
                   ),
                 ),
                 if (invoiceNum.isNotEmpty || supplier.isNotEmpty) ...[
@@ -205,9 +207,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
                       if (invoiceNum.isNotEmpty) 'N° $invoiceNum',
                       if (supplier.isNotEmpty) supplier,
                     ].join(' • '),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppTheme.textLight,
+                      color: AppTheme.getTextMuted(context),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -218,7 +220,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Partager',
-            icon: const Icon(Icons.share_outlined, color: AppTheme.textMedium),
+            icon: Icon(Icons.share_outlined, color: AppTheme.getTextSecondary(context)),
             onPressed: () async {
               try {
                 await shareScanStatus(status);
@@ -237,6 +239,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
   }
 
   Widget _buildSummaryCard({
+    required BuildContext context,
     required _Case kase,
     required double invoiceAmount,
     required double linkedAmount,
@@ -262,18 +265,18 @@ class _InvoiceStatusSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: AppTheme.getSurfaceLight(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.getDivider(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildAmountRow('Facture', invoiceAmount, currency,
-              bold: true, color: AppTheme.textDark),
+              bold: true, color: AppTheme.getTextPrimary(context)),
           const SizedBox(height: 6),
           _buildAmountRow('Alloué', linkedAmount, currency,
-              color: AppTheme.textMedium),
+              color: AppTheme.getTextSecondary(context)),
           const SizedBox(height: 6),
           _buildAmountRow(
             'Restant',
@@ -288,7 +291,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
             child: LinearProgressIndicator(
               value: progress,
               minHeight: 6,
-              backgroundColor: Colors.grey.shade200,
+              backgroundColor: AppTheme.getDivider(context),
               valueColor: AlwaysStoppedAnimation<Color>(barColor),
             ),
           ),
@@ -298,7 +301,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
   }
 
   Widget _buildAmountRow(String label, double amount, String currency,
-      {bool bold = false, Color color = AppTheme.textDark}) {
+      {bool bold = false, required Color color}) {
     final style = TextStyle(
       fontSize: 14,
       fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
@@ -313,7 +316,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkCard(Map<String, dynamic> link, {required String currency}) {
+  Widget _buildLinkCard(BuildContext context, Map<String, dynamic> link, {required String currency}) {
     final otRef = (link['transit_order_ref'] as String?) ?? '';
     final costLabel = (link['cost_type_label'] as String?) ?? '';
     final amount = (link['amount'] as num?)?.toDouble() ?? 0.0;
@@ -324,9 +327,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.getSurfaceElevated(context),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: AppTheme.getDivider(context)),
       ),
       child: Row(
         children: [
@@ -349,10 +352,10 @@ class _InvoiceStatusSheet extends StatelessWidget {
               children: [
                 Text(
                   otRef.isNotEmpty ? otRef : 'OT',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textDark,
+                    color: AppTheme.getTextPrimary(context),
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -363,9 +366,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
                       if (costLabel.isNotEmpty) costLabel,
                       if (stateLabel.isNotEmpty) stateLabel,
                     ].join(' • '),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppTheme.textLight,
+                      color: AppTheme.getTextMuted(context),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -376,10 +379,10 @@ class _InvoiceStatusSheet extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             _formatAmount(amount, linkCurrency),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: AppTheme.textDark,
+              color: AppTheme.getTextPrimary(context),
             ),
           ),
         ],
@@ -426,8 +429,8 @@ class _InvoiceStatusSheet extends StatelessWidget {
               ),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                foregroundColor: AppTheme.textMedium,
-                side: BorderSide(color: Colors.grey.shade300),
+                foregroundColor: AppTheme.getTextSecondary(context),
+                side: BorderSide(color: AppTheme.getDivider(context)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),

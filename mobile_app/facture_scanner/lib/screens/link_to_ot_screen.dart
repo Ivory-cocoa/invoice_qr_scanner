@@ -614,7 +614,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
           Container(
             constraints: const BoxConstraints(maxHeight: 280),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: AppTheme.getDivider(context)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: ListView.separated(
@@ -964,7 +964,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
           border: Border(
-            top: BorderSide(color: Colors.grey.shade300),
+            top: BorderSide(color: AppTheme.getDivider(context)),
           ),
           boxShadow: [
             BoxShadow(
@@ -983,7 +983,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
               child: LinearProgressIndicator(
                 value: progressValue,
                 minHeight: 6,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: AppTheme.getDivider(context),
                 valueColor: AlwaysStoppedAnimation<Color>(progressColor),
               ),
             ),

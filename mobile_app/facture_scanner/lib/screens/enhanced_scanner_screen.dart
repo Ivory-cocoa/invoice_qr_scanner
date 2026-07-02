@@ -306,10 +306,10 @@ class _EnhancedScannerScreenState extends State<EnhancedScannerScreen>
               Text(
                 _errorMessage!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimary,
+                  color: AppTheme.getTextPrimary(context),
                 ),
               ),
               const SizedBox(height: 24),

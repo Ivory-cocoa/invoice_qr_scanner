@@ -79,7 +79,7 @@ class HistoryList extends StatelessWidget {
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        decoration: AppTheme.cardDecoration,
+        decoration: AppTheme.getCardDecoration(context),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -265,12 +265,66 @@ class HistoryList extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // Badges OT (Ordres de Transit liés)
+                  if (record.hasOtLinks) ...[
+                    const SizedBox(height: 10),
+                    _buildOtLinksRow(context, record),
+                  ],
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// Ligne de puces représentant les OT auxquels le scan est lié.
+  Widget _buildOtLinksRow(BuildContext context, ScanRecord record) {
+    final primaryColor = AppTheme.getPrimary(context);
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: record.otLinks.map((link) {
+        final ref = link.otReference.isNotEmpty
+            ? link.otReference
+            : 'OT #${link.otId ?? '?'}';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: primaryColor.withOpacity(AppTheme.isDark(context) ? 0.18 : 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: primaryColor.withOpacity(0.3)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.local_shipping_rounded, size: 13, color: primaryColor),
+              const SizedBox(width: 5),
+              Text(
+                ref,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: primaryColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (link.amount > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  link.formattedAmount,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.getTextSecondary(context),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
   
@@ -418,7 +472,7 @@ class HistoryList extends StatelessWidget {
       itemBuilder: (context, index) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          decoration: AppTheme.cardDecoration,
+          decoration: AppTheme.getCardDecoration(context),
           child: Shimmer.fromColors(
             baseColor: AppTheme.isDark(context) ? const Color(0xFF3A3A3A) : Colors.grey.shade300,
             highlightColor: AppTheme.isDark(context) ? const Color(0xFF4A4A4A) : Colors.grey.shade100,
@@ -630,6 +684,22 @@ class _RecordDetailsSheet extends StatelessWidget {
                   _buildDetailRow(context, 'Traité par', record.processedBy!, Icons.verified_rounded),
                 if (record.isProcessed && record.processedDate != null)
                   _buildDetailRow(context, 'Date de traitement', dateFormat.format(record.processedDate!), Icons.event_available_rounded),
+                if (record.hasOtLinks)
+                  ...record.otLinks.map((link) {
+                    final ref = link.otReference.isNotEmpty
+                        ? link.otReference
+                        : 'OT #${link.otId ?? '?'}';
+                    final detail = [
+                      if (link.costType.isNotEmpty) link.costType,
+                      if (link.amount > 0) link.formattedAmount,
+                    ].join(' • ');
+                    return _buildDetailRow(
+                      context,
+                      'Ordre de Transit',
+                      detail.isEmpty ? ref : '$ref  ($detail)',
+                      Icons.local_shipping_rounded,
+                    );
+                  }),
               ],
             ),
           ),

@@ -137,7 +137,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.primarySurface,
+      backgroundColor: AppTheme.isDark(context) ? AppTheme.darkSurface : AppTheme.primarySurface,
       appBar: AppBar(
         title: const Text('Consulter un OT'),
         backgroundColor: AppTheme.primaryColor,
@@ -150,12 +150,15 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          if (_suggestions.isNotEmpty) _buildSuggestions(),
-          Expanded(child: _buildBody()),
-        ],
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            _buildSearchBar(),
+            if (_suggestions.isNotEmpty) _buildSuggestions(),
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
     );
   }
@@ -163,7 +166,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.all(12),
-      color: Colors.white,
+      color: AppTheme.getSurfaceElevated(context),
       child: TextField(
         controller: _searchCtrl,
         onChanged: _onSearchChanged,
@@ -199,7 +202,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   Widget _buildSuggestions() {
     return Container(
       constraints: const BoxConstraints(maxHeight: 240),
-      color: Colors.white,
+      color: AppTheme.getSurfaceElevated(context),
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: _suggestions.length,

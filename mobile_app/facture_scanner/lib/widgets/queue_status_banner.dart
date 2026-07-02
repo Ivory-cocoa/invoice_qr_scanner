@@ -52,7 +52,7 @@ class QueueStatusBanner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.infoLight,
+        color: AppTheme.getInfoLight(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.infoColor.withAlpha(77)),
       ),
@@ -93,7 +93,7 @@ class QueueStatusBanner extends StatelessWidget {
                         currentItem.progressMessage ?? 'Vérification DGI...',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[700],
+                          color: AppTheme.getTextSecondary(context),
                         ),
                       ),
                     ],
@@ -116,7 +116,7 @@ class QueueStatusBanner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.warningLight,
+        color: AppTheme.getWarningLight(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.warningColor.withAlpha(77)),
       ),
@@ -157,7 +157,7 @@ class QueueStatusBanner extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         item.resultMessage ?? 'Timeout DGI',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                        style: TextStyle(fontSize: 12, color: AppTheme.getTextSecondary(context)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -194,7 +194,7 @@ class QueueStatusBanner extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.successLight,
+          color: AppTheme.getSuccessLight(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppTheme.successColor.withAlpha(77)),
         ),
@@ -229,7 +229,7 @@ class QueueStatusBanner extends StatelessWidget {
               onPressed: () => queue.removeItem(item.id),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              color: Colors.grey[400],
+              color: AppTheme.getTextMuted(context),
             ),
           ],
         ),
@@ -243,7 +243,7 @@ class QueueStatusBanner extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.errorLight,
+        color: AppTheme.getErrorLight(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppTheme.errorColor.withAlpha(77)),
       ),
@@ -279,7 +279,7 @@ class QueueStatusBanner extends StatelessWidget {
             onPressed: () => queue.removeItem(item.id),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            color: Colors.grey[400],
+            color: AppTheme.getTextMuted(context),
           ),
         ],
       ),
@@ -457,7 +457,7 @@ class _QueueDetailsSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: AppTheme.getDivider(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -483,7 +483,7 @@ class _QueueDetailsSheet extends StatelessWidget {
                         icon: const Icon(Icons.clear_all, size: 18),
                         label: const Text('Vider'),
                         style: TextButton.styleFrom(
-                          foregroundColor: Colors.grey[600],
+                          foregroundColor: AppTheme.getTextSecondary(context),
                         ),
                       ),
                   ],
@@ -618,7 +618,7 @@ class _QueueItemTile extends StatelessWidget {
                 ),
                 Text(
                   item.progressMessage ?? item.resultMessage ?? item.qrUrl,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 11, color: AppTheme.getTextSecondary(context)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
