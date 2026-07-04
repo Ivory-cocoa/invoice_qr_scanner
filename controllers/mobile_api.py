@@ -21,6 +21,8 @@ Endpoints:
 import logging
 import hashlib
 import secrets
+import threading
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -42,6 +44,39 @@ _logger = logging.getLogger(__name__)
 API_VERSION = "1.0.0"
 TOKEN_EXPIRY_HOURS = 24 * 7  # 7 jours
 MAX_LOGIN_ATTEMPTS = 5
+LOGIN_ATTEMPT_WINDOW = 300  # 5 minutes (fenêtre glissante)
+
+# Limiteur de tentatives de connexion (par worker ; compléter par un
+# rate-limit nginx en production pour une protection inter-workers)
+_LOGIN_ATTEMPTS = {}
+_LOGIN_ATTEMPTS_LOCK = threading.Lock()
+_LOGIN_ATTEMPTS_MAX_KEYS = 10000
+
+
+def _login_rate_limited(key):
+    """True si `key` (IP ou login) a dépassé le quota d'échecs récents."""
+    now = time.time()
+    with _LOGIN_ATTEMPTS_LOCK:
+        attempts = [t for t in _LOGIN_ATTEMPTS.get(key, ())
+                    if now - t < LOGIN_ATTEMPT_WINDOW]
+        if attempts:
+            _LOGIN_ATTEMPTS[key] = attempts
+        else:
+            _LOGIN_ATTEMPTS.pop(key, None)
+        return len(attempts) >= MAX_LOGIN_ATTEMPTS
+
+
+def _register_login_failure(key):
+    """Enregistrer un échec de connexion pour `key`."""
+    now = time.time()
+    with _LOGIN_ATTEMPTS_LOCK:
+        # Purge grossière si le dictionnaire grossit trop (DoS mémoire)
+        if len(_LOGIN_ATTEMPTS) > _LOGIN_ATTEMPTS_MAX_KEYS:
+            cutoff = now - LOGIN_ATTEMPT_WINDOW
+            for k in list(_LOGIN_ATTEMPTS):
+                if all(t < cutoff for t in _LOGIN_ATTEMPTS[k]):
+                    _LOGIN_ATTEMPTS.pop(k, None)
+        _LOGIN_ATTEMPTS.setdefault(key, []).append(now)
 
 
 # ==================== HELPERS ====================
@@ -86,6 +121,20 @@ def api_error(error_code, message, status=400, details=None, data=None):
         status=status,
         headers={'Content-Type': 'application/json; charset=utf-8'}
     )
+
+
+def safe_error_message(e, generic=None):
+    """Message d'erreur sûr pour les réponses API.
+
+    Les UserError/ValidationError portent des messages métier destinés à
+    l'utilisateur : on les renvoie tels quels. Toute autre exception
+    (technique) est remplacée par un message générique pour ne pas
+    divulguer de détails internes (le détail complet reste dans les logs).
+    """
+    from odoo.exceptions import UserError as _UserError, ValidationError as _ValidationError
+    if isinstance(e, (_UserError, _ValidationError)):
+        return str(e)
+    return generic or _("Une erreur interne s'est produite. Contactez l'administrateur.")
 
 
 def get_client_ip():
@@ -329,6 +378,20 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not login or not password:
             return api_error('VALIDATION_ERROR', 'Login et mot de passe requis', status=400)
         
+        # Rate limiting : bloquer après trop d'échecs récents (par IP et par login)
+        client_ip = get_client_ip()
+        rate_keys = [f'ip:{client_ip}', f'login:{login.lower()}']
+        if any(_login_rate_limited(k) for k in rate_keys):
+            _logger.warning(
+                "Rate limit login scanner atteint (ip=%s, login=%s)",
+                client_ip, login,
+            )
+            return api_error(
+                'TOO_MANY_ATTEMPTS',
+                'Trop de tentatives de connexion. Réessayez dans quelques minutes.',
+                status=429,
+            )
+        
         # Authentification Odoo
         try:
             uid = request.session.authenticate(
@@ -341,6 +404,8 @@ class InvoiceScannerMobileAPI(http.Controller):
             uid = False
         
         if not uid:
+            for k in rate_keys:
+                _register_login_failure(k)
             return api_error('AUTH_FAILED', 'Identifiants incorrects', status=401)
         
         user = request.env['res.users'].sudo().browse(uid)
@@ -614,7 +679,7 @@ class InvoiceScannerMobileAPI(http.Controller):
             })
             return api_error(
                 'INVOICE_ERROR',
-                f'Erreur lors de la création de la facture: {str(e)}',
+                f'Erreur lors de la création de la facture: {safe_error_message(e)}',
                 status=500
             )
         finally:
@@ -886,19 +951,25 @@ class InvoiceScannerMobileAPI(http.Controller):
         ScanRecord = request.env['invoice.scan.record'].sudo()
         company_id = request.env.company.id
         
-        # Factures en attente
-        pending = ScanRecord.search_count([
+        # Agrégations SQL (count + somme) en 3 requêtes au lieu de 5 + boucles Python
+        pending_domain = [
             ('company_id', '=', company_id),
             ('state', '=', 'done'),
             ('processed_by', '=', False),
-        ])
-        
-        # Factures traitées par moi
-        my_processed = ScanRecord.search_count([
+        ]
+        my_processed_domain = [
             ('company_id', '=', company_id),
             ('state', '=', 'processed'),
             ('processed_by', '=', user.id),
-        ])
+        ]
+        
+        pending_res = ScanRecord._read_group(
+            pending_domain, groupby=[], aggregates=['__count', 'amount_ttc:sum'])
+        my_processed_res = ScanRecord._read_group(
+            my_processed_domain, groupby=[], aggregates=['__count', 'amount_ttc:sum'])
+        
+        pending, pending_amount = pending_res[0] if pending_res else (0, 0.0)
+        my_processed, processed_amount = my_processed_res[0] if my_processed_res else (0, 0.0)
         
         # Total traitées (tous traiteurs)
         all_processed = ScanRecord.search_count([
@@ -906,26 +977,11 @@ class InvoiceScannerMobileAPI(http.Controller):
             ('state', '=', 'processed'),
         ])
         
-        # Montants
-        pending_records = ScanRecord.search([
-            ('company_id', '=', company_id),
-            ('state', '=', 'done'),
-            ('processed_by', '=', False),
-        ])
-        pending_amount = sum(r.amount_ttc for r in pending_records)
-        
-        my_processed_records = ScanRecord.search([
-            ('company_id', '=', company_id),
-            ('state', '=', 'processed'),
-            ('processed_by', '=', user.id),
-        ])
-        processed_amount = sum(r.amount_ttc for r in my_processed_records)
-        
         return api_response({
             'pending_count': pending,
-            'pending_amount': pending_amount,
+            'pending_amount': pending_amount or 0.0,
             'my_processed_count': my_processed,
-            'my_processed_amount': processed_amount,
+            'my_processed_amount': processed_amount or 0.0,
             'all_processed_count': all_processed,
             'currency': 'XOF',
         })
@@ -1082,11 +1138,12 @@ class InvoiceScannerMobileAPI(http.Controller):
                     'success': True,
                 })
             except Exception as e:
+                _logger.error(f"Erreur marquage traité record {record.id}: {e}")
                 results.append({
                     'record_id': record.id,
                     'reference': record.reference,
                     'success': False,
-                    'error': str(e),
+                    'error': safe_error_message(e),
                 })
         
         successful = sum(1 for r in results if r.get('success'))
@@ -1547,7 +1604,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                         'qr_url': qr_url,
                         'scanned_at': scanned_at,
                         'success': False,
-                        'error': f'Erreur lors de la création de la facture: {str(e)}',
+                        'error': f'Erreur lors de la création de la facture: {safe_error_message(e)}',
                         'error_code': 'INVOICE_ERROR',
                     })
         finally:
@@ -1743,12 +1800,13 @@ class InvoiceScannerMobileAPI(http.Controller):
             })
         except Exception as e:
             # Mettre à jour le message d'erreur
+            _logger.error(f"Échec retry record {record.id}: {e}")
             record.write({
                 'error_message': f'Nouvelle tentative échouée: {str(e)}'
             })
             return api_error(
                 'RETRY_FAILED',
-                f'Échec de la nouvelle tentative: {str(e)}',
+                f'Échec de la nouvelle tentative: {safe_error_message(e)}',
                 status=400
             )
 
@@ -1814,6 +1872,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                         'invoice_name': invoice.name,
                     })
                 except Exception as e:
+                    _logger.error(f"Échec bulk-retry record {record.id}: {e}")
                     record.write({
                         'error_message': f'Tentative groupée échouée: {str(e)}'
                     })
@@ -1821,7 +1880,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                         'record_id': record.id,
                         'reference': record.reference,
                         'success': False,
-                        'error': str(e),
+                        'error': safe_error_message(e),
                     })
         finally:
             release_scan_slot()

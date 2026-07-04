@@ -160,6 +160,25 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
     });
   }
 
+  /// Libellé (texte) du type de coût correspondant à un code `value`.
+  String _labelForCostType(String? value) {
+    if (value == null) return '';
+    final match = _costTypes.firstWhere(
+      (ct) => ct['value'] == value,
+      orElse: () => const {},
+    );
+    return match['label']?.toString() ?? '';
+  }
+
+  /// Vrai si la description a été renseignée automatiquement (vide ou égale
+  /// au libellé d'un type de coût), donc écrasable sans perdre de saisie.
+  bool _isAutoFilledDesc(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return true;
+    return _costTypes
+        .any((ct) => (ct['label']?.toString() ?? '').trim() == t);
+  }
+
   void _toggleOt(Map<String, dynamic> ot, bool selected) {
     final int otId = ot['id'];
     final bool wasEmpty = _selected.isEmpty;
@@ -176,6 +195,8 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
         _selected[otId] = _OtLinkConfig(
           costType: defaultCostType,
           initialAmount: initialAmount,
+          // Pré-remplit la description avec le libellé du type de coût.
+          initialDesc: _labelForCostType(defaultCostType),
         );
         _selectedOtData[otId] = ot;
       } else {
@@ -816,7 +837,14 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                 }).toList(),
                 onChanged: _costTypes.isEmpty
                     ? null
-                    : (v) => setState(() => cfg.costType = v),
+                    : (v) => setState(() {
+                          // Préremplit la description avec le libellé du type
+                          // de coût, sans écraser une saisie manuelle.
+                          if (_isAutoFilledDesc(cfg.descCtrl.text)) {
+                            cfg.descCtrl.text = _labelForCostType(v);
+                          }
+                          cfg.costType = v;
+                        }),
               ),
             ] else ...[
               if (cfg.loadingExisting)

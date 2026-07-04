@@ -234,6 +234,34 @@ class InvoiceScanRecord(models.Model):
          'Ce QR-code a déjà été scanné pour cette société!')
     ]
 
+    # Borne de cohérence : au-delà, c'est presque certainement une erreur de
+    # parsing du QR-code (100 milliards de FCFA).
+    AMOUNT_TTC_MAX = 100_000_000_000
+
+    @api.constrains('amount_ttc')
+    def _check_amount_ttc(self):
+        for record in self:
+            if record.amount_ttc and record.amount_ttc < 0:
+                raise ValidationError(_(
+                    "Le montant TTC ne peut pas être négatif (%s)."
+                ) % record.amount_ttc)
+            if record.amount_ttc and record.amount_ttc > self.AMOUNT_TTC_MAX:
+                raise ValidationError(_(
+                    "Le montant TTC (%s) dépasse la limite de cohérence. "
+                    "Vérifiez les données extraites du QR-code."
+                ) % record.amount_ttc)
+
+    @api.constrains('invoice_date')
+    def _check_invoice_date(self):
+        from datetime import timedelta
+        max_date = fields.Date.today() + timedelta(days=7)
+        for record in self:
+            if record.invoice_date and record.invoice_date > max_date:
+                raise ValidationError(_(
+                    "La date de facturation (%s) est trop loin dans le futur. "
+                    "Vérifiez les données extraites du QR-code."
+                ) % record.invoice_date)
+
     @api.depends('state')
     def _compute_is_processed(self):
         for record in self:
