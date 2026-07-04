@@ -1,5 +1,6 @@
 /// Splash Screen - Design Professionnel ICP
 /// Écran de chargement animé avec logo
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -171,7 +172,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
+                    color: Colors.black.withValues(alpha: 0.25),
                     blurRadius: 30,
                     offset: const Offset(0, 15),
                   ),
@@ -213,7 +214,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   'Scanner QR DGI',
                   style: TextStyle(
                     fontSize: 17,
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontWeight: FontWeight.w400,
                     letterSpacing: 0.5,
                   ),
@@ -223,7 +224,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                   'Ivory Cocoa Products',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.65),
+                    color: Colors.white.withValues(alpha: 0.65),
                     fontWeight: FontWeight.w400,
                   ),
                 ),
@@ -248,7 +249,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 child: LinearProgressIndicator(
                   value: _progressValue.value,
                   minHeight: 5,
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                   valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
@@ -256,7 +257,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               Text(
                 'Chargement...',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
                 ),
@@ -274,7 +275,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         Text(
           'Version 2.0.0',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 12,
             fontWeight: FontWeight.w400,
           ),

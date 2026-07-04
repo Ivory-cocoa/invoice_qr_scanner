@@ -1,6 +1,7 @@
 /// Invoice Picker Screen — Gestionnaire OT
 /// Liste paginée des factures déjà scannées, sélectionnables pour
 /// être liées à un ou plusieurs OTs.
+library;
 
 import 'dart:async';
 
@@ -256,7 +257,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
       controller: _scrollCtrl,
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
       itemCount: _items.length + (_hasNext ? 1 : 0),
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, i) {
         if (i >= _items.length) {
           return const Padding(
@@ -288,7 +289,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: primary.withOpacity(0.12),
+                      color: primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(Icons.receipt_long_rounded,

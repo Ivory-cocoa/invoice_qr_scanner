@@ -1,5 +1,6 @@
 /// Enhanced Stats Dashboard Widget - Design Professionnel ICP
 /// Dashboard avec graphiques et statistiques avancées
+library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -124,7 +125,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -149,7 +150,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                 Text(
                   '$total scans enregistrés',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
                   ),
                 ),
@@ -176,7 +177,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -284,9 +285,9 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.2)),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
           ),
           child: Column(
             children: [
@@ -303,7 +304,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
               Text(
                 label,
                 style: TextStyle(
-                  color: color.withOpacity(0.8),
+                  color: color.withValues(alpha: 0.8),
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
@@ -333,16 +334,16 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.08),
+            color: color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withOpacity(0.15)),
+            border: Border.all(color: color.withValues(alpha: 0.15)),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 24),
@@ -501,7 +502,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.accentColor.withOpacity(0.3),
+                  color: AppTheme.accentColor.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),

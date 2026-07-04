@@ -1,5 +1,6 @@
 /// API Service for Facture Scanner
 /// Handles all HTTP communications with Odoo backend
+library;
 
 import 'dart:async';
 import 'dart:convert';
@@ -492,10 +493,18 @@ class ApiService {
       
       // Vérifier que la réponse est bien du JSON avant de parser
       final contentType = response.headers['content-type'] ?? '';
-      final body_text = response.body.trimLeft();
+      final bodyText = response.body.trimLeft();
       
-      if (!contentType.contains('application/json') && body_text.startsWith('<')) {
+      if (!contentType.contains('application/json') && bodyText.startsWith('<')) {
         // Le serveur a renvoyé du HTML (page d'erreur, redirection, etc.)
+        if (response.statusCode == 401 && authenticated) {
+          onUnauthorized?.call();
+          return ApiResponse<T>(
+            success: false,
+            errorCode: 'AUTH_REQUIRED',
+            errorMessage: 'Session expirée. Veuillez vous reconnecter.',
+          );
+        }
         String errorMsg;
         if (response.statusCode == 301 || response.statusCode == 302) {
           errorMsg = 'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
@@ -586,11 +595,30 @@ class ApiService {
       final contentType = response.headers['content-type'] ?? '';
       final bodyText = response.body.trimLeft();
       if (!contentType.contains('application/json') && bodyText.startsWith('<')) {
+        // Le serveur a renvoyé du HTML (page d'erreur, redirection, session
+        // expirée, etc.) : fournir un message actionnable.
+        if (response.statusCode == 401 && authenticated) {
+          onUnauthorized?.call();
+          return ApiResponse<T>(
+            success: false,
+            errorCode: 'AUTH_REQUIRED',
+            errorMessage: 'Session expirée. Veuillez vous reconnecter.',
+          );
+        }
+        String errorMsg;
+        if (response.statusCode == 301 || response.statusCode == 302) {
+          errorMsg = 'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
+        } else if (response.statusCode >= 500) {
+          errorMsg = 'Erreur interne du serveur (${response.statusCode}). Réessayez plus tard.';
+        } else if (response.statusCode == 404) {
+          errorMsg = 'Endpoint non trouvé. Vérifiez la version de l\'API sur le serveur.';
+        } else {
+          errorMsg = 'Réponse inattendue du serveur (${response.statusCode}). Vérifiez l\'URL du serveur.';
+        }
         return ApiResponse<T>(
           success: false,
           errorCode: 'SERVER_ERROR',
-          errorMessage:
-              'Réponse inattendue du serveur (${response.statusCode}).',
+          errorMessage: errorMsg,
         );
       }
       final jsonResponse = jsonDecode(response.body);

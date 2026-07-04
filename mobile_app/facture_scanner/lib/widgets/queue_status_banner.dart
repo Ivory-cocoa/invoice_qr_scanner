@@ -1,5 +1,6 @@
 /// Widget bannière pour la file d'attente de scans en arrière-plan
 /// Affiche le statut des traitements et permet l'accès à la saisie manuelle
+library;
 
 import 'dart:async';
 
@@ -535,7 +536,7 @@ class _QueueDetailsSheet extends StatelessWidget {
                         shrinkWrap: true,
                         padding: const EdgeInsets.all(16),
                         itemCount: items.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final item = items[items.length - 1 - index]; // Recent first
                           return _QueueItemTile(item: item, queue: queue);

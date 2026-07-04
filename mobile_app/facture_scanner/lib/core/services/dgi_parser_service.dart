@@ -1,6 +1,7 @@
 /// DGI Data Parser Service
 /// Port de la logique Python _extract_dgi_data_from_text() côté client
 /// Extrait les données de facture depuis le texte rendu de la page DGI
+library;
 
 class DgiParserService {
   // Singleton

@@ -3,6 +3,7 @@
 /// L'utilisateur peut continuer à scanner pendant que l'extraction DGI
 /// s'effectue en tâche de fond. Si l'extraction prend trop de temps,
 /// l'utilisateur peut ouvrir le formulaire de saisie manuelle.
+library;
 
 import 'dart:async';
 import 'dart:collection';
@@ -44,6 +45,10 @@ class QueueItem {
   double verificationDuration;
   String? errorMessage;
 
+  /// Id de la ligne `pending_scans` servant de filet de sécurité : si l'app
+  /// est tuée pendant le traitement, le scan sera synchronisé plus tard.
+  int? pendingDbId;
+
   QueueItem({
     required this.id,
     required this.qrUrl,
@@ -56,6 +61,7 @@ class QueueItem {
     this.scanRecord,
     this.verificationDuration = 0,
     this.errorMessage,
+    this.pendingDbId,
   });
 
   bool get isActive =>
@@ -92,6 +98,22 @@ class BackgroundScanQueue extends ChangeNotifier {
 
   /// Callback pour rafraîchir l'historique côté ScanProvider
   VoidCallback? onHistoryChanged;
+
+  // Garde contre les notifications après démontage : les traitements en
+  // arrière-plan peuvent se terminer après dispose().
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   // --- Getters ---
 
@@ -141,6 +163,16 @@ class BackgroundScanQueue extends ChangeNotifier {
       return null; // Déjà en traitement
     }
 
+    // Détection de doublons unifiée avec ScanProvider : vérifier aussi les
+    // scans en attente de sync et le cache d'historique local.
+    try {
+      if (await _db.isPendingScan(qrUuid)) return null;
+      if (await _db.findInHistoryCache(qrUuid) != null) return null;
+    } catch (_) {
+      // Une erreur de lecture locale ne doit pas bloquer le scan :
+      // le serveur fera foi (détection DUPLICATE côté serveur).
+    }
+
     final id = '${qrUuid}_${DateTime.now().millisecondsSinceEpoch}';
     final item = QueueItem(
       id: id,
@@ -149,6 +181,15 @@ class BackgroundScanQueue extends ChangeNotifier {
       addedAt: DateTime.now(),
       progressMessage: 'En file d\'attente...',
     );
+
+    // Filet de sécurité : persister immédiatement en base locale. Si l'app
+    // est tuée pendant l'extraction, le scan sera synchronisé plus tard
+    // (le serveur dédoublonne par qr_uuid en cas de course).
+    try {
+      item.pendingDbId = await _db.addPendingScan(qrUrl, qrUuid);
+    } catch (_) {
+      // La persistance est un bonus de robustesse ; ne pas bloquer le scan.
+    }
 
     _queue[id] = item;
     notifyListeners();
@@ -183,7 +224,7 @@ class BackgroundScanQueue extends ChangeNotifier {
 
     try {
       // Extraction DGI avec timeout
-      DgiExtractionResult? result;
+      DgiExtractionResult result;
       bool timedOut = false;
 
       try {
@@ -214,17 +255,25 @@ class BackgroundScanQueue extends ChangeNotifier {
       stopwatch.stop();
       item.verificationDuration = stopwatch.elapsedMilliseconds / 1000.0;
 
-      if (result != null && result.success && result.data != null && !timedOut) {
+      if (result.success && result.data != null && !timedOut) {
         // Extraction réussie → soumettre au serveur
         item.extractedData = result.data;
         item.state = QueueItemState.submitting;
         item.progressMessage = 'Création de la facture...';
         notifyListeners();
 
+        // Enrichir le filet de sécurité local avec les données extraites :
+        // en cas de crash, la sync utilisera le chemin « parsed » (rapide).
+        if (item.pendingDbId != null) {
+          try {
+            await _db.updateScanWithParsedData(item.pendingDbId!, result.data!);
+          } catch (_) {}
+        }
+
         await _submitToServer(item, result.data!, false);
       } else {
         // Timeout ou échec → requiert saisie manuelle
-        item.extractedData = result?.data; // Données partielles éventuelles
+        item.extractedData = result.data; // Données partielles éventuelles
         item.state = QueueItemState.needsManualEntry;
         item.progressMessage = null;
         item.resultMessage = timedOut
@@ -273,6 +322,7 @@ class BackgroundScanQueue extends ChangeNotifier {
           item.scanRecord = ScanRecord.fromJson(response.data!['record']);
         }
         _sessionSuccessCount++;
+        await _removeSafetyNet(item);
         onHistoryChanged?.call();
       } else if (response.errorCode == 'DUPLICATE') {
         item.state = QueueItemState.completed;
@@ -282,6 +332,7 @@ class BackgroundScanQueue extends ChangeNotifier {
           item.scanRecord = ScanRecord.fromJson(response.data!['existing_record']);
         }
         _sessionDuplicateCount++;
+        await _removeSafetyNet(item);
       } else {
         item.state = QueueItemState.failed;
         item.progressMessage = null;
@@ -298,6 +349,18 @@ class BackgroundScanQueue extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  /// Supprime la ligne `pending_scans` de filet de sécurité une fois le scan
+  /// traité avec succès par le serveur (facture créée ou doublon confirmé).
+  /// En cas d'échec, la ligne est conservée : elle sera resynchronisée.
+  Future<void> _removeSafetyNet(QueueItem item) async {
+    final dbId = item.pendingDbId;
+    if (dbId == null) return;
+    item.pendingDbId = null;
+    try {
+      await _db.deletePendingScan(dbId);
+    } catch (_) {}
   }
 
   /// Soumettre la saisie manuelle pour un item en attente

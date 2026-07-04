@@ -1,5 +1,6 @@
 /// Login Screen - Design Professionnel ICP
 /// Écran de connexion moderne avec gradient et animations
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -150,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -183,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           'Scanner QR DGI - Ivory Cocoa Products',
           style: TextStyle(
             fontSize: 15,
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -198,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 30,
             offset: const Offset(0, 15),
           ),
@@ -245,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       decoration: BoxDecoration(
                         color: AppTheme.getErrorLight(context),
                         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                        border: Border.all(color: AppTheme.getError(context).withOpacity(0.3)),
+                        border: Border.all(color: AppTheme.getError(context).withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
@@ -396,7 +397,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           fontWeight: FontWeight.w500,
         ),
         hintStyle: TextStyle(
-          color: AppTheme.getTextMuted(context).withOpacity(0.6),
+          color: AppTheme.getTextMuted(context).withValues(alpha: 0.6),
           fontSize: 14,
         ),
         floatingLabelStyle: TextStyle(
@@ -410,7 +411,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          borderSide: BorderSide(color: AppTheme.dividerColor.withOpacity(0.5), width: 1),
+          borderSide: BorderSide(color: AppTheme.dividerColor.withValues(alpha: 0.5), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -446,9 +447,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       margin: const EdgeInsets.only(top: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: warning.withOpacity(0.12),
+        color: warning.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        border: Border.all(color: warning.withOpacity(0.4)),
+        border: Border.all(color: warning.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
@@ -482,13 +483,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             Icon(
               Icons.settings_outlined,
               size: 18,
-              color: AppTheme.getTextSecondary(context).withOpacity(0.8),
+              color: AppTheme.getTextSecondary(context).withValues(alpha: 0.8),
             ),
             const SizedBox(width: 8),
             Text(
               'Configuration serveur',
               style: TextStyle(
-                color: AppTheme.getTextSecondary(context).withOpacity(0.8),
+                color: AppTheme.getTextSecondary(context).withValues(alpha: 0.8),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -497,7 +498,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             Icon(
               _showServerConfig ? Icons.expand_less : Icons.expand_more,
               size: 20,
-              color: AppTheme.getTextSecondary(context).withOpacity(0.8),
+              color: AppTheme.getTextSecondary(context).withValues(alpha: 0.8),
             ),
           ],
         ),
@@ -515,9 +516,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.getPrimary(context),
               foregroundColor: Colors.white,
-              disabledBackgroundColor: AppTheme.getPrimary(context).withOpacity(0.6),
+              disabledBackgroundColor: AppTheme.getPrimary(context).withValues(alpha: 0.6),
               elevation: auth.isLoading ? 0 : 4,
-              shadowColor: AppTheme.getPrimary(context).withOpacity(0.4),
+              shadowColor: AppTheme.getPrimary(context).withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
               ),
@@ -554,7 +555,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         Text(
           'Scanner QR Factures DGI',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.white.withValues(alpha: 0.7),
             fontSize: 13,
             fontWeight: FontWeight.w400,
           ),
@@ -563,7 +564,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         Text(
           'Version 2.0.0',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 12,
           ),
         ),

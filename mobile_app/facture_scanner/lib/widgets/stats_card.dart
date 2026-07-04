@@ -1,5 +1,6 @@
 /// Stats Card Widget - Design Professionnel ICP
 /// Affiche les statistiques de scan avec un design moderne
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -36,7 +37,7 @@ class StatsCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
@@ -161,7 +162,7 @@ class StatsCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppTheme.getSuccess(context).withOpacity(isDark ? 0.2 : 0.1),
+                        color: AppTheme.getSuccess(context).withValues(alpha: isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -209,7 +210,7 @@ class StatsCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF5C6BC0).withOpacity(isDark ? 0.2 : 0.1),
+                          color: const Color(0xFF5C6BC0).withValues(alpha: isDark ? 0.2 : 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -247,7 +248,7 @@ class StatsCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppTheme.getWarning(context).withOpacity(isDark ? 0.2 : 0.1),
+                            color: AppTheme.getWarning(context).withValues(alpha: isDark ? 0.2 : 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -282,10 +283,10 @@ class StatsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        color: color.withValues(alpha: isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: color.withOpacity(isDark ? 0.25 : 0.15),
+          color: color.withValues(alpha: isDark ? 0.25 : 0.15),
           width: 1,
         ),
       ),

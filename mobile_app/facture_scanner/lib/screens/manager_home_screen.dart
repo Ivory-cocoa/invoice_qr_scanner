@@ -1,6 +1,7 @@
 /// Manager Home Screen - Double profil Vérificateur + Traiteur
 /// Permet de basculer entre le mode Vérificateur et Traiteur
 /// Le dernier mode sélectionné est mémorisé via SharedPreferences
+library;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,7 +82,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -115,34 +116,40 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
   }) {
     final isActive = _mode == mode;
 
-    return GestureDetector(
-      onTap: () => _switchMode(mode),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? color : Colors.transparent,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isActive ? Colors.white : AppTheme.getTextMuted(context),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+    return Semantics(
+      label: 'Mode $label',
+      selected: isActive,
+      button: true,
+      child: GestureDetector(
+        onTap: () => _switchMode(mode),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
                 color: isActive ? Colors.white : AppTheme.getTextMuted(context),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color:
+                      isActive ? Colors.white : AppTheme.getTextMuted(context),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,5 +1,6 @@
 /// My OT Links Screen — Gestionnaire OT
 /// Liste des scans liés par l'utilisateur courant à des OTs.
+library;
 
 import 'package:flutter/material.dart';
 
@@ -76,14 +77,14 @@ class _MyOtLinksScreenState extends State<MyOtLinksScreen> {
                     : ListView.separated(
                         padding: const EdgeInsets.all(12),
                         itemCount: _links.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
                           final l = _links[i];
                           return Card(
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor:
-                                    AppTheme.getPrimary(context).withOpacity(0.15),
+                                    AppTheme.getPrimary(context).withValues(alpha: 0.15),
                                 child: Icon(
                                   Icons.receipt_long_rounded,
                                   color: AppTheme.getPrimary(context),

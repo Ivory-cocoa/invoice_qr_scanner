@@ -1,5 +1,6 @@
 /// History List Widget - Design Professionnel ICP
 /// Affiche l'historique des factures scannées
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -206,10 +207,10 @@ class HistoryList extends StatelessWidget {
                             ),
                             margin: const EdgeInsets.only(right: 6),
                             decoration: BoxDecoration(
-                              color: AppTheme.getPrimary(context).withOpacity(0.1),
+                              color: AppTheme.getPrimary(context).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                color: AppTheme.getPrimary(context).withOpacity(0.3),
+                                color: AppTheme.getPrimary(context).withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
@@ -239,7 +240,7 @@ class HistoryList extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.getPrimary(context).withOpacity(0.1),
+                              color: AppTheme.getPrimary(context).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -293,9 +294,9 @@ class HistoryList extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: primaryColor.withOpacity(AppTheme.isDark(context) ? 0.18 : 0.08),
+            color: primaryColor.withValues(alpha: AppTheme.isDark(context) ? 0.18 : 0.08),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: primaryColor.withOpacity(0.3)),
+            border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -362,13 +363,13 @@ class HistoryList extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            color.withOpacity(0.2),
-            color.withOpacity(0.1),
+            color.withValues(alpha: 0.2),
+            color.withValues(alpha: 0.1),
           ],
         ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -383,23 +384,23 @@ class HistoryList extends StatelessWidget {
     switch (state) {
       case 'done':
         color = AppTheme.getSuccess(context);
-        bgColor = AppTheme.getSuccess(context).withOpacity(0.1);
+        bgColor = AppTheme.getSuccess(context).withValues(alpha: 0.1);
         break;
       case 'processed':
         color = AppTheme.getPrimary(context);
-        bgColor = AppTheme.getPrimary(context).withOpacity(0.1);
+        bgColor = AppTheme.getPrimary(context).withValues(alpha: 0.1);
         break;
       case 'error':
         color = AppTheme.getError(context);
-        bgColor = AppTheme.getError(context).withOpacity(0.1);
+        bgColor = AppTheme.getError(context).withValues(alpha: 0.1);
         break;
       case 'duplicate':
         color = AppTheme.getWarning(context);
-        bgColor = AppTheme.getWarning(context).withOpacity(0.1);
+        bgColor = AppTheme.getWarning(context).withValues(alpha: 0.1);
         break;
       default:
         color = AppTheme.getTextMuted(context);
-        bgColor = AppTheme.getTextMuted(context).withOpacity(0.1);
+        bgColor = AppTheme.getTextMuted(context).withValues(alpha: 0.1);
     }
     
     return Container(
@@ -407,7 +408,7 @@ class HistoryList extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,
@@ -558,7 +559,7 @@ class HistoryList extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppTheme.getPrimary(context).withOpacity(0.1),
+                color: AppTheme.getPrimary(context).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -778,7 +779,7 @@ class _RecordDetailsSheet extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [color.withOpacity(0.2), color.withOpacity(0.1)],
+          colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0.1)],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -805,7 +806,7 @@ class _RecordDetailsSheet extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: (highlight ? AppTheme.getSuccess(context) : AppTheme.getPrimary(context)).withOpacity(0.1),
+              color: (highlight ? AppTheme.getSuccess(context) : AppTheme.getPrimary(context)).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -932,7 +933,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
       style: ElevatedButton.styleFrom(
         backgroundColor: isProcessed 
             ? Colors.orange.shade50 
-            : AppTheme.getPrimary(context).withOpacity(0.1),
+            : AppTheme.getPrimary(context).withValues(alpha: 0.1),
         foregroundColor: isProcessed 
             ? Colors.orange.shade700 
             : AppTheme.getPrimary(context),
@@ -943,7 +944,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
           side: BorderSide(
             color: isProcessed 
                 ? Colors.orange.shade300 
-                : AppTheme.getPrimary(context).withOpacity(0.3),
+                : AppTheme.getPrimary(context).withValues(alpha: 0.3),
           ),
         ),
       ),

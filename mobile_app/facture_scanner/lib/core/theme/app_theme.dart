@@ -1,5 +1,6 @@
 /// App Theme Configuration - Design Professionnel ICP
 /// Thème moderne avec excellent contraste et lisibilité
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -180,7 +181,7 @@ class AppTheme {
     borderRadius: BorderRadius.circular(radiusMedium),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withOpacity(0.08),
+        color: Colors.black.withValues(alpha: 0.08),
         blurRadius: 10,
         offset: const Offset(0, 4),
       ),
@@ -192,7 +193,7 @@ class AppTheme {
     borderRadius: BorderRadius.circular(radiusMedium),
     boxShadow: [
       BoxShadow(
-        color: primaryColor.withOpacity(0.3),
+        color: primaryColor.withValues(alpha: 0.3),
         blurRadius: 12,
         offset: const Offset(0, 6),
       ),
@@ -327,7 +328,7 @@ class AppTheme {
         fontWeight: FontWeight.w600,
       ),
       hintStyle: TextStyle(
-        color: textLight.withOpacity(0.7),
+        color: textLight.withValues(alpha: 0.7),
         fontSize: 15,
       ),
       
@@ -342,7 +343,7 @@ class AppTheme {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusMedium),
-        borderSide: BorderSide(color: dividerColor.withOpacity(0.8), width: 1.5),
+        borderSide: BorderSide(color: dividerColor.withValues(alpha: 0.8), width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusMedium),
@@ -639,7 +640,7 @@ class AppTheme {
         fontWeight: FontWeight.w600,
       ),
       hintStyle: TextStyle(
-        color: darkTextMuted.withOpacity(0.7),
+        color: darkTextMuted.withValues(alpha: 0.7),
         fontSize: 15,
       ),
       
@@ -654,7 +655,7 @@ class AppTheme {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusMedium),
-        borderSide: BorderSide(color: darkDivider.withOpacity(0.8), width: 1.5),
+        borderSide: BorderSide(color: darkDivider.withValues(alpha: 0.8), width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(radiusMedium),
@@ -967,8 +968,8 @@ class AppTheme {
       boxShadow: [
         BoxShadow(
           color: isDark(context) 
-              ? Colors.black.withOpacity(0.3) 
-              : Colors.black.withOpacity(0.08),
+              ? Colors.black.withValues(alpha: 0.3) 
+              : Colors.black.withValues(alpha: 0.08),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
@@ -988,7 +989,7 @@ class AppTheme {
         borderRadius: BorderRadius.circular(radiusMedium),
         boxShadow: [
           BoxShadow(
-            color: primaryColor.withOpacity(0.4),
+            color: primaryColor.withValues(alpha: 0.4),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),

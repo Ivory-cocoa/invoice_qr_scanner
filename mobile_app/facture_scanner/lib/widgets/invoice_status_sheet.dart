@@ -182,7 +182,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -398,7 +398,6 @@ class _InvoiceStatusSheet extends StatelessWidget {
     final String primaryLabel;
     final IconData primaryIcon;
     final double? amountToAllocate;
-    final bool primaryEnabled = true;
 
     switch (kase) {
       case _Case.unlinked:
@@ -442,14 +441,12 @@ class _InvoiceStatusSheet extends StatelessWidget {
           Expanded(
             flex: 2,
             child: ElevatedButton.icon(
-              onPressed: primaryEnabled
-                  ? () => Navigator.of(context).pop(
-                        InvoiceStatusResult(
-                          InvoiceStatusAction.link,
-                          amountToAllocate: amountToAllocate,
-                        ),
-                      )
-                  : null,
+              onPressed: () => Navigator.of(context).pop(
+                InvoiceStatusResult(
+                  InvoiceStatusAction.link,
+                  amountToAllocate: amountToAllocate,
+                ),
+              ),
               icon: Icon(primaryIcon, size: 18),
               label: Text(
                 primaryLabel,

@@ -1,5 +1,6 @@
 /// Connectivity Provider
 /// Monitors network connectivity status
+library;
 
 import 'dart:async';
 import 'package:flutter/material.dart';

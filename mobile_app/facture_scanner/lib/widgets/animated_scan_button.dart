@@ -1,5 +1,6 @@
 /// Animated Scan Button Widget - Design Professionnel ICP
 /// Bouton de scan avec animation de pulsation et feedback haptique
+library;
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -151,13 +152,13 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
             boxShadow: widget.isEnabled
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.4),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.4),
                       blurRadius: 20,
                       spreadRadius: 2,
                       offset: const Offset(0, 8),
                     ),
                     BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.2),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.2),
                       blurRadius: 40,
                       spreadRadius: 4,
                       offset: const Offset(0, 16),
@@ -165,7 +166,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
                   ]
                 : [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
+                      color: Colors.grey.withValues(alpha: 0.2),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -204,7 +205,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 width: 1.5,
               ),
             ),
@@ -222,7 +223,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.2 * delay),
+                color: Colors.white.withValues(alpha: 0.2 * delay),
                 width: 1,
               ),
             ),
@@ -247,7 +248,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
         child: CircularProgressIndicator(
           strokeWidth: 3,
           valueColor: AlwaysStoppedAnimation<Color>(
-            Colors.white.withOpacity(0.9),
+            Colors.white.withValues(alpha: 0.9),
           ),
         ),
       ),
@@ -282,7 +283,7 @@ class MiniScanButton extends StatelessWidget {
             boxShadow: isEnabled
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),

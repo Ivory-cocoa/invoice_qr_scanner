@@ -1,6 +1,7 @@
 /// Main entry point for Facture Scanner App
 /// Application de scan de QR-codes pour créer des factures fournisseur
 /// Supporte les profils: Vérificateur, Traiteur, Manager
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -38,7 +39,9 @@ void main() async {
   // défaillance (ex: base SQLite corrompue) ne bloque pas le démarrage de
   // l'application. L'app démarre quand même en mode dégradé.
   try {
-    await DatabaseService().init();
+    // Timeout de sécurité : une base corrompue qui bloque openDatabase ne
+    // doit pas geler indéfiniment le démarrage de l'application.
+    await DatabaseService().init().timeout(const Duration(seconds: 10));
   } catch (e, s) {
     debugPrint('Échec init DatabaseService: $e\n$s');
   }

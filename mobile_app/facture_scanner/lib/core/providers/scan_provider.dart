@@ -1,5 +1,6 @@
 /// Scan Provider
 /// Manages QR code scanning and invoice creation
+library;
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -306,7 +307,7 @@ class ScanProvider extends ChangeNotifier {
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
-    DgiExtractionResult? extractionResult;
+    DgiExtractionResult extractionResult;
     bool timedOut = false;
 
     try {
@@ -338,13 +339,13 @@ class ScanProvider extends ChangeNotifier {
     _lastVerificationDuration = stopwatch.elapsedMilliseconds / 1000.0;
     _extractionProgress = null;
 
-    if (extractionResult != null && extractionResult.success && extractionResult.data != null && !timedOut) {
+    if (extractionResult.success && extractionResult.data != null && !timedOut) {
       // Extraction succeeded within timeout - send to server automatically
       return await _submitExtractedData(qrContent, extractionResult.data!, _lastVerificationDuration, false);
     }
 
     // Timeout or extraction failed - switch to manual entry
-    _extractedDgiData = extractionResult?.data;
+    _extractedDgiData = extractionResult.data;
     _pendingQrUrl = qrContent;
     _state = ScanState.manualEntry;
     _message = timedOut

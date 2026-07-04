@@ -1,6 +1,8 @@
 /// Link Scan to OTs Screen — Gestionnaire OT (multi-OT)
 /// Permet de lier une facture scannée (nouvelle OU déjà existante)
 /// à un ou plusieurs Ordres de Transit en une seule opération.
+library;
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,22 +13,18 @@ import '../core/theme/app_theme.dart';
 
 /// Configuration de liaison pour un OT donné (modifiable par l'utilisateur).
 class _OtLinkConfig {
-  String mode; // 'create' | 'link_existing'
+  String mode = 'create'; // 'create' | 'link_existing'
   String? costType;
   int? existingCostLineId;
   final TextEditingController amountCtrl;
   final TextEditingController descCtrl;
-  List<Map<String, dynamic>> existingLines;
-  bool loadingExisting;
+  List<Map<String, dynamic>> existingLines = const [];
+  bool loadingExisting = false;
 
   _OtLinkConfig({
-    this.mode = 'create',
     this.costType,
-    this.existingCostLineId,
     String initialAmount = '',
     String initialDesc = '',
-    this.existingLines = const [],
-    this.loadingExisting = false,
   })  : amountCtrl = TextEditingController(text: initialAmount),
         descCtrl = TextEditingController(text: initialDesc);
 
@@ -81,7 +79,6 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
   final Map<int, Map<String, dynamic>> _selectedOtData = {};
 
   bool _loadingOts = false;
-  bool _loadingCostTypes = false;
   bool _submitting = false;
   String? _costTypesError;
   Timer? _searchDebounce;
@@ -118,7 +115,6 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
   Future<void> _loadInitial() async {
     setState(() {
       _loadingOts = true;
-      _loadingCostTypes = true;
       _costTypesError = null;
     });
     final results = await Future.wait([
@@ -130,7 +126,6 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
     final ctResp = results[1];
     setState(() {
       _loadingOts = false;
-      _loadingCostTypes = false;
       if (otsResp.success && otsResp.data != null) {
         _ots = List<Map<String, dynamic>>.from(otsResp.data!['ots'] ?? []);
       }
@@ -641,7 +636,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _ots.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (_, i) {
                 final ot = _ots[i];
                 final id = ot['id'] as int;
@@ -816,7 +811,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
             const SizedBox(height: 12),
             if (cfg.mode == 'create') ...[
               DropdownButtonFormField<String>(
-                value: cfg.costType,
+                initialValue: cfg.costType,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: 'Type de coût *',
@@ -859,7 +854,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                 )
               else
                 DropdownButtonFormField<int>(
-                  value: cfg.existingCostLineId,
+                  initialValue: cfg.existingCostLineId,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Ligne estimée',

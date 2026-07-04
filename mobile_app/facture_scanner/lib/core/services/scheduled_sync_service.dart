@@ -1,6 +1,7 @@
 /// Scheduled Sync Service
 /// Gère la synchronisation programmée des scans à une heure configurable
 /// Utilise workmanager pour les tâches en arrière-plan
+library;
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -87,7 +88,6 @@ class ScheduledSyncService {
   Future<void> initialize() async {
     await Workmanager().initialize(
       callbackDispatcher,
-      isInDebugMode: kDebugMode,
     );
     // Programmer la sync si activée
     await rescheduleSync();

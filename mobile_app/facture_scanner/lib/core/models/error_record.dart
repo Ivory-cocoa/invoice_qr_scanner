@@ -1,5 +1,6 @@
 /// Error Record Model
 /// Représente un enregistrement d'erreur avec classification
+library;
 
 enum ErrorCategory {
   dgiService('dgi_service', 'Service DGI', 'Erreur du service DGI'),

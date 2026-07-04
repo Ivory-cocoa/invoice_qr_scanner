@@ -1,6 +1,7 @@
 /// Local Database Service for Offline Support
 /// Uses SQLite to store scans when offline
 /// Auto-cleanup of data older than 24 hours
+library;
 
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -11,8 +12,14 @@ import 'dgi_parser_service.dart';
 class DatabaseService {
   static Database? _database;
   
-  // Durée maximale de conservation des données offline (24 heures)
+  // Durée de conservation des données déjà synchronisées (24 heures)
   static const int maxOfflineHours = 24;
+  // Durée de conservation des scans en échec définitif (7 jours) afin que
+  // l'utilisateur ait le temps de voir l'erreur et de rescanner.
+  static const int maxFailedRetentionDays = 7;
+  // Durée de conservation du cache d'historique (7 jours) : il sert aussi à
+  // la détection locale de doublons, une purge trop agressive la dégrade.
+  static const int maxHistoryCacheDays = 7;
   
   // Singleton
   static final DatabaseService _instance = DatabaseService._internal();
@@ -32,7 +39,7 @@ class DatabaseService {
     
     final db = await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -63,7 +70,8 @@ class DatabaseService {
         verification_id TEXT,
         amount_ttc REAL,
         raw_text TEXT,
-        parsed INTEGER DEFAULT 0
+        parsed INTEGER DEFAULT 0,
+        extraction_attempts INTEGER DEFAULT 0
       )
     ''');
 
@@ -209,26 +217,52 @@ class DatabaseService {
         // Colonne déjà présente : ignorer.
       }
     }
+    if (oldVersion < 7) {
+      // Compteur de tentatives d'extraction DGI (limite les re-tentatives
+      // infinies lors des synchronisations).
+      try {
+        await db.execute(
+            'ALTER TABLE pending_scans ADD COLUMN extraction_attempts INTEGER DEFAULT 0');
+      } catch (_) {
+        // Colonne déjà présente : ignorer.
+      }
+    }
   }
   
-  /// Nettoyer les données de plus de 24 heures
+  /// Nettoyer les anciennes données.
+  /// IMPORTANT : ne supprime JAMAIS un scan non synchronisé (synced = 0) —
+  /// ce sont des données utilisateur qui n'ont pas encore atteint le serveur.
   Future<void> cleanupOldData([Database? providedDb]) async {
     final db = providedDb ?? await database;
-    final cutoffTime = DateTime.now().subtract(const Duration(hours: maxOfflineHours));
-    final cutoffString = cutoffTime.toIso8601String();
-    
-    // Supprimer les scans en attente de plus de 24h (déjà synchronisés ou non)
+    final now = DateTime.now();
+    final syncedCutoff =
+        now.subtract(const Duration(hours: maxOfflineHours)).toIso8601String();
+    final failedCutoff = now
+        .subtract(const Duration(days: maxFailedRetentionDays))
+        .toIso8601String();
+    final historyCutoff = now
+        .subtract(const Duration(days: maxHistoryCacheDays))
+        .toIso8601String();
+
+    // Scans déjà synchronisés : purge après 24h.
     await db.delete(
       'pending_scans',
-      where: 'created_at < ?',
-      whereArgs: [cutoffString],
+      where: 'synced = 1 AND created_at < ?',
+      whereArgs: [syncedCutoff],
     );
-    
-    // Supprimer le cache d'historique de plus de 24h
+
+    // Scans en échec définitif : purge après 7 jours.
+    await db.delete(
+      'pending_scans',
+      where: 'synced = 2 AND created_at < ?',
+      whereArgs: [failedCutoff],
+    );
+
+    // Cache d'historique : purge après 7 jours.
     await db.delete(
       'scan_history',
       where: 'cached_at < ?',
-      whereArgs: [cutoffString],
+      whereArgs: [historyCutoff],
     );
   }
   
@@ -303,6 +337,47 @@ class DatabaseService {
       whereArgs: [id],
     );
   }
+
+  /// Enregistrer une erreur transitoire SANS marquer le scan comme définitif :
+  /// il reste synced=0 et sera retenté à la prochaine synchronisation.
+  Future<void> markScanRetryLater(int id, String error) async {
+    final db = await database;
+    await db.update(
+      'pending_scans',
+      {'sync_error': error},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Incrémenter le compteur de tentatives d'extraction DGI.
+  /// Retourne le nombre de tentatives après incrément.
+  Future<int> incrementExtractionAttempts(int id) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE pending_scans SET extraction_attempts = COALESCE(extraction_attempts, 0) + 1 WHERE id = ?',
+      [id],
+    );
+    final rows = await db.query(
+      'pending_scans',
+      columns: ['extraction_attempts'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return 0;
+    return rows.first['extraction_attempts'] as int? ?? 0;
+  }
+
+  /// Supprimer un scan en attente précis (ex : traité avec succès en ligne).
+  Future<void> deletePendingScan(int id) async {
+    final db = await database;
+    await db.delete(
+      'pending_scans',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
   
   /// Check if QR code exists in pending scans
   Future<bool> isPendingScan(String qrUuid) async {
@@ -325,13 +400,16 @@ class DatabaseService {
     return result.first['count'] as int? ?? 0;
   }
   
-  /// Delete synced and permanently failed scans (cleanup)
+  /// Delete successfully synced scans (cleanup).
+  /// Les scans en échec définitif (synced=2) sont conservés pour que
+  /// l'utilisateur puisse voir l'erreur ; ils sont purgés après 7 jours
+  /// par [cleanupOldData].
   Future<void> deleteSyncedScans() async {
     final db = await database;
     await db.delete(
       'pending_scans',
-      where: 'synced != ?',
-      whereArgs: [0],
+      where: 'synced = ?',
+      whereArgs: [1],
     );
   }
   

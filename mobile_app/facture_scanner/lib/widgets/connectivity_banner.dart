@@ -1,5 +1,6 @@
 /// Connectivity Banner Widget - Design Professionnel ICP
 /// Affiche l'état de connexion avec un design moderne
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -98,7 +99,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                   color: (connectivity.isOnline
                           ? AppTheme.successColor
                           : AppTheme.warningColor)
-                      .withOpacity(0.3),
+                      .withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -134,7 +135,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                               ? 'Synchronisation des données en cours...'
                               : 'Les scans seront synchronisés plus tard',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -150,7 +151,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -164,7 +165,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.white.withOpacity(0.5),
+                                color: Colors.white.withValues(alpha: 0.5),
                                 blurRadius: 4,
                               ),
                             ],
@@ -203,7 +204,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
@@ -259,7 +260,7 @@ class CompactConnectivityBanner extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(

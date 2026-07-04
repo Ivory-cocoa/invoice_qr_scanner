@@ -4,6 +4,7 @@
 /// - development: http://192.168.5.159:8069 (icp_dev_db) - Réseau local développement
 /// - staging: http://192.168.5.85:8069 (icp_test_db) 
 /// - production: https://odoo.ivorycocoa.ci (odoo.ivorycocoa.ci)
+library;
 
 enum Environment {
   development,

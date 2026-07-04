@@ -1,5 +1,6 @@
 /// Scan Result Dialog - Design Professionnel ICP
 /// Affiche le résultat d'un scan QR avec un design moderne
+library;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -37,7 +38,7 @@ class ScanResultDialog extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.4 : 0.2),
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.2),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -143,7 +144,7 @@ class ScanResultDialog extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [color, color.withOpacity(0.8)],
+          colors: [color, color.withValues(alpha: 0.8)],
         ),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -154,7 +155,7 @@ class ScanResultDialog extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: Colors.white, size: 40),
@@ -172,7 +173,7 @@ class ScanResultDialog extends StatelessWidget {
           Text(
             subtitle,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withValues(alpha: 0.9),
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -281,9 +282,9 @@ class ScanResultDialog extends StatelessWidget {
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: primaryColor.withOpacity(AppTheme.isDark(context) ? 0.16 : 0.08),
+        color: primaryColor.withValues(alpha: AppTheme.isDark(context) ? 0.16 : 0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: primaryColor.withOpacity(0.3)),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +330,7 @@ class ScanResultDialog extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceElevated(context),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: primaryColor.withOpacity(0.35)),
+        border: Border.all(color: primaryColor.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,7 +398,7 @@ class ScanResultDialog extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               color: (isHighlight ? successColor : primaryColor)
-                  .withOpacity(isDark ? 0.2 : 0.1),
+                  .withValues(alpha: isDark ? 0.2 : 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -543,7 +544,7 @@ class ScanResultDialog extends StatelessWidget {
         color: errorLight,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: errorColor.withOpacity(0.3),
+          color: errorColor.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -555,7 +556,7 @@ class ScanResultDialog extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: errorColor.withOpacity(isDark ? 0.3 : 0.15),
+                  color: errorColor.withValues(alpha: isDark ? 0.3 : 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -614,8 +615,8 @@ Future<String?> showScanResultDialog(
     barrierDismissible: true,
     barrierLabel: 'Scan Result',
     barrierColor: isDark 
-        ? Colors.black.withOpacity(0.7) 
-        : Colors.white.withOpacity(0.85),
+        ? Colors.black.withValues(alpha: 0.7) 
+        : Colors.white.withValues(alpha: 0.85),
     transitionDuration: const Duration(milliseconds: 300),
     pageBuilder: (context, animation, secondaryAnimation) {
       return ScanResultDialog(

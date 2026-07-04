@@ -1,5 +1,6 @@
 /// Scanner Screen - Design Professionnel ICP
 /// Interface de scan QR moderne avec overlay personnalisé
+library;
 
 import 'dart:async';
 
@@ -162,11 +163,11 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: AppTheme.errorColor.withOpacity(0.95),
+            color: AppTheme.errorColor.withValues(alpha: 0.95),
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -209,6 +210,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
               _buildCircleButton(
                 icon: Icons.arrow_back_rounded,
                 onTap: () => Navigator.of(context).pop(),
+                semanticLabel: 'Retour',
               ),
               
               // Titre
@@ -226,6 +228,8 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 icon: _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
                 onTap: _toggleFlash,
                 isActive: _isFlashOn,
+                semanticLabel:
+                    _isFlashOn ? 'Désactiver le flash' : 'Activer le flash',
               ),
             ],
           ),
@@ -238,21 +242,26 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     required IconData icon,
     required VoidCallback onTap,
     bool isActive = false,
+    String? semanticLabel,
   }) {
-    return Material(
-      color: isActive ? AppTheme.primaryColor : Colors.black.withOpacity(0.5),
-      borderRadius: BorderRadius.circular(25),
-      child: InkWell(
-        onTap: onTap,
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: Material(
+        color: isActive ? AppTheme.primaryColor : Colors.black.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(25),
-        child: Container(
-          width: 50,
-          height: 50,
-          alignment: Alignment.center,
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: 24,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(25),
+          child: Container(
+            width: 50,
+            height: 50,
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
         ),
       ),
@@ -264,7 +273,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       size: size,
       painter: ScanOverlayPainter(
         scanAreaSize: scanAreaSize,
-        overlayColor: Colors.black.withOpacity(0.6),
+        overlayColor: Colors.black.withValues(alpha: 0.6),
       ),
     );
   }
@@ -301,16 +310,16 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          AppTheme.primaryLight.withOpacity(0.8),
+                          AppTheme.primaryLight.withValues(alpha: 0.8),
                           AppTheme.primaryColor,
-                          AppTheme.primaryLight.withOpacity(0.8),
+                          AppTheme.primaryLight.withValues(alpha: 0.8),
                           Colors.transparent,
                         ],
                       ),
                       borderRadius: BorderRadius.circular(2),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.primaryColor.withOpacity(0.5),
+                          color: AppTheme.primaryColor.withValues(alpha: 0.5),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),
@@ -383,7 +392,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             end: Alignment.bottomCenter,
             colors: [
               Colors.transparent,
-              Colors.black.withOpacity(0.8),
+              Colors.black.withValues(alpha: 0.8),
             ],
           ),
         ),
@@ -393,7 +402,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withOpacity(0.2),
+                color: AppTheme.primaryColor.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -422,7 +431,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             Text(
               'Le scan sera effectué automatiquement',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
               ),

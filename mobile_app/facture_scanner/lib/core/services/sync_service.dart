@@ -1,13 +1,13 @@
 /// Sync Service for Offline/Online Synchronization
 /// Handles syncing pending scans when connectivity is restored
 /// Supports both raw URL syncs and pre-parsed DGI data syncs
+library;
 
 import 'dart:async';
 
 import 'api_service.dart';
 import 'database_service.dart';
 import 'dgi_extractor_service.dart';
-import 'dgi_parser_service.dart';
 
 class SyncService {
   final ApiService _api = ApiService();
@@ -15,6 +15,23 @@ class SyncService {
   final DgiExtractorService _extractor = DgiExtractorService();
   
   bool _isSyncing = false;
+
+  /// Nombre maximum de tentatives d'extraction DGI par scan avant échec définitif.
+  static const int maxExtractionAttempts = 3;
+
+  /// Nombre maximum de scans à extraire par cycle de synchronisation
+  /// (évite qu'une sync ne bloque pendant des dizaines de minutes).
+  static const int maxExtractionsPerSync = 10;
+
+  /// Codes d'erreur serveur considérés comme transitoires : le scan reste
+  /// en attente (synced=0) et sera retenté à la prochaine synchronisation.
+  static const Set<String> _retryableErrorCodes = {
+    'SERVER_BUSY',
+    'TIMEOUT',
+    'NETWORK_ERROR',
+    'SERVER_ERROR',
+    'DGI_ERROR',
+  };
   
   /// Optional callback for sync progress updates
   void Function(String message)? onProgress;
@@ -38,8 +55,9 @@ class SyncService {
     _isSyncing = true;
     
     try {
-      // Check if we have connectivity
-      final isOnline = await _api.healthCheck();
+      // Check if we have connectivity (avec retentatives : un serveur
+      // momentanément surchargé ne doit pas faire échouer la sync).
+      final isOnline = await _healthCheckWithRetry();
       if (!isOnline) {
         _isSyncing = false;
         return SyncResult(
@@ -132,6 +150,34 @@ class SyncService {
     }
   }
   
+  /// Vérifie la disponibilité du serveur avec retentatives (backoff simple).
+  Future<bool> _healthCheckWithRetry() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (await _api.healthCheck()) return true;
+      if (attempt < 2) {
+        await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+      }
+    }
+    return false;
+  }
+
+  /// Applique le résultat serveur d'un scan : synchronisé, échec définitif,
+  /// ou erreur transitoire (reste en attente pour la prochaine sync).
+  Future<void> _applyServerResult(int scanDbId, Map<String, dynamic> result) async {
+    if (result['success'] == true || result['error_code'] == 'DUPLICATE') {
+      await _db.markScanSynced(scanDbId);
+      return;
+    }
+    final errorCode = result['error_code']?.toString() ?? '';
+    final errorMsg = result['error']?.toString() ?? 'Erreur inconnue';
+    if (_retryableErrorCodes.contains(errorCode)) {
+      // Erreur transitoire : conserver pour retenter plus tard.
+      await _db.markScanRetryLater(scanDbId, errorMsg);
+    } else {
+      await _db.markScanFailed(scanDbId, errorMsg);
+    }
+  }
+
   /// Sync scans with pre-parsed DGI data
   Future<SyncResult> _syncParsedScans() async {
     final parsedScans = await _db.getParsedPendingScans();
@@ -166,15 +212,7 @@ class SyncService {
       for (int i = 0; i < results.length && i < parsedScans.length; i++) {
         final result = results[i] as Map<String, dynamic>;
         final pendingScan = parsedScans[i];
-        
-        if (result['success'] == true || result['error_code'] == 'DUPLICATE') {
-          await _db.markScanSynced(pendingScan['id'] as int);
-        } else {
-          await _db.markScanFailed(
-            pendingScan['id'] as int,
-            result['error']?.toString() ?? 'Erreur inconnue',
-          );
-        }
+        await _applyServerResult(pendingScan['id'] as int, result);
       }
       
       return SyncResult(
@@ -196,10 +234,14 @@ class SyncService {
   /// This handles the case where scans were saved offline without DGI data,
   /// and now we're online and can extract the data before sending to server.
   Future<SyncResult> _extractAndSyncUnparsedScans() async {
-    final pendingScans = await _db.getUnparsedPendingScans();
-    if (pendingScans.isEmpty) {
+    final allPending = await _db.getUnparsedPendingScans();
+    if (allPending.isEmpty) {
       return SyncResult(success: true, message: '', syncedCount: 0);
     }
+
+    // Limiter le nombre d'extractions par cycle pour ne pas bloquer la sync
+    // pendant des dizaines de minutes si le site DGI est lent.
+    final pendingScans = allPending.take(maxExtractionsPerSync).toList();
     
     final scansToSync = <Map<String, dynamic>>[];
     final scanDbIds = <int>[];
@@ -260,19 +302,40 @@ class SyncService {
           });
           scanDbIds.add(scanId);
         } else {
-          // Extraction failed - mark as failed so user knows
-          await _db.markScanFailed(
-            scanId,
-            'Extraction DGI échouée: ${extractionResult.error ?? "données insuffisantes"}. '
-            'Veuillez rescanner cette facture.',
-          );
+          // Extraction échouée : limiter les retentatives à maxExtractionAttempts.
+          final attempts = await _db.incrementExtractionAttempts(scanId);
+          if (attempts >= maxExtractionAttempts) {
+            await _db.markScanFailed(
+              scanId,
+              'Extraction DGI échouée après $attempts tentatives: '
+              '${extractionResult.error ?? "données insuffisantes"}. '
+              'Veuillez rescanner cette facture.',
+            );
+          } else {
+            // Erreur transitoire : le scan reste en attente pour la
+            // prochaine synchronisation.
+            await _db.markScanRetryLater(
+              scanId,
+              'Extraction DGI échouée (tentative $attempts/$maxExtractionAttempts): '
+              '${extractionResult.error ?? "données insuffisantes"}',
+            );
+          }
           extractionErrors++;
         }
       } catch (e) {
-        await _db.markScanFailed(
-          scanId,
-          'Erreur extraction: ${e.toString()}. Veuillez rescanner cette facture.',
-        );
+        final attempts = await _db.incrementExtractionAttempts(scanId);
+        if (attempts >= maxExtractionAttempts) {
+          await _db.markScanFailed(
+            scanId,
+            'Erreur extraction après $attempts tentatives: ${e.toString()}. '
+            'Veuillez rescanner cette facture.',
+          );
+        } else {
+          await _db.markScanRetryLater(
+            scanId,
+            'Erreur extraction (tentative $attempts/$maxExtractionAttempts): ${e.toString()}',
+          );
+        }
         extractionErrors++;
       }
     }
@@ -299,16 +362,7 @@ class SyncService {
       // Mark scans based on results
       for (int i = 0; i < results.length && i < scanDbIds.length; i++) {
         final result = results[i] as Map<String, dynamic>;
-        final scanId = scanDbIds[i];
-        
-        if (result['success'] == true || result['error_code'] == 'DUPLICATE') {
-          await _db.markScanSynced(scanId);
-        } else {
-          await _db.markScanFailed(
-            scanId,
-            result['error']?.toString() ?? 'Erreur inconnue',
-          );
-        }
+        await _applyServerResult(scanDbIds[i], result);
       }
       
       return SyncResult(

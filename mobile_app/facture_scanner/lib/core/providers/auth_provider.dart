@@ -1,5 +1,6 @@
 /// Authentication Provider
 /// Manages user authentication state
+library;
 
 import 'package:flutter/material.dart';
 
@@ -85,19 +86,29 @@ class AuthProvider extends ChangeNotifier {
   }
   
   /// Gérer l'expiration de session (appelé par d'autres providers)
+  // Garde d'exclusion : plusieurs réponses 401 simultanées ne doivent
+  // déclencher qu'UN SEUL traitement d'expiration (évite doubles dialogs
+  // et déconnexions concurrentes).
+  bool _handlingSessionExpiry = false;
+
   void handleSessionExpired() {
-    // Éviter les déclenchements multiples si plusieurs requêtes 401 arrivent
-    // simultanément.
+    if (_handlingSessionExpiry) return;
     if (_state == AuthState.unauthenticated && _user == null) return;
+    _handlingSessionExpiry = true;
 
     _user = null;
     _errorMessage = 'Votre session a expiré. Veuillez vous reconnecter.';
     _state = AuthState.unauthenticated;
     notifyListeners();
 
-    // Nettoyer les données locales de manière asynchrone (non bloquant).
-    _api.logout().catchError((_) {});
-    _db.clearAllData().catchError((_) {});
+    // Nettoyer les données locales de manière asynchrone (non bloquant),
+    // puis libérer la garde une fois le nettoyage terminé.
+    Future.wait([
+      _api.logout().catchError((_) {}),
+      _db.clearAllData().catchError((_) {}),
+    ]).whenComplete(() {
+      _handlingSessionExpiry = false;
+    });
   }
   
   void clearError() {

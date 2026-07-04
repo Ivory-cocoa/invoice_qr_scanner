@@ -1,6 +1,7 @@
 /// DGI WebView Extraction Service
 /// Charge la page DGI dans un WebView headless, attend le rendu JS,
 /// puis extrait le texte pour le parser localement.
+library;
 
 import 'dart:async';
 import 'dart:convert';

@@ -1,6 +1,7 @@
 /// Settings Screen - Configuration de la synchronisation programmée
 /// Permet de configurer l'heure de synchronisation automatique
 /// et le timeout de vérification DGI
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -200,7 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             : 'Synchronisation manuelle uniquement',
                       ),
                       value: _autoSyncEnabled,
-                      activeColor: AppTheme.primaryColor,
+                      activeThumbColor: AppTheme.primaryColor,
                       onChanged: (value) {
                         setState(() => _autoSyncEnabled = value);
                       },
@@ -211,7 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.1),
+                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
@@ -252,7 +253,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(
@@ -303,7 +304,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           leading: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              color: AppTheme.primaryColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
@@ -443,7 +444,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
-          color: Colors.grey.withOpacity(0.2),
+          color: Colors.grey.withValues(alpha: 0.2),
         ),
       ),
       child: Column(children: children),

@@ -1,4 +1,5 @@
 /// Scan Record Model
+library;
 
 import 'dart:convert';
 

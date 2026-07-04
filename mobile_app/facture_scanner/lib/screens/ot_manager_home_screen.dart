@@ -10,6 +10,7 @@
 ///
 /// Y figurent également un compteur de liaisons effectuées et un accès direct
 /// à la liste détaillée "Mes liaisons OT".
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -398,7 +399,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.link_rounded,
@@ -421,7 +422,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                     Text(
                       'Gestionnaire OT • Rattachez vos factures aux OTs',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
@@ -459,7 +460,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
       color: isDark ? AppTheme.darkSurfaceElevated : Colors.white,
       borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
       elevation: 3,
-      shadowColor: color.withOpacity(0.18),
+      shadowColor: color.withValues(alpha: 0.18),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         onTap: onTap,
@@ -471,7 +472,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(isDark ? 0.22 : 0.14),
+                  color: color.withValues(alpha: isDark ? 0.22 : 0.14),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: color, size: 30),
@@ -590,7 +591,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.25 : 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.06),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -602,7 +603,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(isDark ? 0.22 : 0.12),
+              color: color.withValues(alpha: isDark ? 0.22 : 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: color, size: 18),
@@ -645,7 +646,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withOpacity(0.12),
+            color: AppTheme.primaryColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Icon(Icons.list_alt_rounded,

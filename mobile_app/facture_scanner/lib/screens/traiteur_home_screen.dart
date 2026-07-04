@@ -3,6 +3,7 @@
 /// - Scanner QR pour trouver et traiter les factures existantes
 /// - Tableau de bord avec statistiques de traitement
 /// - Liste des factures en attente de traitement
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -381,7 +382,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(
@@ -462,7 +463,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 null,
                 Icons.done_all_rounded,
                 AppTheme.getPrimary(context),
-                AppTheme.isDark(context) ? AppTheme.getPrimary(context).withOpacity(0.15) : AppTheme.primarySurface,
+                AppTheme.isDark(context) ? AppTheme.getPrimary(context).withValues(alpha: 0.15) : AppTheme.primarySurface,
               ),
             ),
             const SizedBox(width: 12),
@@ -473,7 +474,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 null,
                 Icons.speed_rounded,
                 AppTheme.accentColor,
-                AppTheme.isDark(context) ? AppTheme.accentColor.withOpacity(0.15) : const Color(0xFFE0F2F1),
+                AppTheme.isDark(context) ? AppTheme.accentColor.withValues(alpha: 0.15) : const Color(0xFFE0F2F1),
               ),
             ),
           ],
@@ -495,7 +496,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +521,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
             label,
             style: TextStyle(
               fontSize: 13,
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -530,7 +531,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
               subtitle,
               style: TextStyle(
                 fontSize: 11,
-                color: color.withOpacity(0.6),
+                color: color.withValues(alpha: 0.6),
               ),
             ),
           ],
@@ -693,7 +694,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           Icon(
             Icons.check_circle_outline_rounded,
             size: 64,
-            color: AppTheme.successColor.withOpacity(0.5),
+            color: AppTheme.successColor.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -724,10 +725,10 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceElevated(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.getWarning(context).withOpacity(0.3)),
+        border: Border.all(color: AppTheme.getWarning(context).withValues(alpha: 0.3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -958,6 +959,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       // Rafraîchir les données
       await scan.loadTraiteurPending();
       await scan.loadTraiteurStats();
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

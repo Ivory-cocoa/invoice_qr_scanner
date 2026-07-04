@@ -1,5 +1,6 @@
 /// Home Screen - Design Professionnel ICP
 /// Écran d'accueil moderne avec dashboard et statistiques
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -194,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         }
         
         // Enqueue for background processing
+        if (!mounted) return;
         final queue = context.read<BackgroundScanQueue>();
         final itemId = await queue.enqueue(result, validation.qrUuid!);
         
@@ -305,7 +307,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Clear Data',
-      barrierColor: AppTheme.isDark(context) ? Colors.black.withOpacity(0.85) : Colors.white.withOpacity(0.85),
+      barrierColor: AppTheme.isDark(context) ? Colors.black.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.85),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -488,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Logout',
-      barrierColor: AppTheme.isDark(context) ? Colors.black.withOpacity(0.85) : Colors.white.withOpacity(0.85),
+      barrierColor: AppTheme.isDark(context) ? Colors.black.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.85),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -843,7 +845,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -869,7 +871,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     Text(
                       'Scanner de factures DGI',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
                       ),
@@ -880,7 +882,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               IconButton(
                 onPressed: _openScanner,
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                 ),
                 icon: const Icon(
                   Icons.qr_code_scanner_rounded,
@@ -913,7 +915,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             color: isDark ? AppTheme.darkSurfaceElevated : Colors.white,
             borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             elevation: 2.5,
-            shadowColor: primary.withOpacity(0.18),
+            shadowColor: primary.withValues(alpha: 0.18),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
               child: Column(
@@ -925,7 +927,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: primary.withOpacity(isDark ? 0.22 : 0.14),
+                          color: primary.withValues(alpha: isDark ? 0.22 : 0.14),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(Icons.link_rounded,
@@ -1032,7 +1034,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             decoration: BoxDecoration(
               color: errorLight,
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-              border: Border.all(color: errorColor.withOpacity(0.3)),
+              border: Border.all(color: errorColor.withValues(alpha: 0.3)),
             ),
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -1040,7 +1042,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: errorColor.withOpacity(0.15),
+                    color: errorColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -1113,7 +1115,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             decoration: BoxDecoration(
               color: warningLight,
               borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-              border: Border.all(color: warningColor.withOpacity(0.3)),
+              border: Border.all(color: warningColor.withValues(alpha: 0.3)),
             ),
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -1121,7 +1123,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: warningColor.withOpacity(0.15),
+                    color: warningColor.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -1324,7 +1326,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       color: isDark ? AppTheme.darkSurfaceElevated : Colors.white,
       borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+      shadowColor: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -1338,7 +1340,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(isDark ? 0.2 : 0.12),
+                      color: color.withValues(alpha: isDark ? 0.2 : 0.12),
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                     ),
                     child: Icon(icon, color: color, size: 26),
@@ -1396,7 +1398,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: primaryColor.withOpacity(0.4),
+            color: primaryColor.withValues(alpha: 0.4),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),

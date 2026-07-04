@@ -1,5 +1,6 @@
 /// Scan History Card Widget - Design Professionnel ICP
 /// Carte individuelle d'historique avec animations et interactions
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -253,9 +254,9 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Icon(icon, color: color, size: 26),
     );
@@ -350,7 +351,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
               decoration: BoxDecoration(
                 color: AppTheme.getErrorLight(context),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.getError(context).withOpacity(0.3)),
+                border: Border.all(color: AppTheme.getError(context).withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -507,13 +508,13 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
     if (_isExpanded) {
       switch (widget.record.state) {
         case 'validated':
-          return AppTheme.getSuccess(context).withOpacity(0.3);
+          return AppTheme.getSuccess(context).withValues(alpha: 0.3);
         case 'duplicate':
-          return AppTheme.getWarning(context).withOpacity(0.3);
+          return AppTheme.getWarning(context).withValues(alpha: 0.3);
         case 'error':
-          return AppTheme.getError(context).withOpacity(0.3);
+          return AppTheme.getError(context).withValues(alpha: 0.3);
         default:
-          return AppTheme.getPrimary(context).withOpacity(0.3);
+          return AppTheme.getPrimary(context).withValues(alpha: 0.3);
       }
     }
     return AppTheme.getDivider(context);
@@ -521,8 +522,8 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
 
   Color _getShadowColor() {
     return _isExpanded
-        ? AppTheme.getPrimary(context).withOpacity(0.1)
-        : Colors.black.withOpacity(0.05);
+        ? AppTheme.getPrimary(context).withValues(alpha: 0.1)
+        : Colors.black.withValues(alpha: 0.05);
   }
 
   Color _getAmountColor() {

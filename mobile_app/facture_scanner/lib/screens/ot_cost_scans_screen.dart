@@ -7,6 +7,7 @@
 ///   - Aucun argument  → autocomplete uniquement
 ///   - [initialOtId]   → chargement direct par ID
 ///   - [qrPayload]     → résolution serveur du QR `ICP-OT:<ref>|<token>`
+library;
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -206,7 +207,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: _suggestions.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
+        separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (_, i) {
           final ot = _suggestions[i];
           final cnt = ot['cost_count'] ?? 0;
@@ -304,7 +305,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.qr_code_2, size: 96, color: AppTheme.primaryColor.withOpacity(0.4)),
+            Icon(Icons.qr_code_2, size: 96, color: AppTheme.primaryColor.withValues(alpha: 0.4)),
             const SizedBox(height: 16),
             const Text(
               'Scannez le QR-code d\'un OT ou recherchez-le par référence pour afficher ses coûts opérationnels.',
@@ -560,7 +561,7 @@ class _CostLineCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -620,7 +621,7 @@ class _CostLineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -648,7 +649,7 @@ class _CostLineCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.infoLight,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppTheme.infoColor.withOpacity(0.3)),
+        border: Border.all(color: AppTheme.infoColor.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -747,7 +748,7 @@ class _OtQrScannerPageState extends State<_OtQrScannerPage> {
               margin: const EdgeInsets.symmetric(horizontal: 32),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Text(

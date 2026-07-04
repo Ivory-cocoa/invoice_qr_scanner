@@ -1,4 +1,6 @@
 /// API Response Model
+library;
+
 class ApiResponse<T> {
   final bool success;
   final T? data;

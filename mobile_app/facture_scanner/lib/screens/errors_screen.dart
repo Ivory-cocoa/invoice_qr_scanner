@@ -1,5 +1,6 @@
 /// Errors Screen - Gestion des erreurs avec retry
 /// Écran pour visualiser et relancer les scans en erreur
+library;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -288,7 +289,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       setState(() => _onlyRetryPossible = selected);
                       _loadErrors(refresh: true);
                     },
-                    selectedColor: AppTheme.primaryLight.withOpacity(isDark ? 0.4 : 0.3),
+                    selectedColor: AppTheme.primaryLight.withValues(alpha: isDark ? 0.4 : 0.3),
                   ),
                   const SizedBox(width: 8),
                   if (_selectedIds.isNotEmpty)
@@ -423,7 +424,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             : BorderSide.none,
       ),
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
+      shadowColor: Colors.black.withValues(alpha: 0.1),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _showErrorDetails(error),
@@ -519,9 +520,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -547,7 +548,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       decoration: BoxDecoration(
         color: AppTheme.errorLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
+        border: Border.all(color: AppTheme.errorColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -555,7 +556,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.errorColor.withOpacity(0.15),
+              color: AppTheme.errorColor.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
@@ -629,7 +630,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppTheme.errorColor, AppTheme.errorColor.withOpacity(0.8)],
+                    colors: [AppTheme.errorColor, AppTheme.errorColor.withValues(alpha: 0.8)],
                   ),
                 ),
                 child: Row(
@@ -637,7 +638,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.error_outline, color: Colors.white, size: 28),
@@ -659,7 +660,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                           Text(
                             error.errorCategoryLabel,
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 14,
                             ),
                           ),
@@ -779,7 +780,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         color: isError ? AppTheme.getErrorLight(context) : AppTheme.getSurfaceLight(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isError ? AppTheme.errorColor.withOpacity(0.3) : AppTheme.getDivider(context),
+          color: isError ? AppTheme.errorColor.withValues(alpha: 0.3) : AppTheme.getDivider(context),
         ),
       ),
       child: Column(
@@ -790,7 +791,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: color, size: 20),
@@ -895,7 +896,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         category.label,
         style: TextStyle(color: chipColor, fontSize: 12),
       ),
-      backgroundColor: chipColor.withOpacity(0.1),
+      backgroundColor: chipColor.withValues(alpha: 0.1),
       padding: EdgeInsets.zero,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,

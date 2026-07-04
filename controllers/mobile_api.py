@@ -200,6 +200,40 @@ def require_auth(func):
     return wrapper
 
 
+def require_role(*group_xmlids):
+    """Décorateur pour restreindre un endpoint à certains groupes de sécurité.
+
+    À appliquer SOUS ``@require_auth`` (reçoit ``user=...``). Le groupe
+    Manager (``group_invoice_scanner_manager``) a toujours accès.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, user=None, **kwargs):
+            if user is None:
+                return api_error('AUTH_REQUIRED', "Token d'authentification requis", status=401)
+            is_manager = user.has_group('invoice_qr_scanner.group_invoice_scanner_manager')
+            if not is_manager and not any(user.has_group(g) for g in group_xmlids):
+                return api_error(
+                    'ACCESS_DENIED',
+                    "Accès non autorisé pour votre rôle",
+                    status=403,
+                )
+            return func(self, *args, user=user, **kwargs)
+        return wrapper
+    return decorator
+
+
+def validate_date_param(value):
+    """Valide une date de filtre (YYYY-MM-DD). Retourne la chaîne validée ou None."""
+    if not value:
+        return None
+    try:
+        datetime.strptime(str(value), '%Y-%m-%d')
+        return str(value)
+    except (ValueError, TypeError):
+        return None
+
+
 # ==================== CONTRÔLEUR API ====================
 
 class InvoiceScannerMobileAPI(http.Controller):
@@ -806,6 +840,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def scan_to_process(self, user=None, **kw):
         """Scanner un QR-code pour retrouver et traiter une facture existante (profil Traiteur).
         
@@ -890,6 +925,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def get_pending_for_processing(self, user=None, **kw):
         """Obtenir la liste des factures en attente de traitement (profil Traiteur).
         
@@ -943,6 +979,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def get_traiteur_stats(self, user=None, **kw):
         """Obtenir les statistiques du profil Traiteur."""
         if request.httprequest.method == 'OPTIONS':
@@ -990,6 +1027,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def mark_processed(self, record_id, user=None, **kw):
         """Marquer un scan comme traité/enregistré.
         
@@ -1037,6 +1075,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def mark_unprocessed(self, record_id, user=None, **kw):
         """Remettre un scan à l'état 'Facture créée' (non traité).
         
@@ -1084,6 +1123,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def bulk_mark_processed(self, user=None, **kw):
         """Marquer plusieurs scans comme traités en masse.
         
@@ -1660,8 +1700,8 @@ class InvoiceScannerMobileAPI(http.Controller):
             limit = min(100, max(1, int(data.get('limit', 20))))
         except (ValueError, TypeError):
             page, limit = 1, 20
-        date_from = data.get('date_from')
-        date_to = data.get('date_to')
+        date_from = validate_date_param(data.get('date_from'))
+        date_to = validate_date_param(data.get('date_to'))
         retry_possible = data.get('retry_possible')
         
         ScanRecord = request.env['invoice.scan.record'].sudo()

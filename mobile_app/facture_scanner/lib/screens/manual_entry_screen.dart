@@ -3,6 +3,7 @@
 /// Affiché quand la vérification DGI dépasse le timeout ou échoue
 /// - Lien cliquable vers le site DGI pour consulter la facture
 /// - Ré-extraction automatique en arrière-plan pour pré-remplir les champs
+library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -223,11 +224,11 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? AppTheme.warningColor.withOpacity(0.2)
+                        ? AppTheme.warningColor.withValues(alpha: 0.2)
                         : AppTheme.warningLight,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppTheme.warningColor.withOpacity(0.3),
+                      color: AppTheme.warningColor.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -255,11 +256,11 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? AppTheme.infoColor.withOpacity(0.2)
+                        ? AppTheme.infoColor.withValues(alpha: 0.2)
                         : AppTheme.infoLight,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppTheme.infoColor.withOpacity(0.3),
+                      color: AppTheme.infoColor.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -287,11 +288,11 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.blue.shade900.withOpacity(0.3)
+                      ? Colors.blue.shade900.withValues(alpha: 0.3)
                       : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: Colors.blue.withOpacity(0.3),
+                    color: Colors.blue.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -348,10 +349,10 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                   decoration: BoxDecoration(
                     color: isDark
                         ? (_isReExtracting
-                            ? Colors.orange.shade900.withOpacity(0.2)
+                            ? Colors.orange.shade900.withValues(alpha: 0.2)
                             : (_reExtractionStatus.contains('succès')
-                                ? Colors.green.shade900.withOpacity(0.2)
-                                : Colors.grey.shade800.withOpacity(0.3)))
+                                ? Colors.green.shade900.withValues(alpha: 0.2)
+                                : Colors.grey.shade800.withValues(alpha: 0.3)))
                         : (_isReExtracting
                             ? Colors.orange.shade50
                             : (_reExtractionStatus.contains('succès')
@@ -504,12 +505,12 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       decoration: BoxDecoration(
         color: isDark
             ? (hasCodes
-                ? Colors.green.shade900.withOpacity(0.2)
-                : Colors.orange.shade900.withOpacity(0.2))
+                ? Colors.green.shade900.withValues(alpha: 0.2)
+                : Colors.orange.shade900.withValues(alpha: 0.2))
             : (hasCodes ? Colors.green.shade50 : Colors.orange.shade50),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (hasCodes ? Colors.green : Colors.orange).withOpacity(0.3),
+          color: (hasCodes ? Colors.green : Colors.orange).withValues(alpha: 0.3),
         ),
       ),
       child: Column(
