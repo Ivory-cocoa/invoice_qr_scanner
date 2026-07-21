@@ -10,8 +10,7 @@ import secrets
 import string
 from datetime import timedelta
 
-from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo import api, fields, models
 
 _logger = logging.getLogger(__name__)
 
@@ -145,48 +144,21 @@ class InvoiceScannerLoginOtp(models.Model):
         """Expéditeur des emails OTP, déterministe.
 
         Sans `email_from` explicite, Odoo exige le couple `mail.catchall.domain`
-        + `mail.default.from`, et échoue sinon — mais très en aval, sur un
-        `assert` de `ir_mail_server.build_email` dont le message n'indique pas
-        quel email a échoué. Constaté en production : cette méthode renvoyait
-        `False` (ni paramètre, ni email de société renseignés) et l'envoi
-        cassait dans les entrailles d'Odoo.
+        + `mail.default.from` et échoue sinon (constaté sur base neuve). On force
+        donc un expéditeur non vide.
 
-        On élargit donc la chaîne de repli aux conventions réellement en
-        vigueur sur ce parc, et on échoue avec un message ACTIONNABLE si
-        vraiment aucune adresse n'est disponible.
+        ⚠️ Le contrôleur OTP tourne en `auth='none'` : il n'y a pas
+        d'utilisateur de requête, donc `self.env.company` est un recordset
+        `res.company` VIDE et son `email_formatted` vaut `False`. On s'appuie
+        donc sur la société de l'utilisateur cible (toujours renseignée), puis
+        sur la première société, pour ne jamais retomber sur `False`.
         """
+        self.ensure_one()
         icp = self.env['ir.config_parameter'].sudo()
-
-        def _usable(value):
-            """Une adresse d'expéditeur n'a de sens que si elle contient '@'."""
-            return value if value and '@' in value else False
-
-        candidate = (
-            # 1. Paramètre standard Odoo.
-            _usable(icp.get_param('mail.default.from'))
-            # 2. Email de la société courante.
-            or _usable(self.env.company.sudo().email_formatted)
-            # 3. Convention du parc (module `mail_force_smtp_from`) : c'est
-            #    l'adresse réellement utilisée pour tous les envois sortants.
-            or _usable(icp.get_param('mail.force.smtp.from'))
-        )
-
-        # 4. Dernier recours : le compte du serveur d'envoi configuré.
-        if not candidate:
-            server = self.env['ir.mail_server'].sudo().search(
-                [], order='sequence, id', limit=1)
-            candidate = _usable(server.smtp_user)
-
-        if not candidate:
-            raise UserError(_(
-                "Aucune adresse d'expéditeur n'est configurée : impossible "
-                "d'envoyer les codes de connexion.\n\n"
-                "Renseignez l'une de ces valeurs :\n"
-                "• l'email de la société (Paramètres → Sociétés), ou\n"
-                "• le paramètre système « mail.default.from »."
-            ))
-
-        return candidate
+        return (icp.get_param('mail.default.from')
+                or self.user_id.company_id.sudo().email_formatted
+                or self.env['res.company'].sudo().search([], limit=1).email_formatted
+                or False)
 
     def _send_otp_email(self, code):
         """Envoie le code par email. L'échec SMTP remonte (raise_exception)."""
@@ -200,42 +172,13 @@ class InvoiceScannerLoginOtp(models.Model):
             "de cette demande, ignorez cet email et signalez-le à votre "
             "administrateur.</p>"
         ) % (self.user_id.name or '', code, self.OTP_TTL_MINUTES)
-        values = {
+        mail = self.env['mail.mail'].sudo().create({
             'subject': "Votre code de connexion — Scanner de factures",
             'email_from': self._otp_email_from(),
             'email_to': email_to,
             'body_html': body,
             'auto_delete': True,
-        }
-
-        # Un code de connexion doit partir IMMÉDIATEMENT, sans exception.
-        #
-        # Deux modules du parc détournent l'envoi des emails :
-        #   - `ivorycocoa_notification_manager` route selon la préférence du
-        #     destinataire : en mode « digest », l'email est mis en file et
-        #     agrégé dans un récapitulatif quotidien ; en mode « aucun email »,
-        #     il est purement supprimé.
-        #   - `mail_force_smtp_from` retire les destinataires ayant coupé les
-        #     emails du système.
-        #
-        # Un OTP expire en quelques minutes : digéré, il arrive périmé ; supprimé,
-        # l'utilisateur ne peut plus se connecter du tout. Ce n'est pas une
-        # notification dont on peut se désabonner, c'est un identifiant.
-        #
-        # `force_send_to_blocked` est l'échappatoire prévue par ces modules
-        # pour les envois prioritaires, et il court-circuite les deux routages.
-        # La catégorie « validation » est posée en complément (elle maintient
-        # le temps réel pour les destinataires en digest).
-        #
-        # Ces deux modules sont OPTIONNELS du point de vue du scanner : on ne
-        # pose les champs que s'ils existent réellement dans le registre.
-        MailMail = self.env['mail.mail'].sudo()
-        if 'force_send_to_blocked' in MailMail._fields:
-            values['force_send_to_blocked'] = True
-        if 'notification_category' in MailMail._fields:
-            values['notification_category'] = 'validation'
-
-        mail = MailMail.create(values)
+        })
         # raise_exception : l'échec SMTP doit remonter immédiatement, sinon
         # l'API répondrait « code envoyé » à tort.
         mail.send(raise_exception=True)
