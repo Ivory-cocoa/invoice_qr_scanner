@@ -8,6 +8,7 @@ from unittest.mock import patch
 from datetime import timedelta
 
 from odoo import fields
+from odoo.exceptions import UserError
 from odoo.tests import HttpCase, tagged
 
 from odoo.addons.invoice_qr_scanner.controllers import mobile_api
@@ -69,6 +70,12 @@ class TestMobileAPI(HttpCase):
         # donc annulés avec lui. On repart tout de même d'une table vide pour
         # qu'un résidu ne puisse pas provoquer un 429 sans rapport.
         self.env['invoice.scanner.rate.limit'].sudo().search([]).unlink()
+
+        # Une base de test neuve n'a NI email de société, NI `mail.default.from`,
+        # NI serveur d'envoi : l'expéditeur des OTP serait alors introuvable.
+        # Les tests dédiés à la résolution de l'expéditeur écrasent ce réglage.
+        self.env['ir.config_parameter'].sudo().set_param(
+            'mail.default.from', 'no-reply@example.com')
 
     def test_request_otp_missing_login(self):
         """Demande de code sans identifiant."""
@@ -142,6 +149,79 @@ class TestMobileAPI(HttpCase):
         self.assertTrue(data.get('success'))
         self.assertTrue(data['data'].get('token'))
         self.assertEqual(data['data']['user']['login'], self.test_user.login)
+
+    def test_otp_email_bypasses_digest_routing(self):
+        """L'email d'OTP est marqué pour échapper au routage des notifications.
+
+        Régression protégée, constatée en production : tous les utilisateurs
+        du parc étant en mode « digest quotidien »,
+        `ivorycocoa_notification_manager` retirait le destinataire de l'email
+        et mettait le code en file d'attente. Le code, valable 10 minutes,
+        n'arrivait que dans le récapitulatif du lendemain — donc jamais à
+        temps. Plus personne ne pouvait se connecter.
+
+        Ces champs viennent de modules optionnels : on ne vérifie que ceux
+        réellement présents dans le registre.
+        """
+        Otp = self.env['invoice.scanner.login.otp'].sudo()
+        otp = Otp._get_or_create(self.test_user)
+
+        # Neutraliser l'envoi SMTP : c'est le MARQUAGE qu'on éprouve ici.
+        with patch.object(type(self.env['mail.mail']), 'send'):
+            otp._send_otp_email('123456')
+
+        mail = self.env['mail.mail'].sudo().search(
+            [('email_to', '=', self.test_user.email)], order='id desc', limit=1)
+        self.assertTrue(mail, "L'email d'OTP doit avoir été créé")
+
+        fields_ = self.env['mail.mail']._fields
+        if 'force_send_to_blocked' in fields_:
+            self.assertTrue(
+                mail.force_send_to_blocked,
+                "L'OTP doit forcer l'envoi : c'est un identifiant, pas une "
+                "notification dont on peut se désabonner")
+        if 'notification_category' in fields_:
+            self.assertEqual(mail.notification_category, 'validation')
+
+    def test_otp_sender_falls_back_when_company_email_missing(self):
+        """L'expéditeur est résolu même sans email de société ni paramètre.
+
+        Reproduit la panne de production : `mail.default.from` absent ET email
+        de société vide. `_otp_email_from` renvoyait alors `False`, et Odoo
+        échouait très en aval sur l'assertion de `build_email` — message
+        cryptique, sans indiquer l'email fautif.
+        """
+        icp = self.env['ir.config_parameter'].sudo()
+        icp.set_param('mail.default.from', '')
+        self.env.company.sudo().email = False
+        icp.set_param('mail.force.smtp.from', 'expediteur@ivorycocoa.ci')
+
+        Otp = self.env['invoice.scanner.login.otp'].sudo()
+        sender = Otp._get_or_create(self.test_user)._otp_email_from()
+
+        self.assertEqual(sender, 'expediteur@ivorycocoa.ci',
+                         "La convention du parc doit servir de repli")
+
+    def test_otp_sender_missing_raises_actionable_error(self):
+        """Sans AUCUNE adresse disponible, l'erreur doit être exploitable.
+
+        Mieux vaut un message qui nomme le réglage à corriger qu'un
+        `AssertionError` surgi des entrailles du serveur de mail.
+        """
+        icp = self.env['ir.config_parameter'].sudo()
+        icp.set_param('mail.default.from', '')
+        icp.set_param('mail.force.smtp.from', '')
+        self.env.company.sudo().email = False
+        self.env['ir.mail_server'].sudo().search([]).unlink()
+
+        Otp = self.env['invoice.scanner.login.otp'].sudo()
+        otp = Otp._get_or_create(self.test_user)
+
+        with self.assertRaises(UserError) as ctx:
+            otp._otp_email_from()
+
+        self.assertIn('mail.default.from', str(ctx.exception),
+                      "L'erreur doit nommer le réglage à renseigner")
 
     def test_otp_is_single_use(self):
         """Un code déjà consommé ne peut pas resservir."""
