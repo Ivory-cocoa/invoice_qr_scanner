@@ -33,17 +33,8 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _initializeAndLoad();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthProvider>().addListener(_onAuthStateChanged);
-    });
-  }
-
-  void _onAuthStateChanged() {
-    final auth = context.read<AuthProvider>();
-    if (!auth.isAuthenticated && mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-    }
+    // Redirection en cas de perte de session : assurée globalement par
+    // AuthGuard (cf. main.dart).
   }
 
   Future<void> _initializeAndLoad() async {
@@ -67,9 +58,6 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
 
   @override
   void dispose() {
-    try {
-      context.read<AuthProvider>().removeListener(_onAuthStateChanged);
-    } catch (_) {}
     _tabController.dispose();
     super.dispose();
   }

@@ -18,6 +18,7 @@ class ApiService {
   static const String _baseUrlKey = 'api_base_url';
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'current_user';
+  static const String _tokenExpiresAtKey = 'auth_token_expires_at';
 
   // Stockage sécurisé (chiffré via Keystore/Keychain) pour le token.
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
@@ -35,17 +36,59 @@ class ApiService {
   String? _baseUrl;
   String? _token;
   User? _currentUser;
-  
+
+  /// Date d'expiration du token, telle qu'annoncée par le serveur (en UTC).
+  /// Null si inconnue : c'est le cas des sessions ouvertes avant l'ajout de
+  /// ce champ, qu'on ne peut alors que considérer comme encore valides.
+  DateTime? _tokenExpiresAt;
+
+  /// True si `init()` a trouvé une session déjà expirée et l'a purgée.
+  /// Permet à l'AuthProvider d'expliquer la déconnexion à l'utilisateur.
+  bool _sessionExpiredAtStartup = false;
+
   // Singleton
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
-  
+
   // Getters
   String get baseUrl => _baseUrl ?? _defaultBaseUrl;
   String? get token => _token;
   User? get currentUser => _currentUser;
-  bool get isAuthenticated => _token != null && _currentUser != null;
+  DateTime? get tokenExpiresAt => _tokenExpiresAt;
+  bool get sessionExpiredAtStartup => _sessionExpiredAtStartup;
+
+  /// True si la date d'expiration est connue ET dépassée.
+  bool get isTokenExpired {
+    final expiry = _tokenExpiresAt;
+    if (expiry == null) return false;
+    return !DateTime.now().toUtc().isBefore(expiry);
+  }
+
+  bool get isAuthenticated =>
+      _token != null && _currentUser != null && !isTokenExpired;
+
+  /// Parse une date renvoyée par Odoo.
+  ///
+  /// `fields.Datetime` est de l'UTC NAÏF. Le serveur suffixe désormais un 'Z'
+  /// explicite, mais une réponse plus ancienne (ou un token encore en cache)
+  /// peut ne pas en avoir : sans marqueur, `DateTime.parse` interpréterait la
+  /// date en heure locale. On force donc l'UTC dans ce cas.
+  static DateTime? parseServerDate(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return null;
+    if (parsed.isUtc) return parsed;
+    return DateTime.utc(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+      parsed.hour,
+      parsed.minute,
+      parsed.second,
+      parsed.millisecond,
+    );
+  }
   
   /// Initialize the API service
   Future<void> init() async {
@@ -80,6 +123,27 @@ class ApiService {
         await prefs.remove(_userKey);
       }
     }
+
+    _tokenExpiresAt = parseServerDate(prefs.getString(_tokenExpiresAtKey));
+
+    // Session expirée : la purger MAINTENANT plutôt que d'afficher un écran
+    // d'accueil qui échouera au premier appel réseau.
+    if (_token != null && isTokenExpired) {
+      _sessionExpiredAtStartup = true;
+      await _clearSession();
+    }
+  }
+
+  /// Efface toutes les traces locales de la session (token, date, utilisateur).
+  Future<void> _clearSession() async {
+    _token = null;
+    _currentUser = null;
+    _tokenExpiresAt = null;
+
+    await _clearToken();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_userKey);
+    await prefs.remove(_tokenExpiresAtKey);
   }
 
   /// Persiste le token de manière sécurisée (avec repli SharedPreferences).
@@ -128,39 +192,57 @@ class ApiService {
     return !isLocal;
   }
   
-  /// Login with credentials
-  Future<ApiResponse<Map<String, dynamic>>> login(String login, String password) async {
-    final response = await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/auth/login', {
-      'login': login,
-      'password': password,
-    }, authenticated: false);
-    
+  /// Demander l'envoi d'un code de connexion à usage unique par email.
+  ///
+  /// Le serveur répond volontairement de la même manière que le compte existe
+  /// ou non (anti-énumération) : un succès ne garantit donc pas qu'un email
+  /// est réellement parti.
+  Future<ApiResponse<Map<String, dynamic>>> requestOtp(String login) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/auth/request-otp',
+      {'login': login},
+      authenticated: false,
+    );
+  }
+
+  /// Échanger le code reçu par email contre un token d'API.
+  Future<ApiResponse<Map<String, dynamic>>> verifyOtp(String login, String otp) async {
+    final response = await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/auth/verify-otp',
+      {'login': login, 'otp': otp},
+      authenticated: false,
+    );
+
     if (response.success && response.data != null) {
       _token = response.data!['token'];
       _currentUser = User.fromJson(response.data!['user']);
-      
+      _tokenExpiresAt = parseServerDate(response.data!['expires_at'] as String?);
+      _sessionExpiredAtStartup = false;
+
       // Save to storage
       final prefs = await SharedPreferences.getInstance();
       if (_token != null) await _persistToken(_token!);
       await prefs.setString(_userKey, jsonEncode(_currentUser!.toJson()));
+      if (_tokenExpiresAt != null) {
+        await prefs.setString(
+            _tokenExpiresAtKey, _tokenExpiresAt!.toIso8601String());
+      } else {
+        await prefs.remove(_tokenExpiresAtKey);
+      }
     }
-    
+
     return response;
   }
-  
+
   /// Logout
   Future<void> logout() async {
     // Try to logout on server (ignore errors)
     try {
       await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/auth/logout', {});
     } catch (_) {}
-    
-    _token = null;
-    _currentUser = null;
-    
-    await _clearToken();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_userKey);
+
+    _sessionExpiredAtStartup = false;
+    await _clearSession();
   }
   
   /// Check if QR code already exists

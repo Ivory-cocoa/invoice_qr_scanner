@@ -10,7 +10,8 @@ Cette API permet de:
 - Consulter l'historique des scans
 
 Endpoints:
-- POST /api/v1/invoice-scanner/auth/login - Authentification
+- POST /api/v1/invoice-scanner/auth/request-otp - Envoi du code de connexion
+- POST /api/v1/invoice-scanner/auth/verify-otp - Authentification par code
 - POST /api/v1/invoice-scanner/auth/logout - Déconnexion
 - POST /api/v1/invoice-scanner/scan - Scanner et créer facture
 - GET /api/v1/invoice-scanner/history - Historique des scans
@@ -21,8 +22,6 @@ Endpoints:
 import logging
 import hashlib
 import secrets
-import threading
-import time
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -43,40 +42,40 @@ _logger = logging.getLogger(__name__)
 # Configuration
 API_VERSION = "1.0.0"
 TOKEN_EXPIRY_HOURS = 24 * 7  # 7 jours
-MAX_LOGIN_ATTEMPTS = 5
-LOGIN_ATTEMPT_WINDOW = 300  # 5 minutes (fenêtre glissante)
 
-# Limiteur de tentatives de connexion (par worker ; compléter par un
-# rate-limit nginx en production pour une protection inter-workers)
-_LOGIN_ATTEMPTS = {}
-_LOGIN_ATTEMPTS_LOCK = threading.Lock()
-_LOGIN_ATTEMPTS_MAX_KEYS = 10000
+# Connexion par code à usage unique (OTP) envoyé par email.
+# Délai minimal entre deux demandes de code pour un même compte ; doit rester
+# aligné sur le compte à rebours affiché par l'application mobile.
+OTP_RESEND_SECONDS = 60
+
+# Quotas de rate-limit, sous la forme (max_requests, window_s, block_s).
+# Les compteurs sont adossés à PostgreSQL (`invoice.scanner.rate.limit`) :
+# un compteur en mémoire serait multiplié par le nombre de workers.
+#
+# Les quotas par IP sont volontairement larges : tous les téléphones d'un même
+# site sortent derrière le même NAT, un quota serré déconnecterait l'entrepôt
+# entier. L'objectif est de stopper le flood automatisé, pas les humains — la
+# protection fine est portée par la clé `login`.
+RL_OTP_REQUEST_IP = (30, 3600, 600)
+RL_OTP_REQUEST_LOGIN = (5, 300, 300)
+# La vérification tolère un peu plus de tentatives par compte que le code
+# lui-même (5 saisies), pour qu'une faute de frappe suivie d'un renvoi de code
+# ne bloque pas l'utilisateur.
+RL_OTP_VERIFY_IP = (60, 300, 300)
+RL_OTP_VERIFY_LOGIN = (10, 300, 300)
 
 
-def _login_rate_limited(key):
-    """True si `key` (IP ou login) a dépassé le quota d'échecs récents."""
-    now = time.time()
-    with _LOGIN_ATTEMPTS_LOCK:
-        attempts = [t for t in _LOGIN_ATTEMPTS.get(key, ())
-                    if now - t < LOGIN_ATTEMPT_WINDOW]
-        if attempts:
-            _LOGIN_ATTEMPTS[key] = attempts
-        else:
-            _LOGIN_ATTEMPTS.pop(key, None)
-        return len(attempts) >= MAX_LOGIN_ATTEMPTS
+def _rate_limited(key, quota):
+    """True si `key` a dépassé `quota` = (max_requests, window_s, block_s).
 
-
-def _register_login_failure(key):
-    """Enregistrer un échec de connexion pour `key`."""
-    now = time.time()
-    with _LOGIN_ATTEMPTS_LOCK:
-        # Purge grossière si le dictionnaire grossit trop (DoS mémoire)
-        if len(_LOGIN_ATTEMPTS) > _LOGIN_ATTEMPTS_MAX_KEYS:
-            cutoff = now - LOGIN_ATTEMPT_WINDOW
-            for k in list(_LOGIN_ATTEMPTS):
-                if all(t < cutoff for t in _LOGIN_ATTEMPTS[k]):
-                    _LOGIN_ATTEMPTS.pop(k, None)
-        _LOGIN_ATTEMPTS.setdefault(key, []).append(now)
+    Chaque appel COMPTE comme un hit : pour le brute-force d'un code à 6
+    chiffres, c'est le volume de tentatives qu'il faut plafonner, pas
+    seulement celui des échecs.
+    """
+    max_requests, window_seconds, block_seconds = quota
+    limited, _remaining = request.env['invoice.scanner.rate.limit'].sudo(
+    ).check_and_record(key, max_requests, window_seconds, block_seconds)
+    return limited
 
 
 # ==================== HELPERS ====================
@@ -387,67 +386,34 @@ class InvoiceScannerMobileAPI(http.Controller):
 
     # ==================== ENDPOINTS AUTH ====================
 
-    @http.route('/api/v1/invoice-scanner/auth/login', type='http', auth='none', 
-                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
-    @api_exception_handler
-    def login(self, **kw):
-        """Authentifier un utilisateur.
-        
-        Body JSON:
-        - login: Email ou identifiant
-        - password: Mot de passe
-        
-        Returns:
-        - token: Token d'authentification
-        - user: Données utilisateur
+    def _resolve_scanner_user(self, login):
+        """Retrouve l'utilisateur du scanner à partir d'un identifiant ou email.
+
+        Retourne le `res.users` s'il est actif, autorisé sur le module ET
+        joignable par email ; sinon False. L'appelant NE DOIT PAS distinguer
+        ces cas dans sa réponse (cf. `request_otp`).
         """
-        # Handle CORS preflight
-        if request.httprequest.method == 'OPTIONS':
-            return Response(status=200)
-            
-        data = get_json_body()
-        login = data.get('login', '').strip()
-        password = data.get('password', '')
-        
-        if not login or not password:
-            return api_error('VALIDATION_ERROR', 'Login et mot de passe requis', status=400)
-        
-        # Rate limiting : bloquer après trop d'échecs récents (par IP et par login)
-        client_ip = get_client_ip()
-        rate_keys = [f'ip:{client_ip}', f'login:{login.lower()}']
-        if any(_login_rate_limited(k) for k in rate_keys):
-            _logger.warning(
-                "Rate limit login scanner atteint (ip=%s, login=%s)",
-                client_ip, login,
-            )
-            return api_error(
-                'TOO_MANY_ATTEMPTS',
-                'Trop de tentatives de connexion. Réessayez dans quelques minutes.',
-                status=429,
-            )
-        
-        # Authentification Odoo
-        try:
-            uid = request.session.authenticate(
-                request.env.cr.dbname,
-                login,
-                password
-            )
-        except Exception as e:
-            _logger.warning(f"Échec authentification pour {login}: {e}")
-            uid = False
-        
-        if not uid:
-            for k in rate_keys:
-                _register_login_failure(k)
-            return api_error('AUTH_FAILED', 'Identifiants incorrects', status=401)
-        
-        user = request.env['res.users'].sudo().browse(uid)
-        
-        if not user.active:
-            return api_error('USER_INACTIVE', 'Compte désactivé', status=403)
-        
-        # Vérifier le droit d'accès au module et déterminer le rôle
+        login = (login or '').strip()
+        if not login:
+            return False
+        Users = request.env['res.users'].sudo()
+        user = Users.search([('login', '=ilike', login)], limit=1)
+        if not user:
+            user = Users.search([('email', '=ilike', login)], limit=1)
+        if not user or not user.active:
+            return False
+        if not self._compute_user_role(user):
+            return False
+        # Sans adresse email, aucun code ne peut être délivré.
+        if not (user.email or '@' in (user.login or '')):
+            return False
+        return user
+
+    def _compute_user_role(self, user):
+        """Rôle et drapeaux d'accès du user, ou None s'il n'a pas accès au module.
+
+        Extrait de l'ancienne route `login` pour être partagé avec `verify_otp`.
+        """
         is_manager = user.has_group('invoice_qr_scanner.group_invoice_scanner_manager')
         is_verificateur = user.has_group('invoice_qr_scanner.group_invoice_scanner_verificateur')
         is_traiteur = user.has_group('invoice_qr_scanner.group_invoice_scanner_traiteur')
@@ -456,10 +422,9 @@ class InvoiceScannerMobileAPI(http.Controller):
             is_manager or is_verificateur or is_traiteur or is_ot_manager
             or user.has_group('invoice_qr_scanner.group_invoice_scanner_user')
         )
-        
         if not has_access:
-            return api_error('ACCESS_DENIED', 'Accès non autorisé au scanner de factures', status=403)
-        
+            return None
+
         # Déterminer le rôle principal
         if is_manager:
             user_role = 'manager'
@@ -475,34 +440,185 @@ class InvoiceScannerMobileAPI(http.Controller):
             user_role = 'ot_manager'
         else:
             user_role = 'user'
-        
+
+        return {
+            'role': user_role,
+            'is_ot_manager': is_ot_manager,
+            'is_manager': is_manager,
+            'is_verificateur': is_verificateur,
+            'is_traiteur': is_traiteur,
+        }
+
+    @http.route('/api/v1/invoice-scanner/auth/request-otp', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    def request_otp(self, **kw):
+        """Envoyer un code de connexion à usage unique par email.
+
+        Body JSON:
+        - login: Email ou identifiant
+
+        Returns:
+        - resend_after: délai (s) avant de pouvoir redemander un code
+
+        La réponse est volontairement IDENTIQUE que le compte existe ou non :
+        distinguer les deux permettrait d'énumérer les identifiants du parc.
+        Un compte inconnu, désactivé, sans droit sur le module ou sans email
+        reçoit donc le même « code envoyé » — sans qu'aucun email ne parte.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+
+        data = get_json_body()
+        login = (data.get('login') or '').strip()
+
+        if not login:
+            return api_error('VALIDATION_ERROR', 'Identifiant requis', status=400)
+
+        # Rate limiting : protège autant du flood d'emails que de l'énumération.
+        # Chaque demande est comptée (et non les seuls échecs) : c'est le volume
+        # d'emails déclenchés qu'il faut plafonner.
+        client_ip = get_client_ip()
+        limited = (
+            _rate_limited(f'otpreq:ip:{client_ip}', RL_OTP_REQUEST_IP)
+            or _rate_limited(f'otpreq:login:{login.lower()}', RL_OTP_REQUEST_LOGIN)
+        )
+        if limited:
+            _logger.warning(
+                "Rate limit demande OTP scanner atteint (ip=%s, login=%s)",
+                client_ip, login,
+            )
+            return api_error(
+                'TOO_MANY_ATTEMPTS',
+                'Trop de demandes de code. Réessayez dans quelques minutes.',
+                status=429,
+            )
+
+        generic_response = api_response(
+            {'resend_after': OTP_RESEND_SECONDS},
+            message="Si ce compte existe, un code vient d'être envoyé par email.",
+        )
+
+        user = self._resolve_scanner_user(login)
+        if not user:
+            _logger.info(
+                "Demande OTP scanner pour un compte inconnu ou non autorisé "
+                "(login=%s, ip=%s)", login, client_ip,
+            )
+            return generic_response
+
+        otp = request.env['invoice.scanner.login.otp'].sudo()._get_or_create(user)
+        if not otp._can_resend():
+            return api_error(
+                'OTP_TOO_SOON',
+                "Un code vient d'être envoyé. Patientez un instant.",
+                status=429,
+            )
+
+        try:
+            otp.send_otp(ip_address=client_ip)
+        except Exception as e:  # noqa: BLE001 — tout échec = code non délivré
+            _logger.warning(
+                "Échec d'envoi du code OTP scanner à %s : %s", user.login, e,
+            )
+            return api_error(
+                'OTP_SEND_FAILED',
+                "L'email n'a pas pu être envoyé. Réessayez dans un instant.",
+                status=502,
+            )
+
+        return generic_response
+
+    @http.route('/api/v1/invoice-scanner/auth/verify-otp', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    def verify_otp(self, **kw):
+        """Échanger un code de connexion contre un token d'API.
+
+        Body JSON:
+        - login: Email ou identifiant
+        - otp: Code à 6 chiffres reçu par email
+
+        Returns:
+        - token: Token d'authentification
+        - user: Données utilisateur
+
+        Contrairement à `request_otp`, un échec est explicite : à ce stade
+        l'appelant détient déjà un code, l'énumération n'est plus l'enjeu.
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+
+        data = get_json_body()
+        login = (data.get('login') or '').strip()
+        code = (data.get('otp') or '').strip()
+
+        if not login or not code:
+            return api_error('VALIDATION_ERROR', 'Identifiant et code requis', status=400)
+
+        # Rate limiting : empêche le brute-force des 10^6 codes possibles,
+        # en complément du compteur de tentatives porté par le code lui-même.
+        client_ip = get_client_ip()
+        limited = (
+            _rate_limited(f'otpver:ip:{client_ip}', RL_OTP_VERIFY_IP)
+            or _rate_limited(f'otpver:login:{login.lower()}', RL_OTP_VERIFY_LOGIN)
+        )
+        if limited:
+            _logger.warning(
+                "Rate limit vérification OTP scanner atteint (ip=%s, login=%s)",
+                client_ip, login,
+            )
+            return api_error(
+                'TOO_MANY_ATTEMPTS',
+                'Trop de tentatives. Réessayez dans quelques minutes.',
+                status=429,
+            )
+
+        user = self._resolve_scanner_user(login)
+        if not user:
+            return api_error('AUTH_FAILED', 'Code invalide ou expiré', status=401)
+
+        Otp = request.env['invoice.scanner.login.otp'].sudo()
+        otp = Otp.search([('user_id', '=', user.id)], limit=1)
+        if not otp or not otp.verify_otp(code):
+            return api_error('AUTH_FAILED', 'Code invalide ou expiré', status=401)
+
+        role_info = self._compute_user_role(user)
+        if not role_info:
+            # Les droits ont pu changer entre l'envoi du code et sa saisie.
+            return api_error(
+                'ACCESS_DENIED',
+                'Accès non autorisé au scanner de factures',
+                status=403,
+            )
+
         # Générer le token
         token = self._generate_api_token()
         token_hash = self._hash_token(token)
         expires_at = fields.Datetime.now() + timedelta(hours=TOKEN_EXPIRY_HOURS)
-        
+
         # Sauvegarder le token
         request.env['invoice.scanner.api.token'].sudo().create({
-            'user_id': uid,
+            'user_id': user.id,
             'token_hash': token_hash,
             'expires_at': expires_at,
             'device_info': request.httprequest.headers.get('User-Agent', '')[:200],
-            'ip_address': get_client_ip(),
+            'ip_address': client_ip,
         })
-        
+
         return api_response({
             'token': token,
-            'expires_at': expires_at.isoformat(),
+            # Suffixe 'Z' explicite : `fields.Datetime` est de l'UTC NAÏF, et
+            # un client qui parserait « 2026-07-28T16:00:00 » sans marqueur
+            # l'interpréterait en heure locale. Le décalage passerait inaperçu
+            # en Côte d'Ivoire (UTC+0) et casserait ailleurs.
+            'expires_at': expires_at.isoformat() + 'Z',
             'user': {
                 'id': user.id,
                 'name': user.name,
                 'email': user.email or '',
                 'login': user.login,
-                'role': user_role,
-                'is_ot_manager': is_ot_manager,
-                'is_manager': is_manager,
-                'is_verificateur': is_verificateur,
-                'is_traiteur': is_traiteur,
+                **role_info,
             }
         })
 
@@ -600,7 +716,11 @@ class InvoiceScannerMobileAPI(http.Controller):
         
         # Extraire l'UUID
         ScanRecord = request.env['invoice.scan.record'].sudo()
-        qr_uuid = data.get('qr_uuid', '').strip() or ScanRecord.extract_uuid_from_url(qr_url)
+        # Le `qr_uuid` fourni par le client prime sur l'extraction : le
+        # normaliser explicitement, sinon toutes les recherches par UUID de
+        # cette route (dédoublonnage compris) resteraient sensibles à la casse.
+        qr_uuid = ScanRecord._normalize_qr_uuid(
+            data.get('qr_uuid', '')) or ScanRecord.extract_uuid_from_url(qr_url)
         
         if not qr_uuid:
             return api_error('INVALID_URL', 'Impossible d\'extraire l\'UUID du QR-code', status=400)

@@ -39,9 +39,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _tabController.addListener(_onTabChanged);
     _initializeAndLoad();
     
-    // Écouter les changements d'état d'authentification et de connectivité
+    // Écouter les changements de connectivité. La redirection en cas de perte
+    // de session est assurée globalement par AuthGuard (cf. main.dart).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthProvider>().addListener(_onAuthStateChanged);
       context.read<ConnectivityProvider>().addListener(_onConnectivityChanged);
     });
   }
@@ -58,13 +58,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     scan.loadHistory(isOnline: connectivity.isOnline);
   }
   
-  void _onAuthStateChanged() {
-    final auth = context.read<AuthProvider>();
-    if (!auth.isAuthenticated && mounted) {
-      // Session expirée, rediriger vers la page de connexion
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-    }
-  }
   
   /// Écoute les changements de connectivité pour synchronisation automatique
   void _onConnectivityChanged() {
@@ -127,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     // Retirer les listeners
     try {
-      context.read<AuthProvider>().removeListener(_onAuthStateChanged);
       context.read<ConnectivityProvider>().removeListener(_onConnectivityChanged);
     } catch (_) {
       // Ignorer si le context n'est plus disponible

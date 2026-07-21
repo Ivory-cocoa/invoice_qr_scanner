@@ -24,6 +24,7 @@ import 'screens/settings_screen.dart';
 import 'screens/my_ot_links_screen.dart';
 import 'screens/ot_manager_home_screen.dart';
 import 'screens/invoice_picker_screen.dart';
+import 'widgets/auth_guard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,11 @@ void main() async {
 class FactureScannerApp extends StatelessWidget {
   const FactureScannerApp({super.key});
 
+  /// Clé du Navigator racine : permet à [AuthGuard], qui vit AU-DESSUS du
+  /// Navigator, de déclencher une navigation sans `BuildContext` de route.
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -92,6 +98,13 @@ class FactureScannerApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.system,
+        navigatorKey: navigatorKey,
+        // `builder` place la garde au-dessus du Navigator : elle couvre donc
+        // TOUS les écrans, y compris ceux poussés hors table de routes.
+        builder: (context, child) => AuthGuard(
+          navigatorKey: navigatorKey,
+          child: child ?? const SizedBox.shrink(),
+        ),
         initialRoute: '/',
         routes: {
           '/': (context) => const SplashScreen(),

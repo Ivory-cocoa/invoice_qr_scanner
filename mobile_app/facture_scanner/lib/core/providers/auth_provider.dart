@@ -2,6 +2,8 @@
 /// Manages user authentication state
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
@@ -35,32 +37,50 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     
     await _api.init();
-    
+
     if (_api.isAuthenticated) {
       _user = _api.currentUser;
       _state = AuthState.authenticated;
     } else {
+      // Distinguer « jamais connecté » d'une session arrivée à expiration :
+      // sans message, l'utilisateur retrouve l'écran de connexion sans
+      // comprendre pourquoi.
+      if (_api.sessionExpiredAtStartup) {
+        _errorMessage = 'Votre session a expiré. Veuillez vous reconnecter.';
+        // Les données locales du compte précédent n'ont plus lieu d'être.
+        unawaited(_db.clearAllData().catchError((_) {}));
+      }
       _state = AuthState.unauthenticated;
     }
-    
+
     notifyListeners();
   }
   
-  Future<bool> login(String login, String password) async {
+  /// Identifiant pour lequel un code a été demandé, conservé entre les deux
+  /// étapes de la connexion (l'écran le réaffiche et le renvoie à la vérif).
+  String? _pendingLogin;
+  String? get pendingLogin => _pendingLogin;
+
+  /// True dès qu'un code a été demandé : l'écran bascule alors sur la saisie
+  /// du code à 6 chiffres.
+  bool get isAwaitingOtp => _pendingLogin != null;
+
+  /// Étape 1 — demander l'envoi d'un code de connexion par email.
+  Future<bool> requestOtp(String login) async {
     _state = AuthState.loading;
     _errorMessage = null;
     notifyListeners();
-    
+
     try {
-      final response = await _api.login(login, password);
-      
+      final response = await _api.requestOtp(login);
+
       if (response.success) {
-        _user = _api.currentUser;
-        _state = AuthState.authenticated;
+        _pendingLogin = login;
+        _state = AuthState.unauthenticated;
         notifyListeners();
         return true;
       } else {
-        _errorMessage = response.errorMessage ?? 'Erreur de connexion';
+        _errorMessage = response.errorMessage ?? "Impossible d'envoyer le code";
         _state = AuthState.error;
         notifyListeners();
         return false;
@@ -72,6 +92,53 @@ class AuthProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Étape 2 — échanger le code reçu par email contre un token.
+  Future<bool> verifyOtp(String otp) async {
+    final login = _pendingLogin;
+    if (login == null) {
+      _errorMessage = "Demandez d'abord un code de connexion.";
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
+    }
+
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.verifyOtp(login, otp);
+
+      if (response.success) {
+        _user = _api.currentUser;
+        _pendingLogin = null;
+        _state = AuthState.authenticated;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = response.errorMessage ?? 'Code invalide ou expiré';
+        _state = AuthState.error;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Erreur: ${e.toString()}';
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Revenir à la saisie de l'identifiant (bouton « Modifier l'identifiant »).
+  void resetOtpFlow() {
+    _pendingLogin = null;
+    _errorMessage = null;
+    if (_state == AuthState.error) {
+      _state = AuthState.unauthenticated;
+    }
+    notifyListeners();
+  }
   
   Future<void> logout() async {
     _state = AuthState.loading;
@@ -81,10 +148,11 @@ class AuthProvider extends ChangeNotifier {
     await _db.clearAllData();
     
     _user = null;
+    _pendingLogin = null;
     _state = AuthState.unauthenticated;
     notifyListeners();
   }
-  
+
   /// Gérer l'expiration de session (appelé par d'autres providers)
   // Garde d'exclusion : plusieurs réponses 401 simultanées ne doivent
   // déclencher qu'UN SEUL traitement d'expiration (évite doubles dialogs
@@ -97,6 +165,7 @@ class AuthProvider extends ChangeNotifier {
     _handlingSessionExpiry = true;
 
     _user = null;
+    _pendingLogin = null;
     _errorMessage = 'Votre session a expiré. Veuillez vous reconnecter.';
     _state = AuthState.unauthenticated;
     notifyListeners();

@@ -5,3 +5,5 @@ access_invoice_scan_record_traiteur,invoice.scan.record.traiteur,model_invoice_s
 access_invoice_scan_record_manager,invoice.scan.record.manager,model_invoice_scan_record,group_invoice_scanner_manager,1,1,1,1
 access_invoice_scanner_api_token_user,invoice.scanner.api.token.user,model_invoice_scanner_api_token,group_invoice_scanner_user,1,0,0,0
 access_invoice_scanner_api_token_manager,invoice.scanner.api.token.manager,model_invoice_scanner_api_token,group_invoice_scanner_manager,1,1,1,1
+access_invoice_scanner_login_otp_manager,invoice.scanner.login.otp.manager,model_invoice_scanner_login_otp,group_invoice_scanner_manager,1,0,0,0
+access_invoice_scanner_rate_limit_manager,invoice.scanner.rate.limit.manager,model_invoice_scanner_rate_limit,group_invoice_scanner_manager,1,0,0,0

@@ -55,6 +55,25 @@ Allez dans **Scanner Factures > Configuration > Paramètres** pour :
 | Utilisateur Scanner | Peut scanner et créer des factures, voir son historique |
 | Responsable Scanner | Accès complet : configuration, tout l'historique, suppression |
 
+### Protection des scans contre la suppression
+
+Un scan est une **pièce justificative** dès lors qu'il atteste l'origine DGI
+d'une facture. Deux garde-fous s'appliquent donc à **tous les profils, y
+compris Responsable** — les droits de suppression du groupe ne les lèvent pas.
+
+| Situation | Suppression | Comment procéder malgré tout |
+|---|---|---|
+| Scan à l'état **Traité** | refusée | retirer l'état avec « ↩ Remettre non traité » — l'opération est tracée dans le chatter |
+| Facture liée **comptabilisée** | refusée | annuler d'abord la facture (opération comptable) |
+| Brouillon, erreur, facture non validée | autorisée | — |
+
+La suppression est **atomique** : un lot contenant un seul scan protégé est
+refusé en entier, afin qu'une suppression de masse ne laisse pas un état
+partiel.
+
+La **duplication** d'un scan est également refusée : chaque enregistrement
+correspond à un QR-code DGI unique.
+
 ## Utilisation
 
 ### Via l'application mobile
@@ -72,18 +91,62 @@ Les scans sont visibles dans **Scanner Factures > Scans > Tous les scans**.
 
 ### Authentification
 
+L'authentification mobile se fait par **code à usage unique (OTP) envoyé par
+email**, en deux appels. Il n'y a pas de mot de passe : l'accès à la boîte mail
+professionnelle fait foi.
+
+**Étape 1 — demander un code**
+
 ```http
-POST /api/v1/invoice-scanner/auth/login
+POST /api/v1/invoice-scanner/auth/request-otp
 Content-Type: application/json
 
 {
-  "jsonrpc": "2.0",
-  "params": {
-    "login": "admin",
-    "password": "admin"
-  }
+  "login": "jdupont"
 }
 ```
+
+La réponse est volontairement identique que le compte existe ou non (protection
+contre l'énumération des identifiants) : un succès ne garantit donc pas qu'un
+email est parti. Un compte inconnu, désactivé, sans droit sur le module ou sans
+adresse email reçoit la même réponse, sans qu'aucun email ne soit envoyé.
+
+Le code comporte 6 chiffres, expire au bout de **10 minutes**, tolère **5
+saisies erronées**, et ne peut être redemandé qu'après **60 secondes**
+(erreur `OTP_TOO_SOON` sinon). Seul son hash SHA-256 est stocké en base.
+
+Les deux routes sont protégées par un rate-limit adossé à PostgreSQL
+(`invoice.scanner.rate.limit`, verrou `SELECT ... FOR UPDATE`), donc **commun à
+tous les workers** — un compteur en mémoire aurait été multiplié par leur
+nombre. Quotas, sous la forme *(requêtes, fenêtre, blocage)* :
+
+| Clé | Envoi de code | Vérification |
+|---|---|---|
+| par IP | 30 / 1 h → 10 min | 60 / 5 min → 5 min |
+| par compte | 5 / 5 min → 5 min | 10 / 5 min → 5 min |
+
+Les quotas par IP sont larges à dessein : tous les téléphones d'un site
+sortent derrière la même IP publique, un quota serré bloquerait l'entrepôt
+entier. Dépassement → HTTP 429 `TOO_MANY_ATTEMPTS`.
+
+**Étape 2 — échanger le code contre un token**
+
+```http
+POST /api/v1/invoice-scanner/auth/verify-otp
+Content-Type: application/json
+
+{
+  "login": "jdupont",
+  "otp": "482913"
+}
+```
+
+Le token retourné vaut **7 jours**. La réponse porte `expires_at` au format
+ISO 8601 **suffixé `Z`** : `fields.Datetime` étant de l'UTC naïf, un client qui
+parserait la date sans marqueur l'interpréterait en heure locale — décalage
+invisible en Côte d'Ivoire (UTC+0), bien réel ailleurs. L'application mobile
+persiste cette date et invalide la session au démarrage plutôt que d'attendre
+un 401 sur le premier appel métier.
 
 Réponse :
 ```json

@@ -14,5 +14,29 @@
             <field name="active">True</field>
         </record>
 
+        <!-- Cron job pour purger les codes de connexion (OTP) dormants -->
+        <record id="ir_cron_cleanup_expired_otps" model="ir.cron">
+            <field name="name">Scanner Factures: Nettoyage codes de connexion</field>
+            <field name="model_id" ref="model_invoice_scanner_login_otp"/>
+            <field name="state">code</field>
+            <field name="code">model.cleanup_expired_otps()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active">True</field>
+        </record>
+
+        <!-- Cron job pour purger les compteurs de rate-limit obsolètes -->
+        <record id="ir_cron_cleanup_rate_limit" model="ir.cron">
+            <field name="name">Scanner Factures: Nettoyage compteurs rate-limit</field>
+            <field name="model_id" ref="model_invoice_scanner_rate_limit"/>
+            <field name="state">code</field>
+            <field name="code">model.cleanup_stale_buckets()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active">True</field>
+        </record>
+
     </data>
 </odoo>

@@ -5,11 +5,16 @@
 # Vérifie, dans l'ordre :
 #   1. Odoo répond et résout bien UNE base (pas de redirection vers le sélecteur)
 #   2. L'endpoint public /health renvoie 200 + JSON (routes du module montées)
-#   3. Le login mobile /auth/login fonctionne (si identifiants fournis)
+#   3. L'envoi de code /auth/request-otp répond (si un identifiant est fourni)
+#
+# La connexion mobile se fait par code à usage unique envoyé par email : ce
+# script ne peut donc pas aller jusqu'au token sans intervention humaine. Il
+# vérifie que l'endpoint d'envoi répond, et — si l'identifiant existe — qu'un
+# email part réellement (à confirmer dans la boîte de réception).
 #
 # Usage :
 #   ./verify_prod_api.sh                       # health + résolution DB
-#   ./verify_prod_api.sh user@exemple.ci 'MotDePasse'   # + test login
+#   ./verify_prod_api.sh user@exemple.ci       # + test d'envoi de code
 #
 # Variables d'env optionnelles :
 #   BASE_URL  (défaut: https://odoo.ivorycocoa.ci)
@@ -18,7 +23,6 @@ set -u
 
 BASE_URL="${BASE_URL:-https://odoo.ivorycocoa.ci}"
 LOGIN="${1:-}"
-PASSWORD="${2:-}"
 TIMEOUT=20
 
 GREEN=$'\033[0;32m'; RED=$'\033[0;31m'; YEL=$'\033[0;33m'; NC=$'\033[0m'
@@ -65,29 +69,37 @@ else
 fi
 rm -f /tmp/_health_body
 
-# 3. Login mobile (optionnel) ------------------------------------------------
-if [ -n "$LOGIN" ] && [ -n "$PASSWORD" ]; then
-  echo "--- [3] Login mobile /auth/login (utilisateur: $LOGIN) ---"
-  login_url="$BASE_URL/api/v1/invoice-scanner/auth/login"
-  payload="$(printf '{"login":"%s","password":"%s"}' "$LOGIN" "$PASSWORD")"
-  login_code="$(curl -s -o /tmp/_login_body -w '%{http_code}' -m "$TIMEOUT" \
-    -X POST "$login_url" \
+# 3. Envoi de code de connexion (optionnel) -----------------------------------
+if [ -n "$LOGIN" ]; then
+  echo "--- [3] Envoi de code /auth/request-otp (utilisateur: $LOGIN) ---"
+  otp_url="$BASE_URL/api/v1/invoice-scanner/auth/request-otp"
+  payload="$(printf '{"login":"%s"}' "$LOGIN")"
+  otp_code="$(curl -s -o /tmp/_otp_body -w '%{http_code}' -m "$TIMEOUT" \
+    -X POST "$otp_url" \
     -H 'Content-Type: application/json' \
     -H 'Accept: application/json' \
     -d "$payload" 2>/dev/null)"
-  login_body="$(cat /tmp/_login_body 2>/dev/null)"
-  if [ "$login_code" = "200" ] && printf '%s' "$login_body" | grep -q '"token"'; then
-    ok "Login réussi : token reçu, rôle = $(printf '%s' "$login_body" | grep -oE '"role"[^,]*' | head -1)"
-  elif printf '%s' "$login_body" | grep -q '"success": *false'; then
-    warn "API joignable mais login refusé (HTTP $login_code) : $(printf '%s' "$login_body" | head -c 200)"
-    echo "      => Identifiants incorrects ou utilisateur sans rôle scanner (groupes)."
+  otp_body="$(cat /tmp/_otp_body 2>/dev/null)"
+  if [ "$otp_code" = "200" ]; then
+    ok "Endpoint d'envoi opérationnel (HTTP 200)."
+    echo "      => La réponse est identique que le compte existe ou non"
+    echo "         (anti-énumération) : vérifiez la boîte mail de $LOGIN pour"
+    echo "         confirmer que le code est bien parti."
+  elif printf '%s' "$otp_body" | grep -q 'OTP_SEND_FAILED'; then
+    ko "Le compte existe mais l'email n'a PAS pu être envoyé (SMTP)."
+    echo "      => Vérifiez le serveur de courrier sortant et mail.default.from."
+    fail=1
+  elif printf '%s' "$otp_body" | grep -q 'OTP_TOO_SOON'; then
+    warn "Un code vient déjà d'être envoyé pour ce compte (anti-spam 60 s)."
+  elif printf '%s' "$otp_body" | grep -q 'TOO_MANY_ATTEMPTS'; then
+    warn "Quota de demandes atteint (HTTP $otp_code) : réessayez plus tard."
   else
-    ko "Login en échec (HTTP $login_code) : $(printf '%s' "$login_body" | head -c 200)"
+    ko "Envoi de code en échec (HTTP $otp_code) : $(printf '%s' "$otp_body" | head -c 200)"
     fail=1
   fi
-  rm -f /tmp/_login_body
+  rm -f /tmp/_otp_body
 else
-  echo "--- [3] Login mobile : ignoré (passer login + mot de passe en arguments) ---"
+  echo "--- [3] Envoi de code : ignoré (passer un identifiant en argument) ---"
 fi
 
 echo "════════════════════════════════════════════════════════════════"

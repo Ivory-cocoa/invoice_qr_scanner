@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../core/providers/auth_provider.dart';
 import '../core/theme/app_theme.dart';
+import '../core/config/environment.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -273,7 +274,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     return Column(
       children: [
         Text(
-          'Version 2.0.0',
+          'Version ${AppConfig.appVersion}',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),
             fontSize: 12,

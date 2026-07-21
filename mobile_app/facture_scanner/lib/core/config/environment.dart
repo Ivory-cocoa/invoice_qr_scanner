@@ -81,9 +81,18 @@ class AppConfig {
   static bool get enableLogging => config.enableLogging;
   static bool get enableCrashlytics => config.enableCrashlytics;
   
-  // Version de l'application
-  static const String appVersion = '2.0.1';
-  static const int buildNumber = 2;
+  // Version de l'application — SOURCE UNIQUE pour l'affichage.
+  //
+  // ⚠️ Garder synchronisé avec `version:` dans pubspec.yaml. Ces valeurs ont
+  // divergé par le passé (pubspec 2.1.0+3, AppConfig 2.0.1, et « Version
+  // 2.0.0 » codé en dur dans deux écrans) : l'utilisateur voyait une version
+  // qui n'était celle d'aucun build.
+  //
+  // Passage en 3.0.0 : la connexion par mot de passe est remplacée par un
+  // code à usage unique envoyé par email. Les APK antérieurs ne peuvent plus
+  // s'authentifier — c'est un changement incompatible, d'où le majeur.
+  static const String appVersion = '3.0.0';
+  static const int buildNumber = 4;
   
   // Nom de l'application
   static const String appName = 'Facture Scanner';

@@ -16,7 +16,8 @@
         - Tableau de bord OWL pour le Responsable Scanner
         
         API REST pour application mobile Flutter :
-        - POST /api/v1/invoice-scanner/auth/login - Authentification
+        - POST /api/v1/invoice-scanner/auth/request-otp - Envoi du code de connexion
+        - POST /api/v1/invoice-scanner/auth/verify-otp - Authentification par code
         - POST /api/v1/invoice-scanner/auth/logout - Déconnexion
         - POST /api/v1/invoice-scanner/scan-with-data - Scanner avec données pré-extraites
         - GET /api/v1/invoice-scanner/history - Historique des scans

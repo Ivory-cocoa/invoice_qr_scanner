@@ -5,7 +5,7 @@ Modèle pour enregistrer les scans de QR-code de factures
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
@@ -26,6 +26,7 @@ class InvoiceScanRecord(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
     _rec_name = 'reference'
+
 
     # Champs d'identification
     reference = fields.Char(
@@ -98,7 +99,7 @@ class InvoiceScanRecord(models.Model):
     currency_id = fields.Many2one(
         'res.currency',
         string="Devise",
-        default=lambda self: self.env['res.currency'].search([('name', '=', 'XOF')], limit=1),
+        default=lambda self: self._default_currency_id(),
         required=True
     )
     
@@ -238,6 +239,19 @@ class InvoiceScanRecord(models.Model):
     # parsing du QR-code (100 milliards de FCFA).
     AMOUNT_TTC_MAX = 100_000_000_000
 
+    @api.model
+    def _default_currency_id(self):
+        """Devise par défaut : XOF si disponible, sinon celle de la société.
+
+        `search` ignore les devises INACTIVES, et Odoo les livre presque toutes
+        désactivées. Sur une base où XOF n'a pas été activée, l'ancien défaut
+        renvoyait un recordset vide et la création d'un scan échouait sur la
+        contrainte NOT NULL de `currency_id` — un échec brutal et peu lisible.
+        Le repli sur la devise de la société garantit une valeur exploitable.
+        """
+        xof = self.env['res.currency'].search([('name', '=', 'XOF')], limit=1)
+        return xof or self.env.company.currency_id
+
     @api.constrains('amount_ttc')
     def _check_amount_ttc(self):
         for record in self:
@@ -253,7 +267,6 @@ class InvoiceScanRecord(models.Model):
 
     @api.constrains('invoice_date')
     def _check_invoice_date(self):
-        from datetime import timedelta
         max_date = fields.Date.today() + timedelta(days=7)
         for record in self:
             if record.invoice_date and record.invoice_date > max_date:
@@ -267,12 +280,113 @@ class InvoiceScanRecord(models.Model):
         for record in self:
             record.is_processed = record.state == 'processed'
 
+    @staticmethod
+    def _normalize_qr_uuid(qr_uuid):
+        """Normaliser un UUID DGI en minuscules.
+
+        Point critique pour la détection de doublons : la contrainte SQL
+        `(qr_uuid, company_id)` et les recherches `('qr_uuid', '=', ...)` sont
+        SENSIBLES À LA CASSE. Deux scans du même QR différant seulement par la
+        casse passeraient donc tous les deux — c'est-à-dire une facture
+        fournisseur enregistrée en double, exactement ce que ce module existe
+        pour empêcher.
+
+        `extract_uuid_from_url` normalisait déjà, mais l'API accepte aussi un
+        `qr_uuid` fourni directement par le client (cf. `scan-with-data`), qui
+        court-circuitait l'extraction. On normalise donc au niveau du modèle,
+        seul endroit que tous les chemins d'écriture traversent.
+        """
+        return (qr_uuid or '').strip().lower()
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get('reference', '/') == '/':
                 vals['reference'] = self.env['ir.sequence'].next_by_code('invoice.scan.record') or '/'
+            if vals.get('qr_uuid'):
+                vals['qr_uuid'] = self._normalize_qr_uuid(vals['qr_uuid'])
         return super().create(vals_list)
+
+    def write(self, vals):
+        if vals.get('qr_uuid'):
+            vals = dict(vals, qr_uuid=self._normalize_qr_uuid(vals['qr_uuid']))
+        return super().write(vals)
+
+    @api.ondelete(at_uninstall=False)
+    def _unlink_except_processed(self):
+        """Interdire la suppression des scans traités.
+
+        Un scan « traité » atteste qu'une facture fournisseur a été créée puis
+        enregistrée : c'est une pièce justificative, pas une donnée de travail.
+        Le supprimer détacherait au passage, et SILENCIEUSEMENT, les lignes de
+        coût d'OT qui s'y réfèrent — `potting.cost.line.scan_record_id` est en
+        `ondelete='set null'`, donc la justification disparaîtrait sans erreur.
+
+        `@api.ondelete` plutôt qu'une surcharge d'`unlink()` : Odoo l'appelle
+        sur tous les chemins de suppression, et `at_uninstall=False` laisse la
+        désinstallation du module se dérouler normalement.
+
+        La protection s'applique à TOUS les profils, y compris Responsable.
+        Pour supprimer un scan traité, il faut d'abord lui retirer cet état via
+        `action_mark_unprocessed`, ce qui laisse une trace dans le chatter :
+        la suppression reste possible, mais jamais silencieuse.
+        """
+        processed = self.filtered(lambda r: r.state == 'processed')
+        if not processed:
+            return
+        raise UserError(_(
+            "Impossible de supprimer un scan traité : il sert de pièce "
+            "justificative à une facture enregistrée.\n\n"
+            "Scan(s) concerné(s) : %s\n\n"
+            "Pour le supprimer malgré tout, retirez d'abord l'état « Traité » "
+            "avec le bouton « ↩ Remettre non traité ». L'opération est tracée "
+            "dans l'historique du scan."
+        ) % ', '.join(processed.mapped('display_name')))
+
+    @api.ondelete(at_uninstall=False)
+    def _unlink_except_posted_invoice(self):
+        """Interdire la suppression d'un scan lié à une facture COMPTABILISÉE.
+
+        Axe distinct de la protection des scans traités : un scan peut porter
+        une facture validée sans avoir été marqué « traité ». Or dès qu'une
+        facture est comptabilisée, le scan devient la pièce qui justifie son
+        origine DGI — le supprimer laisserait une écriture sans justificatif.
+
+        Une facture en brouillon ou annulée ne bloque pas : elle n'a pas
+        d'existence comptable.
+
+        Contrairement au scan traité, il n'existe PAS d'échappatoire ici :
+        « dévalider » une facture comptabilisée est une opération comptable
+        lourde, volontairement hors du périmètre de ce module.
+        """
+        posted = self.filtered(
+            lambda r: r.invoice_id and r.invoice_id.state == 'posted')
+        if not posted:
+            return
+        raise UserError(_(
+            "Impossible de supprimer un scan dont la facture est "
+            "comptabilisée : il en justifie l'origine DGI.\n\n"
+            "Scan(s) concerné(s) : %s\n\n"
+            "Il faudrait d'abord annuler la facture correspondante, ce qui "
+            "relève de la comptabilité."
+        ) % ', '.join(
+            '%s → %s' % (r.display_name, r.invoice_id.name) for r in posted
+        ))
+
+    def copy(self, default=None):
+        """Interdire la duplication d'un scan.
+
+        Un scan matérialise UN QR-code DGI, identifié de façon unique par son
+        `qr_uuid`. Le dupliquer n'a pas de sens métier, et la contrainte SQL
+        d'unicité le refusait déjà — mais sous la forme d'une `IntegrityError`
+        brute, illisible pour l'utilisateur et qui invalide la transaction en
+        cours. On échoue donc proprement, avant d'atteindre la base.
+        """
+        raise UserError(_(
+            "Un scan de QR-code ne peut pas être dupliqué : chaque "
+            "enregistrement correspond à une facture DGI unique.\n\n"
+            "Pour enregistrer une autre facture, scannez son QR-code."
+        ))
 
     def action_mark_processed(self):
         """Marquer le(s) scan(s) comme traité(s)/enregistré(s)."""
@@ -324,6 +438,10 @@ class InvoiceScanRecord(models.Model):
         Returns:
             str: UUID ou None
         """
+        # `url` peut être None ou vide : l'API le reçoit du client et
+        # `re.search` lèverait un TypeError au lieu de renvoyer None.
+        if not url:
+            return None
         # Pattern UUID: 8-4-4-4-12 caractères hexadécimaux
         pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
         match = re.search(pattern, url, re.IGNORECASE)
@@ -338,8 +456,10 @@ class InvoiceScanRecord(models.Model):
         Returns:
             record: Enregistrement existant (done/processed) ou False
         """
+        # Normaliser la recherche : un appelant peut passer un UUID en
+        # majuscules, et la comparaison SQL est sensible à la casse.
         return self.search([
-            ('qr_uuid', '=', qr_uuid),
+            ('qr_uuid', '=', self._normalize_qr_uuid(qr_uuid)),
             ('state', 'in', ['done', 'processed']),
             ('company_id', '=', self.env.company.id)
         ], limit=1)
@@ -675,6 +795,14 @@ class InvoiceScanRecord(models.Model):
                     })
             
             return {
+                # Chemin nominal : `error` est explicitement faux, pour que le
+                # client distingue « aucune donnée » de « calcul en échec »
+                # (cf. le repli du `except` plus bas).
+                'error': False,
+                # Période RÉELLEMENT appliquée : une valeur invalide est
+                # silencieusement ramenée à 'month' plus haut, et l'appelant
+                # n'avait aucun moyen de s'en apercevoir.
+                'period': period,
                 'stats': {
                     'totalScans': total_scans,
                     'successfulScans': successful_scans,
@@ -700,9 +828,19 @@ class InvoiceScanRecord(models.Model):
                 },
             }
         except Exception as e:
-            _logger.error(f"Erreur get_dashboard_data: {e}")
-            # Retourner des données vides en cas d'erreur
+            _logger.error(f"Erreur get_dashboard_data: {e}", exc_info=True)
+            # Repli en cas d'erreur : structure vide, mais EXPLICITEMENT
+            # signalée par `error`.
+            #
+            # Sans ce drapeau, le repli est indiscernable d'un tableau de bord
+            # légitimement vide : un `timedelta` non importé y a renvoyé des
+            # zéros pendant très longtemps sans que personne ne s'en aperçoive,
+            # et trois tests passaient au vert sur cette structure de repli.
+            # Le client doit pouvoir afficher « données indisponibles » plutôt
+            # que de fausses statistiques à zéro.
             return {
+                'error': True,
+                'period': period,
                 'stats': {
                     'totalScans': 0,
                     'successfulScans': 0,
