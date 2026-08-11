@@ -1,8 +1,8 @@
 /// Background Scan Queue Service
 /// Gère une file d'attente de scans traités en arrière-plan avec sémaphore.
-/// L'utilisateur peut continuer à scanner pendant que l'extraction DGI
-/// s'effectue en tâche de fond. Si l'extraction prend trop de temps,
-/// l'utilisateur peut ouvrir le formulaire de saisie manuelle.
+/// L'utilisateur peut continuer à scanner pendant que la vérification DGI
+/// s'effectue côté serveur. Si la DGI est indisponible, l'utilisateur peut
+/// ouvrir le formulaire de saisie manuelle.
 library;
 
 import 'dart:async';
@@ -11,7 +11,6 @@ import 'package:flutter/foundation.dart';
 
 import 'api_service.dart';
 import 'database_service.dart';
-import 'dgi_extractor_service.dart';
 import 'dgi_parser_service.dart';
 import '../models/scan_record.dart';
 
@@ -79,12 +78,11 @@ class QueueItem {
 class BackgroundScanQueue extends ChangeNotifier {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
-  final DgiExtractorService _extractor = DgiExtractorService();
 
   /// File d'attente ordonnée
   final LinkedHashMap<String, QueueItem> _queue = LinkedHashMap();
 
-  /// Sémaphore : max 1 extraction à la fois (WebView unique)
+  /// Sémaphore : un scan traité à la fois, pour ne pas saturer le serveur
   bool _isProcessing = false;
 
   /// Timeout configurable (en secondes)
@@ -220,67 +218,57 @@ class BackgroundScanQueue extends ChangeNotifier {
     item.progressMessage = 'Vérification DGI en cours...';
     notifyListeners();
 
+    // La vérification DGI est faite par le SERVEUR, sur toutes les
+    // plateformes : l'extraction locale par WebView tronquait les raisons
+    // sociales contenant un tiret et fabriquait de faux codes DGI.
+    await _processItemServerSide(item);
+  }
+
+  /// Traitement d'un élément de la file par le serveur.
+  ///
+  /// Un seul appel fait la vérification DGI ET la création de la facture. La
+  /// file garde tout son sens — l'utilisateur enchaîne les scans sans
+  /// attendre — seul l'étage d'extraction locale disparaît.
+  Future<void> _processItemServerSide(QueueItem item) async {
     final stopwatch = Stopwatch()..start();
-
     try {
-      // Extraction DGI avec timeout
-      DgiExtractionResult result;
-      bool timedOut = false;
-
-      try {
-        result = await _extractor.extractFromUrl(
-          item.qrUrl,
-          onProgress: (msg) {
-            item.progressMessage = msg;
-            notifyListeners();
-          },
-        ).timeout(
-          Duration(seconds: _verificationTimeout),
-          onTimeout: () {
-            timedOut = true;
-            return DgiExtractionResult(
-              success: false,
-              error: 'Timeout DGI',
-            );
-          },
-        );
-      } catch (e) {
-        timedOut = true;
-        result = DgiExtractionResult(
-          success: false,
-          error: e.toString(),
-        );
-      }
-
+      final response = await _api.scanFromUrl(item.qrUrl);
       stopwatch.stop();
       item.verificationDuration = stopwatch.elapsedMilliseconds / 1000.0;
 
-      if (result.success && result.data != null && !timedOut) {
-        // Extraction réussie → soumettre au serveur
-        item.extractedData = result.data;
-        item.state = QueueItemState.submitting;
-        item.progressMessage = 'Création de la facture...';
-        notifyListeners();
-
-        // Enrichir le filet de sécurité local avec les données extraites :
-        // en cas de crash, la sync utilisera le chemin « parsed » (rapide).
-        if (item.pendingDbId != null) {
-          try {
-            await _db.updateScanWithParsedData(item.pendingDbId!, result.data!);
-          } catch (_) {}
+      if (response.success && response.data != null) {
+        item.state = QueueItemState.completed;
+        item.progressMessage = null;
+        item.resultMessage =
+            response.data!['message'] ?? 'Facture créée avec succès';
+        if (response.data!.containsKey('record')) {
+          item.scanRecord = ScanRecord.fromJson(response.data!['record']);
         }
-
-        await _submitToServer(item, result.data!, false);
-      } else {
-        // Timeout ou échec → requiert saisie manuelle
-        item.extractedData = result.data; // Données partielles éventuelles
+        _sessionSuccessCount++;
+        await _removeSafetyNet(item);
+        onHistoryChanged?.call();
+      } else if (response.errorCode == 'DUPLICATE') {
+        item.state = QueueItemState.completed;
+        item.progressMessage = null;
+        item.resultMessage = 'Doublon détecté';
+        if (response.data != null &&
+            response.data!.containsKey('existing_record')) {
+          item.scanRecord = ScanRecord.fromJson(response.data!['existing_record']);
+        }
+        _sessionDuplicateCount++;
+        await _removeSafetyNet(item);
+      } else if (response.data?['manual_entry_suggested'] == true) {
         item.state = QueueItemState.needsManualEntry;
         item.progressMessage = null;
-        item.resultMessage = timedOut
-            ? 'Timeout (${item.verificationDuration.toStringAsFixed(1)}s) - Saisie manuelle requise'
-            : 'Extraction échouée - Saisie manuelle requise';
+        item.resultMessage =
+            response.errorMessage ?? 'Vérification DGI indisponible - Saisie manuelle requise';
         _sessionManualCount++;
-        notifyListeners();
+      } else {
+        item.state = QueueItemState.failed;
+        item.progressMessage = null;
+        item.errorMessage = response.errorCode;
+        item.resultMessage = response.errorMessage ?? 'Erreur serveur';
+        _sessionErrorCount++;
       }
     } catch (e) {
       stopwatch.stop();
@@ -290,8 +278,9 @@ class BackgroundScanQueue extends ChangeNotifier {
       item.errorMessage = e.toString();
       item.resultMessage = 'Erreur: ${e.toString()}';
       _sessionErrorCount++;
-      notifyListeners();
     }
+
+    notifyListeners();
 
     // Libérer le sémaphore et traiter le prochain
     _isProcessing = false;

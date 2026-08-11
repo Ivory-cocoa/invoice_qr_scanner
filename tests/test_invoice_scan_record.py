@@ -51,7 +51,7 @@ class TestInvoiceScanRecord(TransactionCase):
             'name': 'Test Supplier',
             'supplier_rank': 1,
             'is_company': True,
-            'dgi_code': 'TEST123K',
+            'dgi_code': '1234567K',
         })
         
         # UUID de test valide
@@ -203,12 +203,17 @@ class TestInvoiceScanRecord(TransactionCase):
             record.action_view_invoice()
 
     def test_get_or_create_supplier_by_dgi_code(self):
-        """Test de recherche fournisseur par code DGI."""
+        """Test de recherche fournisseur par code DGI.
+
+        Les codes de test suivent le format réel (7 chiffres + 1 lettre) :
+        `_get_or_create_supplier` ignore désormais les codes non conformes,
+        qui étaient en pratique des morceaux de raison sociale.
+        """
         record = self.env['invoice.scan.record'].create({
             'qr_uuid': self.valid_uuid,
             'qr_url': self.valid_url,
             'supplier_name': 'Another Name',
-            'supplier_code_dgi': 'TEST123K',  # Code DGI du partenaire existant
+            'supplier_code_dgi': '1234567K',  # Code DGI du partenaire existant
         })
         
         partner = record._get_or_create_supplier()
@@ -232,7 +237,7 @@ class TestInvoiceScanRecord(TransactionCase):
             'qr_uuid': self.valid_uuid,
             'qr_url': self.valid_url,
             'supplier_name': 'New Supplier XYZ',
-            'supplier_code_dgi': 'NEWCODE999',
+            'supplier_code_dgi': '7654321X',
         })
 
         partner = record._get_or_create_supplier()
@@ -240,7 +245,7 @@ class TestInvoiceScanRecord(TransactionCase):
         self.assertNotIn(partner.id, before,
                          "Le fournisseur aurait dû être créé, pas réutilisé")
         self.assertEqual(partner.name, 'New Supplier XYZ')
-        self.assertEqual(partner.dgi_code, 'NEWCODE999')
+        self.assertEqual(partner.dgi_code, '7654321X')
         self.assertEqual(partner.supplier_rank, 1)
 
     def _make_scan(self, state='done', uuid=None):

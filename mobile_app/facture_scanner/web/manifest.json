@@ -1,12 +1,13 @@
 {
-    "name": "facture_scanner",
-    "short_name": "facture_scanner",
+    "name": "Facture Scanner",
+    "short_name": "Facture Scanner",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1565C0",
+    "theme_color": "#1565C0",
+    "description": "Scanner de factures certifiées DGI et liaison aux ordres de transit — ICP",
     "orientation": "portrait-primary",
+    "lang": "fr",
     "prefer_related_applications": false,
     "icons": [
         {

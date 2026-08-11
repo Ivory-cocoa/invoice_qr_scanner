@@ -21,6 +21,33 @@ Module Odoo 17 pour créer des factures fournisseur en scannant les QR-codes des
 - ✅ **Historique** : Liste des factures scannées
 - ✅ **Statistiques** : Tableau de bord avec métriques
 
+### Application web installable (PWA)
+
+Pour les utilisateurs **sans téléphone Android** (iPhone notamment). Même code
+Flutter, servi par Odoo sur `/facture`.
+
+- Profils couverts : **Gestionnaire OT** et **Traiteur**.
+- **En ligne uniquement** : pas de base locale ni de synchronisation différée
+  (`sqflite` et WorkManager n'existent pas dans un navigateur).
+- La vérification DGI est faite **par le serveur** (voir plus bas) : un
+  navigateur ne peut pas lire la page de vérification de la DGI.
+- La caméra exige **HTTPS** (ou `localhost`) : en HTTP simple, le scan est
+  impossible — la saisie manuelle reste disponible.
+
+**Construire et déployer**
+
+```bash
+cd mobile_app/facture_scanner
+./build_web.sh           # sortie : invoice_qr_scanner/static/pwa/
+```
+
+Le dossier `static/pwa/` est **généré au déploiement** et n'est pas versionné :
+tant qu'il n'existe pas, `/facture` affiche un message d'explication.
+
+**Installer sur iPhone** : ouvrir `https://<serveur>/facture` dans **Safari**,
+puis **Partager → « Sur l'écran d'accueil »**. iOS ne propose pas d'invite
+automatique d'installation.
+
 ## Installation
 
 ### 1. Module Odoo
@@ -47,6 +74,61 @@ Allez dans **Scanner Factures > Configuration > Paramètres** pour :
 - **Valider automatiquement les factures** : Si activé (par défaut), les factures sont validées automatiquement. Sinon, elles restent en brouillon.
 - **Créer automatiquement le fournisseur** : Crée le partenaire s'il n'existe pas dans Odoo.
 - **Compte de dépense par défaut** : Compte comptable pour les lignes de factures.
+- **Interroger la DGI depuis le serveur** (par défaut activé) : le serveur
+  récupère lui-même les données de la facture auprès de la plateforme FNE.
+  Indispensable à la PWA. Décoché, tous les clients basculent sur la saisie
+  manuelle.
+- **URL de l'API FNE** : à ne modifier que si la DGI change l'adresse de son
+  service (défaut : `https://www.services.fne.dgi.gouv.ci/ws`).
+
+### Vérification auprès de la DGI
+
+La page publique de vérification est une application JavaScript : son HTML ne
+contient aucune donnée. Le module interroge donc directement le service REST
+qu'utilise cette page (`/ws/invoices/qr/<uuid>`).
+
+⚠️ **Confidentialité.** Cette réponse publique contient aussi des données
+sensibles du fournisseur (clé d'API, référence bancaire). Le module applique une
+**liste blanche** stricte (`models/fne_api.py`) : le payload brut n'est ni
+stocké ni journalisé. Cette faiblesse de la plateforme FNE a été documentée pour
+signalement à la DGI (`docs/signalement_dgi_fne.md`). Ne pas alimenter
+`raw_html` depuis cette source.
+
+⚠️ **Endpoint non contractuel.** Il n'est pas documenté publiquement et peut
+changer sans préavis ; c'est pourquoi la saisie manuelle reste le filet de
+sécurité et l'URL de base est un paramètre.
+
+### Identification du fournisseur
+
+Le fournisseur est identifié **par son NCC** (format `1234567K` : 7 chiffres et
+une lettre), puis, à défaut, par son **nom exact**.
+
+⚠️ Ne pas réintroduire de recherche par nom partielle (`ilike`). Elle a
+réellement imputé des factures au mauvais tiers : un nom tronqué en « TRANS »
+désignait « CLIENT LOCAL TRANSCAO ». Créer un fournisseur en double est anodin
+et se corrige ; imputer une facture au mauvais tiers ne se voit pas.
+
+Un code DGI non conforme n'est jamais utilisé pour identifier un partenaire, ni
+recopié sur sa fiche.
+
+### Réparer les données antérieures
+
+Les scans réalisés avant la version 17.0.1.4.0 peuvent porter un nom tronqué et
+un faux code DGI (ancien découpage « NOM - CODE »). L'outil de réparation
+compare l'existant à la source DGI :
+
+```python
+# Rapport, sans aucune écriture
+env['invoice.scan.record'].repair_dgi_data(only_invalid_code=True)
+
+# Application des corrections
+env['invoice.scan.record'].repair_dgi_data(only_invalid_code=True, dry_run=False)
+```
+
+Il corrige les scans et nettoie les codes DGI non conformes des fiches
+partenaires. Il **ne réimpute jamais une facture** : les écarts de tiers sont
+seulement listés, classés `libelle` (même tiers, nom abrégé) ou `conflit`
+(tiers différent) — la décision appartient à la comptabilité.
 
 ### Groupes de sécurité
 
@@ -167,18 +249,37 @@ Réponse :
 
 ### Scanner un QR-code
 
+Le corps est un objet JSON **simple** (pas d'enveloppe `jsonrpc`/`params` : ces
+routes sont de type `http`, pas `json`).
+
 ```http
 POST /api/v1/invoice-scanner/scan
 Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "jsonrpc": "2.0",
-  "params": {
-    "qr_url": "https://www.services.fne.dgi.gouv.ci/fr/verification/019bd62c-467e-7000-82ac-45c8389c7f05"
-  }
+  "qr_url": "https://www.services.fne.dgi.gouv.ci/fr/verification/019bd62c-467e-7000-82ac-45c8389c7f05"
 }
 ```
+
+Le **serveur** interroge lui-même la plateforme FNE, crée l'enregistrement de
+scan et la facture fournisseur. C'est la route utilisée par la PWA, qui ne peut
+pas lire une page servie par un autre domaine.
+
+En cas d'indisponibilité de la DGI, la réponse porte un code `FNE_*` et
+`"manual_entry_suggested": true` : l'application bascule alors sur la saisie
+manuelle.
+
+| Code | Signification | Statut HTTP |
+|------|---------------|-------------|
+| `FNE_NOT_FOUND` | Aucune facture certifiée pour ce QR-code | 404 |
+| `FNE_INCOMPLETE_DATA` | Réponse DGI inexploitable (fournisseur/numéro/montant) | 422 |
+| `FNE_DISABLED` | Vérification automatique désactivée dans les réglages | 503 |
+| `FNE_TIMEOUT`, `FNE_UNREACHABLE`, `FNE_HTTP_ERROR`, `FNE_INVALID_RESPONSE` | Panne côté DGI | 502 |
+
+`POST /api/v1/invoice-scanner/scan-with-data` reste disponible et inchangée :
+elle reçoit des données déjà extraites (saisie manuelle, ou extraction par
+WebView des APK Android déjà déployés).
 
 ### Historique
 

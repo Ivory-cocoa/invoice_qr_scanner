@@ -27,7 +27,33 @@
                                 </div>
                             </setting>
                         </block>
-                        
+
+                        <block title="Vérification auprès de la DGI" name="invoice_qr_scanner_fne_settings">
+                            <setting id="invoice_qr_fne_api_enabled"
+                                     string="Vérification automatique (plateforme FNE)"
+                                     help="Le serveur récupère lui-même les données de la facture à partir du QR-code.">
+                                <div class="content-group">
+                                    <div class="row mt-2">
+                                        <field name="invoice_qr_fne_api_enabled"/>
+                                        <label for="invoice_qr_fne_api_enabled" string="Interroger la DGI depuis le serveur"/>
+                                    </div>
+                                    <div class="text-muted mt-1">
+                                        Indispensable à l'application web (PWA), qui ne peut pas
+                                        interroger la DGI depuis le navigateur. Si vous décochez cette
+                                        case, ou si la plateforme DGI est injoignable, les utilisateurs
+                                        basculent sur la saisie manuelle des données de la facture.
+                                    </div>
+                                    <div class="row mt-2" invisible="not invoice_qr_fne_api_enabled">
+                                        <label for="invoice_qr_fne_api_base_url" class="col-lg-4 o_light_label"/>
+                                        <field name="invoice_qr_fne_api_base_url" placeholder="https://www.services.fne.dgi.gouv.ci/ws"/>
+                                    </div>
+                                    <div class="text-muted mt-1" invisible="not invoice_qr_fne_api_enabled">
+                                        À ne modifier que si la DGI change l'adresse de son service.
+                                    </div>
+                                </div>
+                            </setting>
+                        </block>
+
                     </app>
                 </xpath>
             </field>

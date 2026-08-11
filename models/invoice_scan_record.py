@@ -89,6 +89,13 @@ class InvoiceScanRecord(models.Model):
         string="ID Vérification DGI",
         tracking=True
     )
+
+    commercial_message = fields.Char(
+        string="Message commercial (DGI)",
+        help="Mention libre portée par le fournisseur sur la facture certifiée. "
+             "Elle contient fréquemment la référence de l'OT concerné, ce qui "
+             "permet de suggérer la liaison au Gestionnaire OT."
+    )
     
     amount_ttc = fields.Monetary(
         string="Montant TTC",
@@ -464,36 +471,63 @@ class InvoiceScanRecord(models.Model):
             ('company_id', '=', self.env.company.id)
         ], limit=1)
 
+    @staticmethod
+    def is_valid_dgi_code(code):
+        """Un code DGI (NCC) valide : 7 chiffres suivis d'une lettre (ex. 2502298K).
+
+        Ce contrôle n'est pas cosmétique. L'ancienne extraction découpait la
+        ligne « NOM - CODE » de la page DGI ; quand la raison sociale contenait
+        elle-même un tiret (TERMINAL DE SAN-PEDRO, TRANS-ROULEMENTS,
+        3D INFOPLUS-CI), la coupure tombait au mauvais endroit et le « code »
+        enregistré était un morceau du nom : PEDRO, ROULEMENTS, CI, SERVICES…
+
+        Un tel faux code est ensuite recopié sur la fiche du partenaire, et
+        comme la recherche commence par le code, TOUS les fournisseurs dont le
+        nom se termine pareil finissent sur la même fiche : des factures
+        attribuées au mauvais fournisseur. D'où ce filtre, appliqué aussi bien
+        à la recherche qu'à l'écriture.
+        """
+        return bool(code) and bool(re.fullmatch(r'[0-9]{7}[A-Z]', code.strip().upper()))
+
     def _get_or_create_supplier(self):
         """Obtenir ou créer le fournisseur basé sur les données DGI."""
         self.ensure_one()
         Partner = self.env['res.partner']
-        
-        # Chercher par code DGI d'abord
-        if self.supplier_code_dgi:
+
+        code_is_valid = self.is_valid_dgi_code(self.supplier_code_dgi)
+        if self.supplier_code_dgi and not code_is_valid:
+            _logger.warning(
+                "Scan %s : code DGI « %s » non conforme, ignoré pour "
+                "l'identification du fournisseur",
+                self.reference, self.supplier_code_dgi)
+
+        # Chercher par code DGI d'abord (le seul identifiant fiable)
+        if code_is_valid:
             partner = Partner.search([
                 ('dgi_code', '=', self.supplier_code_dgi)
             ], limit=1)
             if partner:
                 return partner
-        
-        # Chercher par nom exact d'abord, puis ilike en fallback
+
+        # Puis par nom EXACT uniquement.
+        #
+        # Il y avait ici un repli `('name', 'ilike', supplier_name)` : une
+        # correspondance PARTIELLE. Avec un nom tronqué par l'extraction, il
+        # rattachait la facture au premier partenaire qui contenait ce
+        # fragment — « TRANS » a ainsi désigné « CLIENT LOCAL TRANSCAO ».
+        # Créer un fournisseur en double est anodin et se corrige ; imputer une
+        # facture au mauvais tiers ne se voit pas et se propage.
         if self.supplier_name:
             partner = Partner.search([
                 ('name', '=ilike', self.supplier_name),
                 ('supplier_rank', '>', 0)
             ], limit=1)
-            if not partner:
-                partner = Partner.search([
-                    ('name', 'ilike', self.supplier_name),
-                    ('supplier_rank', '>', 0)
-                ], limit=1)
             if partner:
-                # Mettre à jour le code DGI si absent
-                if self.supplier_code_dgi and not partner.dgi_code:
+                # Compléter le code DGI s'il est absent ET conforme.
+                if code_is_valid and not partner.dgi_code:
                     partner.write({'dgi_code': self.supplier_code_dgi})
                 return partner
-        
+
         # Obtenir le compte payable par défaut
         payable_account = self.env['account.account'].search([
             ('account_type', '=', 'liability_payable'),
@@ -506,12 +540,14 @@ class InvoiceScanRecord(models.Model):
             ('company_id', '=', self.company_id.id),
         ], limit=1)
         
-        # Créer le fournisseur avec les comptes comptables
+        # Créer le fournisseur avec les comptes comptables. Un code non
+        # conforme n'est pas recopié : il rendrait la fiche « attractive » pour
+        # tous les scans portant le même fragment de nom.
         partner_vals = {
             'name': self.supplier_name or f"Fournisseur DGI {self.supplier_code_dgi}",
             'supplier_rank': 1,
             'is_company': True,
-            'dgi_code': self.supplier_code_dgi,
+            'dgi_code': self.supplier_code_dgi if code_is_valid else False,
         }
         
         if payable_account:

@@ -36,6 +36,7 @@ from .scan_semaphore import (
     acquire_scan_slot, release_scan_slot,
     get_semaphore_status, SEMAPHORE_TIMEOUT,
 )
+from ..models.fne_api import FneApiError
 
 _logger = logging.getLogger(__name__)
 
@@ -63,6 +64,16 @@ RL_OTP_REQUEST_LOGIN = (5, 300, 300)
 # ne bloque pas l'utilisateur.
 RL_OTP_VERIFY_IP = (60, 300, 300)
 RL_OTP_VERIFY_LOGIN = (10, 300, 300)
+
+# Statut HTTP renvoyé au client selon l'échec d'interrogation de la DGI.
+# 502 par défaut : la panne est chez le tiers, pas chez nous — l'application
+# doit le distinguer d'une erreur de saisie (4xx) pour proposer la saisie
+# manuelle plutôt que de faire recommencer le scan.
+FNE_ERROR_STATUS = {
+    'FNE_NOT_FOUND': 404,
+    'FNE_INCOMPLETE_DATA': 422,
+    'FNE_DISABLED': 503,
+}
 
 
 def _rate_limited(key, quota):
@@ -351,6 +362,8 @@ class InvoiceScannerMobileAPI(http.Controller):
             'scan_date': record.scan_date.isoformat() if record.scan_date else None,
             'scanned_by': record.scanned_by.name if record.scanned_by else '',
             'error_message': record.error_message or '',
+            # Mention libre du fournisseur : porte souvent la référence de l'OT
+            'commercial_message': record.commercial_message or '',
             # Champs pour le suivi des doublons
             'duplicate_count': record.duplicate_count,
             'last_duplicate_attempt': record.last_duplicate_attempt.isoformat() if record.last_duplicate_attempt else None,
@@ -725,6 +738,60 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not qr_uuid:
             return api_error('INVALID_URL', 'Impossible d\'extraire l\'UUID du QR-code', status=400)
         
+        record_vals = {
+            'supplier_name': supplier_name,
+            'supplier_code_dgi': data.get('supplier_code_dgi', '').strip() or False,
+            'customer_name': data.get('customer_name', '').strip() or False,
+            'customer_code_dgi': data.get('customer_code_dgi', '').strip() or False,
+            'invoice_number_dgi': invoice_number_dgi,
+            'invoice_date': invoice_date,
+            'verification_id': data.get('verification_id', '').strip() or False,
+            'amount_ttc': amount_ttc,
+            'is_manual_entry': bool(data.get('is_manual_entry', False)),
+            'verification_duration': verification_duration,
+        }
+
+        return self._create_scan_and_invoice(
+            user, qr_url, qr_uuid, record_vals, origin='scan-with-data')
+
+    def _create_scan_and_invoice(self, user, qr_url, qr_uuid, values, origin='scan'):
+        """Réponse HTTP du parcours de scan (le travail est fait par `_process_scan`)."""
+        result = self._process_scan(user, qr_url, qr_uuid, values, origin=origin)
+        if result['ok']:
+            return api_response(result['data'])
+        return api_error(
+            result['error_code'], result['message'],
+            status=result['status'], data=result.get('data'),
+            details=result.get('details'),
+        )
+
+    def _process_scan(self, user, qr_url, qr_uuid, values, origin='scan'):
+        """Créer l'enregistrement de scan puis la facture fournisseur.
+
+        Cœur COMMUN à toutes les façons d'obtenir les données DGI :
+        - `scan-with-data` : extraites par le client (WebView Android ou saisie
+          manuelle) ;
+        - `scan` : extraites par le serveur via l'API FNE ;
+        - `sync` : idem, pour un lot de scans faits hors ligne.
+
+        Toutes doivent se comporter exactement pareil — dédoublonnage,
+        réutilisation d'un scan en erreur, sémaphore, messages — d'où cette mise
+        en facteur : une divergence entre deux entrées signifierait des factures
+        fournisseur en double, ce que ce module existe pour empêcher.
+
+        Args:
+            values: dict des valeurs DGI, OU fonction sans argument le
+                renvoyant. La forme fonction est résolue APRÈS le contrôle de
+                doublon, pour ne pas interroger la DGI quand la facture est
+                déjà connue.
+
+        Returns:
+            dict: ``{'ok': bool, 'data': ..., 'error_code': ..., 'message': ...,
+            'status': ...}``. Un dict plutôt qu'une réponse HTTP, pour que
+            `/sync` puisse enchaîner un lot d'items sur la même logique.
+        """
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+
         # Vérifier les doublons
         existing = ScanRecord.check_duplicate(qr_uuid)
         if existing:
@@ -734,14 +801,15 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'last_duplicate_user_id': user.id,
             })
             existing.message_post(
-                body=f"Tentative de scan doublon #{existing.duplicate_count} par {user.name} (scan-with-data)",
+                body=f"Tentative de scan doublon #{existing.duplicate_count} par {user.name} ({origin})",
                 message_type='notification'
             )
-            return api_error(
-                'DUPLICATE',
-                'Cette facture a déjà été scannée',
-                status=400,
-                data={
+            return {
+                'ok': False,
+                'error_code': 'DUPLICATE',
+                'message': 'Cette facture a déjà été scannée',
+                'status': 400,
+                'data': {
                     'existing_record': {
                         'id': existing.id,
                         'reference': existing.reference,
@@ -756,88 +824,137 @@ class InvoiceScannerMobileAPI(http.Controller):
                         'duplicate_count': existing.duplicate_count,
                     },
                     'duplicate_count': existing.duplicate_count,
+                },
+            }
+
+        # Extraction DGI côté serveur, seulement maintenant : inutile d'appeler
+        # la DGI pour une facture déjà enregistrée.
+        if callable(values):
+            try:
+                values = values()
+            except FneApiError as exc:
+                return {
+                    'ok': False,
+                    'error_code': exc.code,
+                    'message': exc.message,
+                    'status': FNE_ERROR_STATUS.get(exc.code, 502),
+                    # L'application bascule alors sur la saisie manuelle, qui
+                    # reste le filet de sécurité si la DGI change ou tombe.
+                    'data': {'manual_entry_suggested': True},
                 }
-            )
-        
+
         # Vérifier s'il existe un enregistrement en erreur
         existing_error = ScanRecord.search([
             ('qr_uuid', '=', qr_uuid),
             ('state', '=', 'error'),
             ('company_id', '=', request.env.company.id)
         ], limit=1)
-        
-        # Préparer les valeurs
-        verification_duration = 0
-        try:
-            verification_duration = max(0, float(data.get('verification_duration', 0)))
-        except (ValueError, TypeError):
-            pass
-        
-        record_vals = {
+
+        record_vals = dict(values)
+        record_vals.update({
             'qr_url': qr_url,
-            'supplier_name': supplier_name,
-            'supplier_code_dgi': data.get('supplier_code_dgi', '').strip() or False,
-            'customer_name': data.get('customer_name', '').strip() or False,
-            'customer_code_dgi': data.get('customer_code_dgi', '').strip() or False,
-            'invoice_number_dgi': invoice_number_dgi,
-            'invoice_date': invoice_date,
-            'verification_id': data.get('verification_id', '').strip() or False,
-            'amount_ttc': amount_ttc,
             'scanned_by': user.id,
             'state': 'draft',
             'error_message': False,
-            'is_manual_entry': bool(data.get('is_manual_entry', False)),
-            'verification_duration': verification_duration,
-        }
-        
+        })
+
         if existing_error:
             existing_error.write(record_vals)
             record = existing_error
         else:
             record_vals['qr_uuid'] = qr_uuid
             record = ScanRecord.create(record_vals)
-        
+
         # Acquérir un slot du sémaphore pour la création de facture
         if not acquire_scan_slot():
-            _logger.warning("scan-with-data rejeté (serveur occupé) pour user=%s", user.id)
-            return api_error(
-                'SERVER_BUSY',
-                'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
-                status=503,
-                details=get_semaphore_status()
-            )
-        
+            _logger.warning("%s rejeté (serveur occupé) pour user=%s", origin, user.id)
+            return {
+                'ok': False,
+                'error_code': 'SERVER_BUSY',
+                'message': 'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
+                'status': 503,
+                'details': get_semaphore_status(),
+            }
+
         # Créer la facture
         try:
             invoice = record._create_invoice()
-            return api_response({
-                'success': True,
-                'message': 'Facture créée avec succès',
-                'record': {
-                    'id': record.id,
-                    'reference': record.reference,
+            return {
+                'ok': True,
+                'data': {
+                    'success': True,
+                    'message': 'Facture créée avec succès',
+                    'record': {
+                        'id': record.id,
+                        'reference': record.reference,
+                    },
+                    'invoice': {
+                        'id': invoice.id,
+                        'name': invoice.name,
+                        'state': invoice.state,
+                        'amount_total': invoice.amount_total,
+                        'partner_name': invoice.partner_id.name,
+                    },
                 },
-                'invoice': {
-                    'id': invoice.id,
-                    'name': invoice.name,
-                    'state': invoice.state,
-                    'amount_total': invoice.amount_total,
-                    'partner_name': invoice.partner_id.name,
-                },
-            })
+            }
         except Exception as e:
-            _logger.error(f"Erreur création facture (scan-with-data): {e}")
+            _logger.error("Erreur création facture (%s): %s", origin, e)
             record.write({
                 'state': 'error',
                 'error_message': str(e),
             })
-            return api_error(
-                'INVOICE_ERROR',
-                f'Erreur lors de la création de la facture: {safe_error_message(e)}',
-                status=500
-            )
+            return {
+                'ok': False,
+                'error_code': 'INVOICE_ERROR',
+                'message': f'Erreur lors de la création de la facture: {safe_error_message(e)}',
+                'status': 500,
+            }
         finally:
             release_scan_slot()
+
+    @http.route('/api/v1/invoice-scanner/scan', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def scan(self, user=None, **kw):
+        """Scanner un QR-code : le SERVEUR interroge la DGI.
+
+        C'est la route utilisée par la PWA, qui ne peut pas extraire les données
+        elle-même (un navigateur ne peut pas lire une page d'un autre domaine).
+        Le client n'envoie que l'URL du QR-code.
+
+        `scan-with-data` reste disponible et inchangée : les APK déjà déployés
+        continuent de fonctionner sans mise à jour.
+
+        Body JSON:
+        - qr_url: URL extraite du QR-code (requis)
+
+        Returns:
+        - record / invoice : identiques à `scan-with-data`
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+
+        data = get_json_body()
+        qr_url = (data.get('qr_url') or '').strip()
+
+        if not qr_url:
+            return api_error('VALIDATION_ERROR', 'URL du QR-code requise', status=400)
+
+        if 'services.fne.dgi.gouv.ci' not in qr_url:
+            return api_error('INVALID_URL', 'URL non reconnue. Seules les factures DGI sont supportées.', status=400)
+
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        qr_uuid = ScanRecord.extract_uuid_from_url(qr_url)
+        if not qr_uuid:
+            return api_error('INVALID_URL', "Impossible d'extraire l'UUID du QR-code", status=400)
+
+        FneApi = request.env['fne.api.client'].sudo()
+        return self._create_scan_and_invoice(
+            user, qr_url, qr_uuid,
+            lambda: FneApi.fetch_invoice(qr_uuid),
+            origin='scan',
+        )
 
     @http.route('/api/v1/invoice-scanner/check', type='http', auth='none',
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
@@ -1525,44 +1642,65 @@ class InvoiceScannerMobileAPI(http.Controller):
         if len(scans) > 50:
             return api_error('LIMIT_EXCEEDED', 'Maximum 50 scans par synchronisation', status=400)
         
-        # Acquérir un slot du sémaphore pour toute la synchronisation
-        if not acquire_scan_slot():
-            _logger.warning("Sync rejeté (serveur occupé) pour user=%s, scans=%d", user.id, len(scans))
-            return api_error(
-                'SERVER_BUSY',
-                'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
-                status=503,
-                details=get_semaphore_status()
-            )
-        
-        try:
-            ScanRecord = request.env['invoice.scan.record'].sudo()
-            results = []
-            
-            for scan in scans:
-                qr_url = scan.get('qr_url', '').strip()
-                scanned_at = scan.get('scanned_at')
-                
-                if not qr_url:
-                    results.append({
-                        'qr_url': qr_url,
-                        'success': False,
-                        'error': 'URL manquante'
-                    })
-                    continue
-                
-                # L'extraction DGI côté serveur a été supprimée.
-                # Les scans non parsés ne peuvent plus être traités.
+        # Chaque item est traité par `_process_scan`, qui prend et rend lui-même
+        # un slot du sémaphore autour de la seule création de facture. Ne pas en
+        # prendre un ici pour tout le lot : les appels réseau à la DGI le
+        # tiendraient occupé pendant plusieurs secondes par scan, bloquant les
+        # scans interactifs des autres utilisateurs.
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        FneApi = request.env['fne.api.client'].sudo()
+        results = []
+
+        for scan in scans:
+            qr_url = (scan.get('qr_url') or '').strip()
+            scanned_at = scan.get('scanned_at')
+
+            if not qr_url:
+                results.append({
+                    'qr_url': qr_url,
+                    'success': False,
+                    'error': 'URL manquante',
+                    'error_code': 'VALIDATION_ERROR',
+                })
+                continue
+
+            qr_uuid = ScanRecord.extract_uuid_from_url(qr_url)
+            if not qr_uuid:
                 results.append({
                     'qr_url': qr_url,
                     'scanned_at': scanned_at,
                     'success': False,
-                    'error': 'Extraction DGI côté serveur non disponible. Veuillez rescanner avec la dernière version de l\'application.',
-                    'error_code': 'SERVER_EXTRACTION_REMOVED',
+                    'error': "Impossible d'extraire l'UUID du QR-code",
+                    'error_code': 'INVALID_URL',
                 })
-        finally:
-            release_scan_slot()
-        
+                continue
+
+            # Extraction DGI côté serveur : c'est ce qui rend de nouveau
+            # possible la synchronisation d'un scan fait hors ligne, où le
+            # client n'a par définition pas pu joindre la DGI.
+            result = self._process_scan(
+                user, qr_url, qr_uuid,
+                lambda uuid=qr_uuid: FneApi.fetch_invoice(uuid),
+                origin='sync',
+            )
+
+            if result['ok']:
+                results.append({
+                    'qr_url': qr_url,
+                    'scanned_at': scanned_at,
+                    'success': True,
+                    'record': result['data'].get('record'),
+                    'invoice': result['data'].get('invoice'),
+                })
+            else:
+                results.append({
+                    'qr_url': qr_url,
+                    'scanned_at': scanned_at,
+                    'success': False,
+                    'error': result['message'],
+                    'error_code': result['error_code'],
+                })
+
         # Résumé
         successful = sum(1 for r in results if r.get('success'))
         duplicates = sum(1 for r in results if r.get('error_code') == 'DUPLICATE')

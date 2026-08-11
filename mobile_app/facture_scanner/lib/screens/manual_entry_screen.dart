@@ -9,7 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../core/services/dgi_extractor_service.dart';
+import '../core/services/api_service.dart';
+
 import '../core/services/dgi_parser_service.dart';
 import '../core/theme/app_theme.dart';
 
@@ -86,44 +87,41 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     super.dispose();
   }
 
-  /// Lance la ré-extraction DGI en arrière-plan.
-  /// Si elle réussit, pré-remplit les champs vides automatiquement.
+  /// Nouvelle tentative de récupération automatique, PAR LE SERVEUR.
+  ///
+  /// On arrive sur cet écran parce que la vérification a échoué ; elle peut
+  /// avoir échoué pour une raison passagère (DGI momentanément injoignable),
+  /// d'où cette seconde tentative. L'ancienne version relançait une extraction
+  /// locale par WebView : c'est elle qui pré-remplissait le formulaire avec un
+  /// nom tronqué et un faux code DGI, que l'utilisateur validait sans le voir.
   Future<void> _startBackgroundReExtraction() async {
     if (_reExtractionDone) return;
 
     setState(() {
       _isReExtracting = true;
-      _reExtractionStatus = 'Tentative de récupération automatique...';
+      _reExtractionStatus = 'Nouvelle tentative auprès de la DGI...';
     });
 
     try {
-      final extractor = DgiExtractorService();
-      final result = await extractor.extractFromUrl(
-        widget.qrUrl,
-        onProgress: (message) {
-          if (mounted) {
-            setState(() => _reExtractionStatus = message);
-          }
-        },
-      );
+      final response = await ApiService().scanFromUrl(widget.qrUrl);
 
       if (!mounted) return;
 
-      if (result.success && result.data != null) {
-        _autoFillFromData(result.data!);
-        setState(() {
-          _isReExtracting = false;
-          _reExtractionDone = true;
-          _reExtractionStatus = 'Données récupérées avec succès !';
-        });
-      } else {
-        setState(() {
-          _isReExtracting = false;
-          _reExtractionDone = true;
-          _reExtractionStatus =
-              'Récupération automatique échouée. Utilisez le lien DGI ci-dessous.';
-        });
+      if (response.success && response.data != null) {
+        // La facture vient d'être créée côté serveur : il n'y a plus rien à
+        // saisir. On referme l'écran en signalant le succès.
+        Navigator.of(context).pop(true);
+        return;
       }
+
+      setState(() {
+        _isReExtracting = false;
+        _reExtractionDone = true;
+        _reExtractionStatus = response.errorCode == 'DUPLICATE'
+            ? 'Cette facture a déjà été enregistrée.'
+            : 'Récupération automatique impossible. '
+                'Ouvrez le lien DGI ci-dessous et recopiez les informations.';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -135,33 +133,6 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     }
   }
 
-  /// Pré-remplit uniquement les champs qui sont actuellement vides.
-  void _autoFillFromData(DgiParsedData data) {
-    if (_supplierNameCtrl.text.trim().isEmpty && data.supplierName.isNotEmpty) {
-      _supplierNameCtrl.text = data.supplierName;
-    }
-    if (_supplierCodeCtrl.text.trim().isEmpty &&
-        data.supplierCodeDgi.isNotEmpty) {
-      _supplierCodeCtrl.text = data.supplierCodeDgi;
-    }
-    if (_customerNameCtrl.text.trim().isEmpty && data.customerName.isNotEmpty) {
-      _customerNameCtrl.text = data.customerName;
-    }
-    if (_customerCodeCtrl.text.trim().isEmpty &&
-        data.customerCodeDgi.isNotEmpty) {
-      _customerCodeCtrl.text = data.customerCodeDgi;
-    }
-    if (_invoiceNumberCtrl.text.trim().isEmpty &&
-        data.invoiceNumberDgi.isNotEmpty) {
-      _invoiceNumberCtrl.text = data.invoiceNumberDgi;
-    }
-    if (_invoiceDateCtrl.text.trim().isEmpty && (data.invoiceDate?.isNotEmpty ?? false)) {
-      _invoiceDateCtrl.text = data.invoiceDate!;
-    }
-    if (_amountTtcCtrl.text.trim().isEmpty && data.amountTtc > 0) {
-      _amountTtcCtrl.text = data.amountTtc.toStringAsFixed(0);
-    }
-  }
 
   /// Ouvre le lien DGI dans le navigateur externe.
   Future<void> _openDgiLink() async {

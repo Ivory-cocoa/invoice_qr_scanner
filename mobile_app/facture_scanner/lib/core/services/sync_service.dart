@@ -7,21 +7,19 @@ import 'dart:async';
 
 import 'api_service.dart';
 import 'database_service.dart';
-import 'dgi_extractor_service.dart';
 
 class SyncService {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
-  final DgiExtractorService _extractor = DgiExtractorService();
   
   bool _isSyncing = false;
 
-  /// Nombre maximum de tentatives d'extraction DGI par scan avant échec définitif.
+  /// Nombre maximum de tentatives par scan avant échec définitif.
   static const int maxExtractionAttempts = 3;
 
-  /// Nombre maximum de scans à extraire par cycle de synchronisation
-  /// (évite qu'une sync ne bloque pendant des dizaines de minutes).
-  static const int maxExtractionsPerSync = 10;
+  /// Nombre maximum de scans envoyés par cycle de synchronisation.
+  /// Le serveur refuse les lots de plus de 50 scans.
+  static const int maxScansPerSync = 50;
 
   /// Codes d'erreur serveur considérés comme transitoires : le scan reste
   /// en attente (synced=0) et sera retenté à la prochaine synchronisation.
@@ -77,8 +75,8 @@ class SyncService {
       totalDuplicates += parsedResult.duplicateCount;
       totalErrors += parsedResult.errorCount;
       
-      // 2. For unparsed scans: extract DGI data first, then sync as parsed
-      onProgress?.call('Extraction des données DGI pour les scans en attente...');
+      // 2. Scans bruts : le serveur récupère lui-même les données DGI
+      onProgress?.call('Synchronisation des scans en attente...');
       final unparsedResult = await _extractAndSyncUnparsedScans();
       totalSynced += unparsedResult.syncedCount;
       totalDuplicates += unparsedResult.duplicateCount;
@@ -232,152 +230,76 @@ class SyncService {
   
   /// Extract DGI data for unparsed scans, then sync via /sync-parsed endpoint.
   /// This handles the case where scans were saved offline without DGI data,
-  /// and now we're online and can extract the data before sending to server.
+  /// and now we're online: the SERVER retrieves the DGI data from the URL.
+  ///
+  /// L'application extrayait auparavant les données elle-même (WebView) avant
+  /// de les envoyer via `/sync-parsed`. C'est cette extraction qui tronquait
+  /// les raisons sociales contenant un tiret et fabriquait de faux codes DGI.
+  /// On envoie désormais les URL brutes à `/sync` : le serveur interroge la
+  /// plateforme FNE, qui donne le nom et le NCC comme deux champs distincts.
   Future<SyncResult> _extractAndSyncUnparsedScans() async {
     final allPending = await _db.getUnparsedPendingScans();
     if (allPending.isEmpty) {
       return SyncResult(success: true, message: '', syncedCount: 0);
     }
 
-    // Limiter le nombre d'extractions par cycle pour ne pas bloquer la sync
-    // pendant des dizaines de minutes si le site DGI est lent.
-    final pendingScans = allPending.take(maxExtractionsPerSync).toList();
-    
+    // Le serveur borne les lots à 50 scans.
+    final pendingScans = allPending.take(maxScansPerSync).toList();
+
     final scansToSync = <Map<String, dynamic>>[];
     final scanDbIds = <int>[];
-    int extractionErrors = 0;
-    
-    // Extract DGI data for each unparsed scan
-    for (int i = 0; i < pendingScans.length; i++) {
-      final scan = pendingScans[i];
+    int errors = 0;
+
+    for (final scan in pendingScans) {
       final qrUrl = scan['qr_url'] as String? ?? '';
       final scanId = scan['id'] as int;
-      
+
       if (qrUrl.isEmpty) {
         await _db.markScanFailed(scanId, 'URL manquante');
-        extractionErrors++;
+        errors++;
         continue;
       }
-      
-      onProgress?.call(
-        'Extraction DGI ${i + 1}/${pendingScans.length}...',
-      );
-      
-      // Try to extract DGI data now that we're online
-      try {
-        final extractionResult = await _extractor.extractFromUrl(
-          qrUrl,
-          onProgress: (msg) {
-            onProgress?.call(
-              'Scan ${i + 1}/${pendingScans.length}: $msg',
-            );
-          },
-        ).timeout(
-          const Duration(seconds: 20),
-          onTimeout: () => DgiExtractionResult(
-            success: false,
-            error: 'Timeout extraction DGI',
-          ),
-        );
-        
-        if (extractionResult.success && extractionResult.data != null) {
-          final data = extractionResult.data!;
-          
-          // Update the local DB to mark as parsed (in case sync fails, we won't re-extract)
-          await _db.updateScanWithParsedData(scanId, data);
-          
-          scansToSync.add({
-            'qr_url': qrUrl,
-            'scanned_at': scan['scanned_at'],
-            'parsed_data': {
-              'supplier_name': data.supplierName,
-              'supplier_code_dgi': data.supplierCodeDgi,
-              'customer_name': data.customerName,
-              'customer_code_dgi': data.customerCodeDgi,
-              'invoice_number_dgi': data.invoiceNumberDgi,
-              'invoice_date': data.invoiceDate,
-              'verification_id': data.verificationId,
-              'amount_ttc': data.amountTtc,
-            },
-          });
-          scanDbIds.add(scanId);
-        } else {
-          // Extraction échouée : limiter les retentatives à maxExtractionAttempts.
-          final attempts = await _db.incrementExtractionAttempts(scanId);
-          if (attempts >= maxExtractionAttempts) {
-            await _db.markScanFailed(
-              scanId,
-              'Extraction DGI échouée après $attempts tentatives: '
-              '${extractionResult.error ?? "données insuffisantes"}. '
-              'Veuillez rescanner cette facture.',
-            );
-          } else {
-            // Erreur transitoire : le scan reste en attente pour la
-            // prochaine synchronisation.
-            await _db.markScanRetryLater(
-              scanId,
-              'Extraction DGI échouée (tentative $attempts/$maxExtractionAttempts): '
-              '${extractionResult.error ?? "données insuffisantes"}',
-            );
-          }
-          extractionErrors++;
-        }
-      } catch (e) {
-        final attempts = await _db.incrementExtractionAttempts(scanId);
-        if (attempts >= maxExtractionAttempts) {
-          await _db.markScanFailed(
-            scanId,
-            'Erreur extraction après $attempts tentatives: ${e.toString()}. '
-            'Veuillez rescanner cette facture.',
-          );
-        } else {
-          await _db.markScanRetryLater(
-            scanId,
-            'Erreur extraction (tentative $attempts/$maxExtractionAttempts): ${e.toString()}',
-          );
-        }
-        extractionErrors++;
-      }
+
+      scansToSync.add({
+        'qr_url': qrUrl,
+        'scanned_at': scan['scanned_at'],
+      });
+      scanDbIds.add(scanId);
     }
-    
-    // If no scans could be extracted, return errors
+
     if (scansToSync.isEmpty) {
       return SyncResult(
-        success: extractionErrors == 0,
-        message: extractionErrors > 0 
-            ? '$extractionErrors scan(s) non extractible(s)'
-            : '',
-        errorCount: extractionErrors,
+        success: errors == 0,
+        message: errors > 0 ? '$errors scan(s) invalide(s)' : '',
+        errorCount: errors,
       );
     }
-    
-    // Send extracted scans to server via /sync-parsed
+
     onProgress?.call('Envoi de ${scansToSync.length} scan(s) au serveur...');
-    final response = await _api.syncParsedScans(scansToSync);
-    
+    final response = await _api.syncOfflineScans(scansToSync);
+
     if (response.success && response.data != null) {
       final results = response.data!['results'] as List? ?? [];
       final summary = response.data!['summary'] as Map<String, dynamic>? ?? {};
-      
-      // Mark scans based on results
+
       for (int i = 0; i < results.length && i < scanDbIds.length; i++) {
         final result = results[i] as Map<String, dynamic>;
         await _applyServerResult(scanDbIds[i], result);
       }
-      
+
       return SyncResult(
         success: true,
         message: '',
         syncedCount: (summary['successful'] as int?) ?? 0,
         duplicateCount: (summary['duplicates'] as int?) ?? 0,
-        errorCount: ((summary['errors'] as int?) ?? 0) + extractionErrors,
+        errorCount: ((summary['errors'] as int?) ?? 0) + errors,
       );
     }
-    
+
     return SyncResult(
       success: false,
       message: response.errorMessage ?? 'Erreur sync',
-      errorCount: extractionErrors,
+      errorCount: errors,
     );
   }
   

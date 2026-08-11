@@ -84,8 +84,14 @@ class ScheduledSyncService {
   factory ScheduledSyncService() => _instance;
   ScheduledSyncService._internal();
 
+  /// Sur le web, il n'existe pas de tâche de fond : WorkManager n'a pas
+  /// d'implémentation navigateur, et un onglet fermé n'exécute rien. La PWA
+  /// est en ligne uniquement — il n'y a donc rien à synchroniser plus tard.
+  static bool get _disabledOnWeb => kIsWeb;
+
   /// Initialiser WorkManager (appeler une seule fois au démarrage)
   Future<void> initialize() async {
+    if (_disabledOnWeb) return;
     await Workmanager().initialize(
       callbackDispatcher,
     );
@@ -95,6 +101,7 @@ class ScheduledSyncService {
 
   /// Programmer ou reprogrammer la tâche de synchronisation
   Future<void> rescheduleSync() async {
+    if (_disabledOnWeb) return;
     final settings = await _db.getSyncSettings();
     final autoSyncEnabled = (settings['auto_sync_enabled'] as int?) == 1;
 

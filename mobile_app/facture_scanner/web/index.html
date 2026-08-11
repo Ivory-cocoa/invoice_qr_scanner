@@ -1,35 +1,30 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
+    Le chemin de base est injecté par `flutter build web --base-href` (cf.
+    build_web.sh) : la PWA est servie sous /invoice_qr_scanner/static/pwa/.
   -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Scanner de factures certifiées DGI et liaison aux ordres de transit — ICP">
+  <meta name="theme-color" content="#1565C0">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iPhone : iOS ignore une grande partie du manifeste. Ces balises sont ce
+       qui donne son nom et son icône à l'application une fois ajoutée à
+       l'écran d'accueil (Safari → Partager → Sur l'écran d'accueil). -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="facture_scanner">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Facture Scanner">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>facture_scanner</title>
+  <title>Facture Scanner</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>

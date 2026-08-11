@@ -4,7 +4,6 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -93,7 +92,13 @@ class ApiService {
   /// Initialize the API service
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _baseUrl = prefs.getString(_baseUrlKey) ?? _defaultBaseUrl;
+    // Sur le web, l'adresse du serveur n'est pas une préférence : la PWA est
+    // servie PAR Odoo, donc l'API est forcément la même origine. Une valeur
+    // enregistrée (ou héritée d'un autre poste) pointerait vers un serveur
+    // tiers et déclencherait en prime un blocage CORS.
+    _baseUrl = kIsWeb
+        ? _defaultBaseUrl
+        : (prefs.getString(_baseUrlKey) ?? _defaultBaseUrl);
 
     // Lecture du token depuis le stockage sécurisé, avec migration depuis
     // l'ancien stockage en clair (SharedPreferences) le cas échéant.
@@ -246,6 +251,27 @@ class ApiService {
   }
   
   /// Check if QR code already exists
+  /// Scanner une facture DGI en laissant le SERVEUR interroger la plateforme FNE.
+  ///
+  /// Utilisé par la PWA : un navigateur ne peut pas lire la page de
+  /// vérification de la DGI (domaine tiers). En cas d'échec côté DGI, le
+  /// serveur renvoie un code `FNE_*` et la réponse porte
+  /// `manual_entry_suggested` : l'appelant bascule alors sur la saisie
+  /// manuelle, comme le fait l'application Android quand l'extraction échoue.
+  Future<ApiResponse<Map<String, dynamic>>> scanFromUrl(String qrUrl) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan',
+      {'qr_url': qrUrl},
+    );
+  }
+
+  /// OT probablement concernés par une facture scannée (aide à la saisie).
+  Future<ApiResponse<Map<String, dynamic>>> getOtSuggestions(int scanId) async {
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan/$scanId/ot-suggestions',
+    );
+  }
+
   Future<ApiResponse<Map<String, dynamic>>> checkQrCode(String qrUrl) async {
     return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/check', {
       'qr_url': qrUrl,
@@ -628,7 +654,11 @@ class ApiService {
           data: jsonResponse['data'] as T?, // Inclure les données (ex: existing_record pour les doublons)
         );
       }
-    } on SocketException {
+    } on http.ClientException {
+      // `dart:io` n'existe pas sur le web : on ne peut pas attraper
+      // SocketException. `http` enveloppe de toute façon les erreurs réseau
+      // des deux plateformes dans ClientException (sur mobile, l'exception
+      // levée implémente les deux types).
       return ApiResponse<T>(
         success: false,
         errorCode: 'NETWORK_ERROR',
@@ -721,7 +751,11 @@ class ApiService {
         errorMessage: error?['message'] ?? 'Une erreur est survenue',
         data: jsonResponse['data'] as T?,
       );
-    } on SocketException {
+    } on http.ClientException {
+      // `dart:io` n'existe pas sur le web : on ne peut pas attraper
+      // SocketException. `http` enveloppe de toute façon les erreurs réseau
+      // des deux plateformes dans ClientException (sur mobile, l'exception
+      // levée implémente les deux types).
       return ApiResponse<T>(
         success: false,
         errorCode: 'NETWORK_ERROR',

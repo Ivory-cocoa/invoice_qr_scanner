@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Scanner QR Factures Fournisseur',
-    'version': '17.0.1.2.0',
+    'version': '17.0.1.4.0',
     'category': 'Accounting/Invoicing',
     'summary': 'Création de factures fournisseur par scan QR-code DGI',
     'description': """
@@ -15,10 +15,14 @@
         - Créer automatiquement le fournisseur s'il n'existe pas
         - Tableau de bord OWL pour le Responsable Scanner
         
+        Application mobile Flutter (APK Android) et application web installable
+        (PWA, servie sur /facture) pour les utilisateurs sans téléphone Android.
+
         API REST pour application mobile Flutter :
         - POST /api/v1/invoice-scanner/auth/request-otp - Envoi du code de connexion
         - POST /api/v1/invoice-scanner/auth/verify-otp - Authentification par code
         - POST /api/v1/invoice-scanner/auth/logout - Déconnexion
+        - POST /api/v1/invoice-scanner/scan - Scanner (extraction DGI par le serveur)
         - POST /api/v1/invoice-scanner/scan-with-data - Scanner avec données pré-extraites
         - GET /api/v1/invoice-scanner/history - Historique des scans
         - GET /api/v1/invoice-scanner/stats - Statistiques

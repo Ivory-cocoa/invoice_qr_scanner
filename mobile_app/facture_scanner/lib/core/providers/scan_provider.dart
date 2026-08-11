@@ -3,13 +3,13 @@
 library;
 
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
-import '../services/dgi_extractor_service.dart';
 import '../services/dgi_parser_service.dart';
 import '../models/scan_record.dart';
 import 'auth_provider.dart';
@@ -20,7 +20,6 @@ class ScanProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
   final SyncService _sync = SyncService();
-  final DgiExtractorService _extractor = DgiExtractorService();
   
   AuthProvider? _auth;
   
@@ -280,79 +279,88 @@ class ScanProvider extends ChangeNotifier {
     }
 
     if (!isOnline) {
+      // Sur le web, il n'y a ni base locale ni extraction possible : sans
+      // réseau, il n'y a tout simplement rien à faire d'un QR-code.
+      if (kIsWeb) {
+        _state = ScanState.error;
+        _message = 'Connexion requise pour scanner une facture.';
+        _localErrorCount++;
+        notifyListeners();
+        return false;
+      }
       await _processOffline(qrContent, qrUuid);
       return false;
     }
 
-    // Online: check server for duplicates first
-    try {
-      final checkResponse = await _api.checkQrCode(qrContent);
-      if (!checkResponse.success && checkResponse.errorCode == 'DUPLICATE') {
-        _state = ScanState.duplicate;
-        _message = checkResponse.errorMessage ?? 'Cette facture a déjà été scannée';
-        _localDuplicateCount++;
-        if (checkResponse.data != null && checkResponse.data!.containsKey('existing_record')) {
-          final existing = checkResponse.data!['existing_record'];
-          _lastScanResult = ScanRecord.fromJson(existing);
-        }
-        notifyListeners();
-        return false;
-      }
-    } catch (_) {
-      // If check fails, continue with extraction
-    }
+    // C'est le SERVEUR qui interroge la DGI, sur toutes les plateformes.
+    //
+    // L'extraction locale par WebView lisait le TEXTE de la page et découpait
+    // « NOM - CODE » : sur une raison sociale contenant un tiret
+    // (TERMINAL DE SAN-PEDRO), elle coupait au mauvais endroit et enregistrait
+    // un faux code DGI — d'où des factures imputées au mauvais fournisseur.
+    // L'API renvoie les deux champs séparément : le problème disparaît à la
+    // source. Elle est aussi plus rapide (pas de rendu de page à attendre).
+    return await _processQrCodeServerSide(qrContent);
+  }
 
-    // Start client-side DGI extraction with timeout
-    _extractionProgress = 'Vérification DGI en cours...';
+  /// Scan traité de bout en bout par le serveur (PWA).
+  ///
+  /// Retourne `true` si l'appelant doit ouvrir l'écran de saisie manuelle,
+  /// c'est-à-dire quand la DGI n'a pas pu être interrogée — même contrat que
+  /// [processQrCodeWithExtraction], pour que les écrans n'aient pas à savoir
+  /// laquelle des deux extractions a servi.
+  Future<bool> _processQrCodeServerSide(String qrContent) async {
+    _extractionProgress = 'Vérification auprès de la DGI...';
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
-    DgiExtractionResult extractionResult;
-    bool timedOut = false;
-
-    try {
-      extractionResult = await _extractor.extractFromUrl(
-        qrContent,
-        onProgress: (msg) {
-          _extractionProgress = msg;
-          notifyListeners();
-        },
-      ).timeout(
-        Duration(seconds: _verificationTimeout),
-        onTimeout: () {
-          timedOut = true;
-          return DgiExtractionResult(
-            success: false,
-            error: 'Timeout: vérification DGI dépassée',
-          );
-        },
-      );
-    } catch (e) {
-      timedOut = true;
-      extractionResult = DgiExtractionResult(
-        success: false,
-        error: 'Erreur extraction: ${e.toString()}',
-      );
-    }
-
+    final response = await _api.scanFromUrl(qrContent);
     stopwatch.stop();
+
     _lastVerificationDuration = stopwatch.elapsedMilliseconds / 1000.0;
     _extractionProgress = null;
 
-    if (extractionResult.success && extractionResult.data != null && !timedOut) {
-      // Extraction succeeded within timeout - send to server automatically
-      return await _submitExtractedData(qrContent, extractionResult.data!, _lastVerificationDuration, false);
+    if (response.success && response.data != null) {
+      _state = ScanState.success;
+      _message = response.data!['message'] ?? 'Facture créée avec succès';
+      _localSuccessCount++;
+      if (response.data!.containsKey('record')) {
+        _lastScanResult = ScanRecord.fromJson(response.data!['record']);
+      }
+      await loadHistory();
+      notifyListeners();
+      return false;
     }
 
-    // Timeout or extraction failed - switch to manual entry
-    _extractedDgiData = extractionResult.data;
-    _pendingQrUrl = qrContent;
-    _state = ScanState.manualEntry;
-    _message = timedOut
-        ? 'Vérification DGI trop lente (${_lastVerificationDuration.toStringAsFixed(1)}s). Saisie manuelle requise.'
-        : 'Site DGI indisponible. Saisie manuelle requise.';
+    if (response.errorCode == 'DUPLICATE') {
+      _state = ScanState.duplicate;
+      _message = response.errorMessage ?? 'Cette facture a déjà été scannée';
+      _localDuplicateCount++;
+      final data = response.data;
+      if (data != null && data.containsKey('existing_record')) {
+        _lastScanResult = ScanRecord.fromJson(data['existing_record']);
+      }
+      notifyListeners();
+      return false;
+    }
+
+    // Échec côté DGI (indisponible, désactivée, données incomplètes) : le
+    // serveur le signale explicitement, et la saisie manuelle prend le relais.
+    final data = response.data;
+    if (data != null && data['manual_entry_suggested'] == true) {
+      _pendingQrUrl = qrContent;
+      _extractedDgiData = null;
+      _state = ScanState.manualEntry;
+      _message = response.errorMessage ?? 'Vérification DGI indisponible.';
+      notifyListeners();
+      return true;
+    }
+
+    _state = ScanState.error;
+    _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
+    _localErrorCount++;
     notifyListeners();
-    return true; // Caller should navigate to ManualEntryScreen
+    return false;
   }
 
   /// Validate QR code and check for duplicates (without starting extraction).
@@ -474,54 +482,6 @@ class ScanProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Submit automatically extracted data to the server (non-manual)
-  Future<bool> _submitExtractedData(String qrUrl, DgiParsedData data, double duration, bool isManual) async {
-    try {
-      final response = await _api.scanWithData(
-        qrUrl: qrUrl,
-        supplierName: data.supplierName,
-        supplierCodeDgi: data.supplierCodeDgi,
-        customerName: data.customerName,
-        customerCodeDgi: data.customerCodeDgi,
-        invoiceNumberDgi: data.invoiceNumberDgi,
-        invoiceDate: data.invoiceDate,
-        amountTtc: data.amountTtc,
-        verificationDuration: duration,
-        isManualEntry: isManual,
-      );
-
-      if (response.success && response.data != null) {
-        _state = ScanState.success;
-        _message = response.data!['message'] ?? 'Facture créée avec succès';
-        _localSuccessCount++;
-
-        if (response.data!.containsKey('record')) {
-          _lastScanResult = ScanRecord.fromJson(response.data!['record']);
-        }
-        await loadHistory();
-      } else if (response.errorCode == 'DUPLICATE') {
-        _state = ScanState.duplicate;
-        _message = response.errorMessage ?? 'Cette facture a déjà été scannée';
-        _localDuplicateCount++;
-        if (response.data != null && response.data!.containsKey('existing_record')) {
-          _lastScanResult = ScanRecord.fromJson(response.data!['existing_record']);
-        }
-      } else {
-        _state = ScanState.error;
-        _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
-        _localErrorCount++;
-      }
-      notifyListeners();
-      return false; // No manual entry needed
-    } catch (e) {
-      _state = ScanState.error;
-      _message = _getUserFriendlyMessage(null, e.toString());
-      _localErrorCount++;
-      notifyListeners();
-      return false;
-    }
-  }
-
   /// Get the configurable verification timeout (in seconds)
   Future<void> loadVerificationTimeout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -585,54 +545,26 @@ class ScanProvider extends ChangeNotifier {
   }
   
   Future<void> _processOffline(String qrUrl, String qrUuid) async {
+    // Hors ligne, on ne conserve QUE l'URL du QR-code.
+    //
+    // L'application tentait auparavant d'extraire les données en chargeant la
+    // page DGI dans un WebView — ce qui, hors ligne, ne pouvait de toute façon
+    // pas aboutir, et qui produisait des noms tronqués quand ça aboutissait.
+    // Le serveur sait désormais retrouver les données à partir de la seule URL
+    // au moment de la synchronisation (`/api/v1/invoice-scanner/sync`).
     try {
-      // Tenter d'extraire les données DGI localement via WebView
-      _extractionProgress = 'Chargement de la page DGI...';
-      notifyListeners();
-      
-      final extractionResult = await _extractor.extractFromUrl(
-        qrUrl,
-        onProgress: (msg) {
-          _extractionProgress = msg;
-          notifyListeners();
-        },
-      );
-      
-      _extractionProgress = null;
-      
-      if (extractionResult.success && extractionResult.data != null) {
-        // Sauvegarder avec les données parsées
-        await _db.addParsedPendingScan(qrUrl, qrUuid, extractionResult.data!);
-        await _updatePendingCount();
-        
-        _state = ScanState.success;
-        _message = 'Facture analysée et enregistrée localement.\n'
-            'Fournisseur: ${extractionResult.data!.supplierName}\n'
-            'Montant: ${extractionResult.data!.formattedAmount}\n'
-            'Sera synchronisée à l\'heure programmée.';
-        _localSuccessCount++;
-      } else {
-        // Fallback: sauvegarder juste l'URL (extraction échouée)
-        await _db.addPendingScan(qrUrl, qrUuid);
-        await _updatePendingCount();
-        
-        _state = ScanState.success;
-        _message = 'Scan enregistré localement (données non extraites).\n'
-            'Veuillez rescanner cette facture pour extraire les données.';
-      }
+      await _db.addPendingScan(qrUrl, qrUuid);
+      await _updatePendingCount();
+
+      _state = ScanState.success;
+      _message = 'Scan enregistré localement.\n'
+          'La facture sera créée à la prochaine synchronisation.';
+      _localSuccessCount++;
     } catch (e) {
-      // Fallback en cas d'erreur: sauvegarder juste l'URL
-      try {
-        await _db.addPendingScan(qrUrl, qrUuid);
-        await _updatePendingCount();
-        _state = ScanState.success;
-        _message = 'Scan enregistré localement.\nVeuillez rescanner pour extraire les données.';
-      } catch (e2) {
-        _state = ScanState.error;
-        _message = 'Erreur lors de l\'enregistrement local';
-      }
+      _state = ScanState.error;
+      _message = 'Erreur lors de l\'enregistrement local';
     }
-    
+
     _extractionProgress = null;
     notifyListeners();
   }

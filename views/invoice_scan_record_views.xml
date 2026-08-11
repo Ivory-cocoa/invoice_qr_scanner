@@ -119,6 +119,7 @@
                                 <field name="verification_id" readonly="1"/>
                                 <field name="amount_ttc" readonly="1"/>
                                 <field name="currency_id" readonly="1"/>
+                                <field name="commercial_message" readonly="1" invisible="not commercial_message"/>
                             </group>
                             <group string="Résultat">
                                 <field name="partner_id" readonly="1"/>

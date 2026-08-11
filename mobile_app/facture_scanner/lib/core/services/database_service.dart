@@ -3,6 +3,7 @@
 /// Auto-cleanup of data older than 24 hours
 library;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -25,15 +26,30 @@ class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
   DatabaseService._internal();
-  
+
+  /// Sur le web (PWA), il n'y a pas de base locale : `sqflite` n'a pas
+  /// d'implémentation navigateur, et le mode hors ligne n'est volontairement
+  /// pas au programme de la PWA (usage en ligne uniquement).
+  ///
+  /// Chaque méthode publique renvoie donc une valeur neutre plutôt que de
+  /// lever : le cache local n'est qu'une OPTIMISATION (détection de doublon
+  /// anticipée, historique consultable sans réseau). Le serveur reste, lui,
+  /// l'autorité sur les doublons — un cache absent ne peut pas créer de
+  /// facture en double.
+  static bool get _disabledOnWeb => kIsWeb;
+
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await init();
     return _database!;
   }
-  
+
   /// Initialize the database
   Future<Database> init() async {
+    if (_disabledOnWeb) {
+      throw UnsupportedError(
+          'Pas de base locale sur le web : la PWA fonctionne en ligne.');
+    }
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'facture_scanner.db');
     
@@ -51,6 +67,7 @@ class DatabaseService {
   }
   
   Future<void> _onCreate(Database db, int version) async {
+    if (_disabledOnWeb) return;
     // Pending scans table (for offline scans with parsed DGI data)
     await db.execute('''
       CREATE TABLE pending_scans (
@@ -138,6 +155,7 @@ class DatabaseService {
   }
   
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (_disabledOnWeb) return;
     // Handle migrations here
     if (oldVersion < 2) {
       // Add index for cleanup queries
@@ -233,6 +251,7 @@ class DatabaseService {
   /// IMPORTANT : ne supprime JAMAIS un scan non synchronisé (synced = 0) —
   /// ce sont des données utilisateur qui n'ont pas encore atteint le serveur.
   Future<void> cleanupOldData([Database? providedDb]) async {
+    if (_disabledOnWeb) return;
     final db = providedDb ?? await database;
     final now = DateTime.now();
     final syncedCutoff =
@@ -270,6 +289,7 @@ class DatabaseService {
   
   /// Add a pending scan (offline mode)
   Future<int> addPendingScan(String qrUrl, String qrUuid) async {
+    if (_disabledOnWeb) return 0;
     final db = await database;
     return await db.insert('pending_scans', {
       'qr_url': qrUrl,
@@ -286,6 +306,7 @@ class DatabaseService {
     String qrUuid,
     DgiParsedData parsedData,
   ) async {
+    if (_disabledOnWeb) return 0;
     final db = await database;
     return await db.insert('pending_scans', {
       'qr_url': qrUrl,
@@ -318,6 +339,7 @@ class DatabaseService {
   
   /// Mark scan as synced
   Future<void> markScanSynced(int id) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.update(
       'pending_scans',
@@ -329,6 +351,7 @@ class DatabaseService {
   
   /// Mark scan as permanently failed with error (synced=2)
   Future<void> markScanFailed(int id, String error) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.update(
       'pending_scans',
@@ -341,6 +364,7 @@ class DatabaseService {
   /// Enregistrer une erreur transitoire SANS marquer le scan comme définitif :
   /// il reste synced=0 et sera retenté à la prochaine synchronisation.
   Future<void> markScanRetryLater(int id, String error) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.update(
       'pending_scans',
@@ -353,6 +377,7 @@ class DatabaseService {
   /// Incrémenter le compteur de tentatives d'extraction DGI.
   /// Retourne le nombre de tentatives après incrément.
   Future<int> incrementExtractionAttempts(int id) async {
+    if (_disabledOnWeb) return 0;
     final db = await database;
     await db.rawUpdate(
       'UPDATE pending_scans SET extraction_attempts = COALESCE(extraction_attempts, 0) + 1 WHERE id = ?',
@@ -371,6 +396,7 @@ class DatabaseService {
 
   /// Supprimer un scan en attente précis (ex : traité avec succès en ligne).
   Future<void> deletePendingScan(int id) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.delete(
       'pending_scans',
@@ -381,6 +407,7 @@ class DatabaseService {
   
   /// Check if QR code exists in pending scans
   Future<bool> isPendingScan(String qrUuid) async {
+    if (_disabledOnWeb) return false;
     final db = await database;
     final result = await db.query(
       'pending_scans',
@@ -393,6 +420,7 @@ class DatabaseService {
   
   /// Get pending scans count
   Future<int> getPendingScansCount() async {
+    if (_disabledOnWeb) return 0;
     final db = await database;
     final result = await db.rawQuery(
       'SELECT COUNT(*) as count FROM pending_scans WHERE synced = 0'
@@ -405,6 +433,7 @@ class DatabaseService {
   /// l'utilisateur puisse voir l'erreur ; ils sont purgés après 7 jours
   /// par [cleanupOldData].
   Future<void> deleteSyncedScans() async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.delete(
       'pending_scans',
@@ -416,6 +445,7 @@ class DatabaseService {
   /// Update an unparsed scan with extracted DGI data (convert parsed=0 → parsed=1)
   /// Used during sync when we extract DGI data for previously unparsed scans.
   Future<void> updateScanWithParsedData(int id, DgiParsedData data) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.update(
       'pending_scans',
@@ -440,6 +470,7 @@ class DatabaseService {
   
   /// Cache scan history from server
   Future<void> cacheScanHistory(List<ScanRecord> records) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     final batch = db.batch();
     
@@ -468,6 +499,7 @@ class DatabaseService {
   
   /// Get cached scan history
   Future<List<ScanRecord>> getCachedHistory({int limit = 50}) async {
+    if (_disabledOnWeb) return [];
     final db = await database;
     final results = await db.query(
       'scan_history',
@@ -490,6 +522,7 @@ class DatabaseService {
   
   /// Check if QR code exists in history cache
   Future<ScanRecord?> findInHistoryCache(String qrUuid) async {
+    if (_disabledOnWeb) return null;
     final db = await database;
     final result = await db.query(
       'scan_history',
@@ -504,6 +537,7 @@ class DatabaseService {
   
   /// Clear history cache
   Future<void> clearHistoryCache() async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.delete('scan_history');
   }
@@ -536,6 +570,9 @@ class DatabaseService {
 
   /// Get sync settings
   Future<Map<String, dynamic>> getSyncSettings() async {
+    if (_disabledOnWeb) {
+      return {'sync_hour': 20, 'sync_minute': 0, 'auto_sync_enabled': 0};
+    }
     final db = await database;
     final results = await db.query('sync_settings', limit: 1);
     if (results.isEmpty) {
@@ -560,6 +597,7 @@ class DatabaseService {
     int? syncMinute,
     bool? autoSyncEnabled,
   }) async {
+    if (_disabledOnWeb) return;
     final db = await database;
     final current = await getSyncSettings();
     await db.update(
@@ -577,6 +615,7 @@ class DatabaseService {
 
   /// Record the last scheduled sync time
   Future<void> recordScheduledSync() async {
+    if (_disabledOnWeb) return;
     final db = await database;
     final current = await getSyncSettings();
     await db.update(
@@ -591,6 +630,7 @@ class DatabaseService {
 
   /// Clear all data (logout)
   Future<void> clearAllData() async {
+    if (_disabledOnWeb) return;
     final db = await database;
     await db.delete('pending_scans');
     await db.delete('scan_history');

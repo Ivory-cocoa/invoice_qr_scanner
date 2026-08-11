@@ -3,6 +3,7 @@
 /// et le timeout de vérification DGI
 library;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -182,6 +183,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                // Application web (PWA) : ni base locale, ni tâche de fond, ni
+                // extraction dans le navigateur. Afficher des réglages sans
+                // effet serait pire que de ne rien afficher.
+                if (kIsWeb) ...[
+                  _buildSectionHeader(
+                    icon: Icons.cloud_done_outlined,
+                    title: 'Application web',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCard(
+                    children: const [
+                      ListTile(
+                        leading: Icon(Icons.info_outline, color: Colors.blue),
+                        title: Text(
+                          'Vérification par le serveur',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          "Dans le navigateur, la vérification des factures "
+                          "auprès de la DGI est faite par le serveur : il n'y a "
+                          "ni synchronisation différée ni réglage d'extraction. "
+                          "Une connexion est nécessaire pour scanner.",
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                if (!kIsWeb) ...[
                 // Section: Synchronisation programmée
                 _buildSectionHeader(
                   icon: Icons.schedule,
@@ -361,10 +391,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
+                ],
 
                 const SizedBox(height: 32),
 
                 // Boutons d'action
+                if (!kIsWeb)
                 Row(
                   children: [
                     Expanded(
