@@ -10,7 +10,8 @@ import secrets
 import string
 from datetime import timedelta
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ class InvoiceScannerLoginOtp(models.Model):
         réarmés pour autoriser une nouvelle tentative immédiate.
         """
         self.ensure_one()
-        code = ''.join(secrets.choice(string.digits) for _ in range(6))
+        code = ''.join(secrets.choice(string.digits) for _i in range(6))
         self.write({
             'otp_hash': self._hash(code),
             'expires_at': fields.Datetime.now() + timedelta(minutes=self.OTP_TTL_MINUTES),
@@ -172,7 +173,13 @@ class InvoiceScannerLoginOtp(models.Model):
             "de cette demande, ignorez cet email et signalez-le à votre "
             "administrateur.</p>"
         ) % (self.user_id.name or '', code, self.OTP_TTL_MINUTES)
-        mail = self.env['mail.mail'].sudo().create({
+        # « transactional » : le gestionnaire de notifications ICP ne doit ni
+        # différer ce mail en digest ni le supprimer pour un utilisateur en
+        # mode « aucun email » — le code EST l'action attendue. Le contexte est
+        # simplement ignoré si le module n'est pas installé.
+        mail = self.env['mail.mail'].sudo().with_context(
+            icp_notification_category='transactional',
+        ).create({
             'subject': "Votre code de connexion — Scanner de factures",
             'email_from': self._otp_email_from(),
             'email_to': email_to,
@@ -182,6 +189,12 @@ class InvoiceScannerLoginOtp(models.Model):
         # raise_exception : l'échec SMTP doit remonter immédiatement, sinon
         # l'API répondrait « code envoyé » à tort.
         mail.send(raise_exception=True)
+        if mail.exists() and mail.state not in ('sent', 'outgoing'):
+            # Mail annulé/rejeté sans exception (filtrage d'un module tiers) :
+            # même exigence que ci-dessus.
+            raise UserError(_(
+                "Le code n'a pas pu être envoyé par email (%s).",
+                mail.failure_reason or mail.state))
 
     # ==================== VÉRIFICATION ====================
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Scanner QR Factures Fournisseur',
-    'version': '17.0.1.4.0',
+    'version': '17.0.1.4.1',
     'category': 'Accounting/Invoicing',
     'summary': 'Création de factures fournisseur par scan QR-code DGI',
     'description': """
