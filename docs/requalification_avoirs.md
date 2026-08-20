@@ -143,7 +143,18 @@ Ce qu'il fait pour vous, et qu'une session manuelle ne fera pas :
 Options utiles : `--scan-ids 2596,2595` pour reprendre des cas précis après
 arbitrage, `--full` pour interroger la DGI sur tout le stock (~40 min),
 `--outdir` pour écrire ailleurs que dans le dépôt, `--container` pour viser un
-autre conteneur (`odoo17-web-dev` en développement).
+autre conteneur (`odoo17-web-dev` en développement), `--db-user` si le rôle
+PostgreSQL n'est pas `odoo`.
+
+> **Lancer avec `./requalifier_avoirs.sh`, pas `sh requalifier_avoirs.sh`.**
+> Le script utilise des constructions bash que `sh` (dash) ne connaît pas. Il
+> se relance désormais tout seul sous bash, mais autant prendre la bonne
+> habitude.
+
+> Le script ne passe **aucun identifiant de connexion** à `odoo shell` : le
+> conteneur sait déjà joindre sa base, c'est ainsi que le serveur tourne. Les
+> imposer reviendrait à parier sur un mot de passe que le script ne connaît
+> pas.
 
 ### 3.5 Procédure — manuelle
 

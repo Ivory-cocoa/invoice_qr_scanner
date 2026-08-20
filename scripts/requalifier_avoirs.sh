@@ -30,6 +30,7 @@
 # Options :
 #   --db NOM             Base de données (détectée automatiquement si unique)
 #   --container NOM      Conteneur web (défaut : odoo17-web-prod)
+#   --db-user NOM        Rôle PostgreSQL pour psql/pg_dump (défaut : odoo)
 #   --apply              Écrire réellement. Sans cette option : rien n'est écrit.
 #   --posting-date DATE  Imputer la correction sur cette date comptable
 #                        (AAAA-MM-JJ). Sans elle, la correction retombe dans la
@@ -46,6 +47,14 @@
 # Sorties : un journal complet et un CSV horodatés dans ./rapports_avoirs/
 #
 # ─────────────────────────────────────────────────────────────────────────────
+# Ce script utilise des constructions propres à bash ([[ ]], tableaux,
+# mapfile). Lancé avec `sh` — donc dash sur Debian/Ubuntu — il échoue sur des
+# messages incompréhensibles (« [[: not found »). Plutôt que de laisser
+# l'utilisateur deviner, on se relance nous-mêmes sous bash.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 # ── Réglages par défaut ──────────────────────────────────────────────────────
@@ -60,10 +69,15 @@ ASSUME_YES=0
 CHECK_ONLY=0
 OUTDIR_OPT=""
 
-DB_HOST="${ODOO_DB_HOST:-db}"
-DB_PORT="${ODOO_DB_PORT:-5432}"
-DB_USER="${ODOO_DB_USER:-odoo}"
-DB_PASSWORD="${ODOO_DB_PASSWORD:-odoo}"
+# Utilisateur employé pour les commandes `psql` / `pg_dump` DANS le conteneur
+# de base : l'authentification y est locale, aucun mot de passe n'est requis.
+DB_USER="${RQ_DB_USER:-odoo}"
+
+# ⚠️ AUCUN identifiant n'est passé à `odoo shell`. Le conteneur sait déjà
+# joindre sa base — c'est ainsi que le serveur tourne. Les imposer en ligne de
+# commande, c'est parier sur un mot de passe qu'on ne connaît pas : en
+# production, `--db_password=odoo` a produit un « password authentication
+# failed » alors que tout était correctement configuré côté conteneur.
 
 ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons,/mnt/oca-addons"
 MIN_VERSION="17.0.1.5.0"
@@ -99,6 +113,7 @@ while [[ $# -gt 0 ]]; do
     --full)          ONLY_SUSPECT="False"; shift ;;
     --no-backup)     DO_BACKUP=0; shift ;;
     --yes|-y)        ASSUME_YES=1; shift ;;
+    --db-user)       DB_USER="${2:?--db-user attend un nom}"; shift 2 ;;
     --outdir)        OUTDIR_OPT="${2:?--outdir attend un chemin}"; shift 2 ;;
     --check)         CHECK_ONLY=1; shift ;;
     --help|-h)       usage ;;
@@ -291,8 +306,6 @@ docker exec -i \
   -e RQ_ONLY_SUSPECT="$ONLY_SUSPECT" \
   "$CONTAINER" odoo shell \
     -d "$DB" \
-    --db_host="$DB_HOST" --db_port="$DB_PORT" \
-    --db_user="$DB_USER" --db_password="$DB_PASSWORD" \
     --addons-path="$ADDONS_PATH" \
     --no-http --log-level=warn <<'PYEOF' > "$RAW" 2>&1
 import os
