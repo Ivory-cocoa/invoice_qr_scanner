@@ -151,10 +151,14 @@ PostgreSQL n'est pas `odoo`.
 > se relance désormais tout seul sous bash, mais autant prendre la bonne
 > habitude.
 
-> Le script ne passe **aucun identifiant de connexion** à `odoo shell` : le
-> conteneur sait déjà joindre sa base, c'est ainsi que le serveur tourne. Les
-> imposer reviendrait à parier sur un mot de passe que le script ne connaît
-> pas.
+> **Connexion à la base.** L'entrypoint officiel d'Odoo traduit les variables
+> d'environnement `HOST` / `PORT` / `USER` / `PASSWORD` du conteneur en
+> arguments `--db_host`, `--db_user`, `--db_password`. Un `docker exec … odoo
+> shell` court-circuite cet entrypoint : sans rien, Odoo tombe sur la socket
+> locale (« No such file or directory ») ; avec des identifiants devinés, sur
+> un « password authentication failed ». Le script refait donc ce travail
+> **dans le conteneur**, à partir de son environnement réel — aucun identifiant
+> n'est écrit dans le script.
 
 ### 3.5 Procédure — manuelle
 

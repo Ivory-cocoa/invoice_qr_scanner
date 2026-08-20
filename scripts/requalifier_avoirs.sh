@@ -73,12 +73,6 @@ OUTDIR_OPT=""
 # de base : l'authentification y est locale, aucun mot de passe n'est requis.
 DB_USER="${RQ_DB_USER:-odoo}"
 
-# ⚠️ AUCUN identifiant n'est passé à `odoo shell`. Le conteneur sait déjà
-# joindre sa base — c'est ainsi que le serveur tourne. Les imposer en ligne de
-# commande, c'est parier sur un mot de passe qu'on ne connaît pas : en
-# production, `--db_password=odoo` a produit un « password authentication
-# failed » alors que tout était correctement configuré côté conteneur.
-
 ADDONS_PATH="/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons,/mnt/oca-addons"
 MIN_VERSION="17.0.1.5.0"
 
@@ -298,16 +292,54 @@ info "Un appel réseau par scan examiné — patientez."
 RAW="$(mktemp)"
 trap 'rm -f "$RAW"' EXIT
 
+# ── Comment on joint la base depuis `docker exec` ────────────────────────────
+#
+# L'entrypoint officiel d'Odoo (`/entrypoint.sh`) ne se contente pas de lancer
+# le serveur : il TRADUIT les variables d'environnement HOST / PORT / USER /
+# PASSWORD en arguments `--db_host`, `--db_port`, `--db_user`, `--db_password`,
+# et ne les ajoute que si `odoo.conf` ne les définit pas déjà.
+#
+# `docker exec … odoo shell` court-circuite cet entrypoint. Sans rien, Odoo
+# tombe donc sur la socket locale (« /var/run/postgresql/.s.PGSQL.5432: No such
+# file or directory ») ; avec des identifiants devinés, sur un « password
+# authentication failed ». Les deux se sont produits en production.
+#
+# On refait donc ici, DANS le conteneur, exactement ce que fait l'entrypoint :
+# les identifiants viennent de l'environnement réel du conteneur, jamais d'une
+# valeur écrite dans ce script.
+read -r -d '' RUNNER <<'RUNNER_EOF' || true
+set -e
+ODOO_RC_FILE="${ODOO_RC:-/etc/odoo/odoo.conf}"
+: "${HOST:=${PGHOST:-db}}"
+: "${PORT:=${PGPORT:-5432}}"
+: "${USER:=${PGUSER:-odoo}}"
+: "${PASSWORD:=${PGPASSWORD:-odoo}}"
+
+DB_ARGS=()
+add_db_arg() {
+  # Un paramètre déjà présent dans odoo.conf a priorité : ne pas l-écraser.
+  if ! grep -qE "^[[:space:]]*$1[[:space:]]*=" "$ODOO_RC_FILE" 2>/dev/null; then
+    DB_ARGS+=("--$1=$2")
+  fi
+}
+add_db_arg db_host "$HOST"
+add_db_arg db_port "$PORT"
+add_db_arg db_user "$USER"
+add_db_arg db_password "$PASSWORD"
+
+exec odoo shell -d "$RQ_DB" --addons-path="$RQ_ADDONS" \
+     --no-http --log-level=warn "${DB_ARGS[@]}"
+RUNNER_EOF
+
 set +e
 docker exec -i \
   -e RQ_APPLY="$APPLY" \
   -e RQ_POSTING_DATE="$POSTING_DATE" \
   -e RQ_SCAN_IDS="$SCAN_IDS" \
   -e RQ_ONLY_SUSPECT="$ONLY_SUSPECT" \
-  "$CONTAINER" odoo shell \
-    -d "$DB" \
-    --addons-path="$ADDONS_PATH" \
-    --no-http --log-level=warn <<'PYEOF' > "$RAW" 2>&1
+  -e RQ_DB="$DB" \
+  -e RQ_ADDONS="$ADDONS_PATH" \
+  "$CONTAINER" bash -c "$RUNNER" <<'PYEOF' > "$RAW" 2>&1
 import os
 import traceback
 
