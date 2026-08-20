@@ -585,9 +585,40 @@ class _CostLineCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(
-                  '${money.format(amount)} $cur',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Une ligne d'AVOIR est négative : elle vient en déduction
+                    // du coût de l'OT. Elle doit se distinguer au premier coup
+                    // d'œil d'un coût ordinaire.
+                    if (amount < 0)
+                      Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppTheme.errorColor,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: const Text(
+                          'AVOIR',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    Text(
+                      '${money.format(amount)} $cur',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: amount < 0 ? AppTheme.errorColor : null,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

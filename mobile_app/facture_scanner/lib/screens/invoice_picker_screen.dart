@@ -101,11 +101,15 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
   Future<void> _openLink(Map<String, dynamic> scan) async {
     final supplier = (scan['supplier_name'] ?? '').toString();
     final invoiceNum = (scan['invoice_number_dgi'] ?? '').toString();
+    final isRefund = (scan['is_refund'] as bool?) ??
+        ((scan['document_type'] as String?) == 'refund');
+    final kind = isRefund ? 'Avoir' : 'Facture';
     final label = invoiceNum.isNotEmpty
-        ? 'Facture $invoiceNum${supplier.isNotEmpty ? ' • $supplier' : ''}'
-        : (supplier.isNotEmpty ? supplier : 'Facture');
+        ? '$kind $invoiceNum${supplier.isNotEmpty ? ' • $supplier' : ''}'
+        : (supplier.isNotEmpty ? supplier : kind);
     final scanId = scan['id'] as int;
-    final fallbackAmount = (scan['amount_ttc'] as num?)?.toDouble();
+    // Valeur absolue : le signe est appliqué par le serveur d'après la nature.
+    final fallbackAmount = (scan['amount_ttc'] as num?)?.toDouble().abs();
 
     // Récupérer le statut OT pour présenter le sheet (Cas A/B/C) avant
     // d'ouvrir l'écran de liaison.
@@ -131,6 +135,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
           scanId: scanId,
           invoiceLabel: label,
           invoiceAmount: amountToAllocate,
+          isRefund: isRefund,
         ),
       ),
     );

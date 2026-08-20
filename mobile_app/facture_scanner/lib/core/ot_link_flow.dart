@@ -25,16 +25,19 @@ import '../widgets/invoice_status_sheet.dart';
 Future<bool> startOtLinkFlow(BuildContext context, ScanRecord record) async {
   final api = ApiService();
 
+  final kindLabel = record.isRefund ? 'Avoir' : 'Facture';
   final invoiceLabel = record.invoiceNumberDgi.isNotEmpty
-      ? 'Facture ${record.invoiceNumberDgi}'
+      ? '$kindLabel ${record.invoiceNumberDgi}'
           '${record.supplierName.isNotEmpty ? ' • ${record.supplierName}' : ''}'
       : (record.supplierName.isNotEmpty
           ? record.supplierName
-          : 'Facture scannée');
+          : '$kindLabel scanné(e)');
 
   // 1. Statut OT (existence + liaisons + montant restant) pour décider du
   //    parcours (Cas A : non liée / B : totalement liée / C : partielle).
-  final double fallbackAmount = record.amountTtc > 0 ? record.amountTtc : 0.0;
+  // `amountTtc` est TOUJOURS positif, avoir compris : le montant à répartir se
+  // saisit en valeur absolue et c'est le serveur qui applique le signe.
+  final double fallbackAmount = record.amountTtc.abs();
   final statusResp = await api.getScanOtStatus(record.id);
   if (!context.mounted) return false;
 
@@ -62,6 +65,7 @@ Future<bool> startOtLinkFlow(BuildContext context, ScanRecord record) async {
         scanId: record.id,
         invoiceLabel: invoiceLabel,
         invoiceAmount: amountToAllocate,
+        isRefund: record.isRefund,
       ),
     ),
   );

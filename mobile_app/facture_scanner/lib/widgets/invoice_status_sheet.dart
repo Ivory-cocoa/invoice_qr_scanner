@@ -72,11 +72,19 @@ class _InvoiceStatusSheet extends StatelessWidget {
     final supplier = (status['supplier_name'] as String?) ?? '';
     final links = (status['links'] as List?) ?? const [];
 
+    // Un AVOIR porte des montants NÉGATIFS : « entièrement alloué » se lit
+    // donc sur la valeur absolue du restant, pas sur son signe. Comparer
+    // `remaining <= 0` déclarait tout avoir « déjà totalement alloué » et
+    // fermait le parcours de liaison — c'était le premier des trois verrous.
+    final isRefund = (status['is_refund'] as bool?) ??
+        ((status['document_type'] as String?) == 'refund') ||
+            invoiceAmount < 0;
+
     // Détermination du cas
     final _Case kase;
     if (linksCount == 0) {
       kase = _Case.unlinked;
-    } else if (remaining <= 0.0001) {
+    } else if (remaining.abs() <= 0.0001) {
       kase = _Case.fullyLinked;
     } else {
       kase = _Case.partiallyLinked;
@@ -114,6 +122,10 @@ class _InvoiceStatusSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (isRefund) ...[
+                        _buildRefundNotice(context),
+                        const SizedBox(height: 12),
+                      ],
                       _buildSummaryCard(
                         context: context,
                         kase: kase,
@@ -283,7 +295,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
             remaining,
             currency,
             bold: true,
-            color: remaining > 0.0001 ? AppTheme.warningColor : AppTheme.successColor,
+            color: remaining.abs() > 0.0001
+              ? AppTheme.warningColor
+              : AppTheme.successColor,
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -390,6 +404,51 @@ class _InvoiceStatusSheet extends StatelessWidget {
     );
   }
 
+  /// Bandeau expliquant qu'un avoir se RETRANCHE du coût de l'OT.
+  ///
+  /// Sans lui, l'écran de liaison ressemble trait pour trait à celui d'une
+  /// facture, et rien ne dit à l'utilisateur que le montant qu'il va saisir
+  /// sera compté en moins.
+  Widget _buildRefundNotice(BuildContext context) {
+    final errorColor = AppTheme.getError(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.getErrorLight(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: errorColor.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.undo_rounded, color: errorColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  color: AppTheme.getTextPrimary(context),
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
+                children: [
+                  TextSpan(
+                    text: 'AVOIR. ',
+                    style: TextStyle(
+                        color: errorColor, fontWeight: FontWeight.w800),
+                  ),
+                  const TextSpan(
+                    text: 'Saisissez le montant sans le signe : il sera '
+                        'automatiquement DÉDUIT du coût des OTs choisis.',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActions(BuildContext context, _Case kase, double remaining,
       double invoiceAmount) {
     // Cas A : Lier maintenant (montant total)
@@ -403,7 +462,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
       case _Case.unlinked:
         primaryLabel = 'Lier maintenant';
         primaryIcon = Icons.add_link_rounded;
-        amountToAllocate = invoiceAmount > 0 ? invoiceAmount : null;
+        // Valeur ABSOLUE : l'écran de liaison saisit des montants positifs,
+        // le serveur applique le signe d'après la nature du document.
+        amountToAllocate = invoiceAmount != 0 ? invoiceAmount.abs() : null;
         break;
       case _Case.fullyLinked:
         primaryLabel = 'Ajouter une liaison';
@@ -413,7 +474,7 @@ class _InvoiceStatusSheet extends StatelessWidget {
       case _Case.partiallyLinked:
         primaryLabel = 'Ajouter une liaison';
         primaryIcon = Icons.add_circle_outline_rounded;
-        amountToAllocate = remaining > 0 ? remaining : null;
+        amountToAllocate = remaining != 0 ? remaining.abs() : null;
         break;
     }
 

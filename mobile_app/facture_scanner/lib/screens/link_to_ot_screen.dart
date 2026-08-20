@@ -52,13 +52,23 @@ class _OtLinkConfig {
 class LinkToOtScreen extends StatefulWidget {
   final int scanId;
   final String? invoiceLabel;
+  /// Montant à répartir, en VALEUR ABSOLUE (y compris pour un avoir).
   final double? invoiceAmount;
+
+  /// Le document scanné est-il un AVOIR ?
+  ///
+  /// L'écran saisit toujours des montants positifs — son champ n'accepte même
+  /// pas le signe moins. C'est le SERVEUR qui applique le signe d'après la
+  /// nature du document. Ce drapeau ne sert donc qu'à le DIRE à l'utilisateur,
+  /// pour qu'il sache que ce qu'il saisit sera déduit et non ajouté.
+  final bool isRefund;
 
   const LinkToOtScreen({
     super.key,
     required this.scanId,
     this.invoiceLabel,
     this.invoiceAmount,
+    this.isRefund = false,
   });
 
   @override
@@ -247,7 +257,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
 
   /// Affecte le solde restant (facture - déjà alloué) à une seule ligne.
   void _fillRemainingOn(int otId) {
-    if (widget.invoiceAmount == null || widget.invoiceAmount! <= 0) return;
+    if (widget.invoiceAmount == null || widget.invoiceAmount!.abs() <= 0) return;
     final cfg = _selected[otId];
     if (cfg == null) return;
     // Total alloué hors cette ligne
@@ -336,7 +346,11 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
     final amountStr = cfg.amountCtrl.text.trim();
     if (amountStr.isEmpty) return 'Montant manquant';
     final amount = double.tryParse(amountStr.replaceAll(',', '.'));
-    if (amount == null || amount <= 0) return 'Montant invalide';
+    if (amount == null) return 'Montant invalide';
+    // Le montant se saisit en valeur absolue, avoir compris : seul zéro n'a
+    // aucun sens. Refuser `<= 0` rendait impossible toute liaison d'avoir,
+    // puisque le montant à répartir y était négatif.
+    if (amount == 0) return 'Montant nul';
     return null;
   }
 
@@ -512,17 +526,61 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
               color: AppTheme.getTextPrimary(context),
             ),
           ),
-          if (widget.invoiceAmount != null && widget.invoiceAmount! > 0) ...[
+          if (widget.invoiceAmount != null &&
+              widget.invoiceAmount!.abs() > 0) ...[
             const SizedBox(height: 4),
             Text(
-              'Montant facture : ${_formatXof(widget.invoiceAmount!)}',
+              widget.isRefund
+                  ? 'Montant de l\'avoir : ${_formatXof(widget.invoiceAmount!.abs())}'
+                  : 'Montant facture : ${_formatXof(widget.invoiceAmount!)}',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: AppTheme.getPrimary(context),
+                color: widget.isRefund
+                    ? AppTheme.getError(context)
+                    : AppTheme.getPrimary(context),
               ),
             ),
           ],
+          if (widget.isRefund) ...[
+            const SizedBox(height: 8),
+            _buildRefundBanner(context),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Bandeau « AVOIR » de l'écran de liaison.
+  ///
+  /// L'écran est visuellement identique à celui d'une facture ; sans ce
+  /// rappel, rien n'indique que les montants saisis seront comptés EN MOINS
+  /// sur les OTs sélectionnés.
+  Widget _buildRefundBanner(BuildContext context) {
+    final errorColor = AppTheme.getError(context);
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppTheme.getErrorLight(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: errorColor.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.undo_rounded, color: errorColor, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Avoir : saisissez les montants sans le signe. Ils seront '
+              'DÉDUITS du coût des OTs sélectionnés.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.3,
+                color: AppTheme.getTextPrimary(context),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -896,7 +954,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                 border: const OutlineInputBorder(),
                 isDense: true,
                 suffixIcon: (widget.invoiceAmount != null &&
-                        widget.invoiceAmount! > 0)
+                        widget.invoiceAmount!.abs() > 0)
                     ? IconButton(
                         icon: const Icon(Icons.swap_horiz, size: 18),
                         tooltip: 'Affecter le solde restant',

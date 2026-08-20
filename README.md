@@ -142,6 +142,23 @@ Deux règles à retenir :
    « Nature à confirmer ». Le bouton « Vérifier la nature auprès de la DGI »
    du formulaire tranche a posteriori.
 
+**Rattachement d'un avoir à un OT.** Le montant se saisit toujours en valeur
+absolue — le champ de l'application n'accepte même pas le signe moins — et
+c'est `potting.cost.line` qui applique le signe d'après la nature du scan
+rattaché : un avoir vient donc en DÉDUCTION du coût de l'OT. Cette
+normalisation vit dans le `create`/`write` du modèle, seul endroit que tous les
+chemins traversent (API mobile, assistant, formulaire, import). Une ligne sans
+scan rattaché garde en revanche le signe voulu par son auteur.
+
+**Un avoir ne se règle pas.** Une ligne de coût négative ne peut être ni
+rattachée à un chèque, ni passée en « Payé »/« Paiement en attente » : le
+refus arrive dès l'ouverture de l'assistant, et une contrainte du modèle sert
+de filet pour les autres chemins. La raison n'est pas seulement conceptuelle :
+la capacité d'un chèque se contrôle par `Σ coûts ≤ montant du chèque`, et un
+montant négatif y ferait de la place au lieu d'en consommer — on émettrait un
+chèque pour un montant non dû. La compensation réelle se fait en comptabilité,
+par lettrage de l'avoir fournisseur avec les factures du même tiers.
+
 Un avoir porte en outre la référence de la facture qu'il corrige
 (`origin_invoice_number_dgi`, champ `parentReference` de la DGI) et se
 rattache automatiquement au scan de cette facture — quel que soit l'ordre dans
