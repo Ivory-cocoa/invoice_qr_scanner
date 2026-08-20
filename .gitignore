@@ -5,3 +5,7 @@ __pycache__/
 
 # Fichiers système
 .DS_Store
+
+# Rapports et sauvegardes produits par scripts/requalifier_avoirs.sh
+# (journaux, CSV comptables et dumps : jamais versionnés)
+scripts/rapports_avoirs/

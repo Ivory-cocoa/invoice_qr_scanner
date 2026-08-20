@@ -24,6 +24,20 @@ def migrate(cr, version):
     if not version:
         return
 
+    # Odoo ne renseigne pas la valeur par défaut d'une nouvelle colonne
+    # booléenne non requise : `document_type_verified` reste à NULL sur les
+    # lignes existantes. L'ORM traite bien NULL comme « faux » dans un domaine,
+    # mais toute requête SQL écrite plus tard (rapports, contrôles) tomberait
+    # dans le piège du `= false` qui ignore les NULL. On rend donc la valeur
+    # explicite une bonne fois.
+    cr.execute("""
+        UPDATE invoice_scan_record
+           SET document_type_verified = false
+         WHERE document_type_verified IS NULL
+    """)
+    _logger.info("Scanner QR — nature : %s scans initialisés à « non confirmée ».",
+                 cr.rowcount)
+
     cr.execute("""
         SELECT count(*)
           FROM invoice_scan_record

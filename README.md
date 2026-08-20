@@ -149,6 +149,19 @@ lequel les deux ont été scannés.
 
 ### Requalifier les avoirs enregistrés en factures
 
+Le plus simple est le script `scripts/requalifier_avoirs.sh`, qui simule par
+défaut, sauvegarde et vérifie la sauvegarde avant toute écriture, et produit un
+CSV pour la comptabilité :
+
+```bash
+./scripts/requalifier_avoirs.sh --db <base>            # simulation
+./scripts/requalifier_avoirs.sh --db <base> --apply    # application
+./scripts/requalifier_avoirs.sh --db <base> --check    # contrôles
+```
+
+Mode opératoire complet : `docs/requalification_avoirs.md`. En direct depuis un
+shell Odoo :
+
 Avant la version 17.0.1.5.0, l'extraction lisait le montant sur le texte de la
 page DGI, qui affiche les avoirs en valeur absolue : chaque avoir scanné
 devenait une facture d'achat. L'outil de requalification interroge la DGI puis

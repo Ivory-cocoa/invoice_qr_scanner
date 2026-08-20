@@ -104,9 +104,51 @@ Aucune date de verrouillage n'est configurée sur la société : Odoo laissera
 passer les deux options sans broncher. **Le choix appartient donc entièrement
 à la comptabilité, et rien dans l'outil ne l'imposera.**
 
-### 3.4 Procédure
+### 3.4 Procédure — avec le script (recommandé)
 
-Sur le VPS, dans le répertoire du projet :
+`scripts/requalifier_avoirs.sh` enchaîne tous les contrôles, la sauvegarde et
+la requalification. Il **simule par défaut** : il faut `--apply` pour qu'il
+écrive quoi que ce soit.
+
+```bash
+cd /home/digital/ivorycocoa/invoice_qr_scanner/scripts
+
+# 1. SIMULATION — rien n'est écrit
+./requalifier_avoirs.sh --db <base_prod>
+
+# 2. Après validation comptable du CSV produit : APPLICATION
+./requalifier_avoirs.sh --db <base_prod> --apply
+#    ...ou, pour imputer sur la période ouverte :
+./requalifier_avoirs.sh --db <base_prod> --apply --posting-date 2026-08-31
+
+# 3. Contrôles
+./requalifier_avoirs.sh --db <base_prod> --check
+```
+
+Ce qu'il fait pour vous, et qu'une session manuelle ne fera pas :
+
+- refuse de tourner si le module n'est pas au moins en 17.0.1.5.0 (la méthode
+  n'existerait pas) ;
+- **sauvegarde la base avant toute écriture, et vérifie que la sauvegarde est
+  relisible** (`pg_restore -l`) avant de continuer — un filet qu'on n'a pas
+  vérifié n'en est pas un ;
+- exige de taper `APPLIQUER` en toutes lettres ;
+- rappelle l'avertissement sur la période d'imputation quand `--posting-date`
+  est absent ;
+- committe la transaction (le shell Odoo ne le fait pas seul : sans cela, tout
+  le travail serait perdu à la fermeture, silencieusement) ;
+- écrit un journal et un **CSV** dans `rapports_avoirs/`, à faire relire par la
+  comptabilité.
+
+Options utiles : `--scan-ids 2596,2595` pour reprendre des cas précis après
+arbitrage, `--full` pour interroger la DGI sur tout le stock (~40 min),
+`--outdir` pour écrire ailleurs que dans le dépôt, `--container` pour viser un
+autre conteneur (`odoo17-web-dev` en développement).
+
+### 3.5 Procédure — manuelle
+
+À utiliser si le script ne peut pas tourner. Sur le VPS, dans le répertoire du
+projet :
 
 ```bash
 # 0. Nom exact de la base de production
@@ -181,7 +223,7 @@ env['invoice.scan.record'].repair_refund_documents(
     dry_run=False, scan_ids=[2596, 2595])
 ```
 
-### 3.5 Contrôles après application
+### 3.6 Contrôles après application
 
 ```sql
 -- Les avoirs portent bien des avoirs fournisseur
