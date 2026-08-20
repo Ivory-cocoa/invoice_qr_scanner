@@ -151,15 +151,37 @@ class InvoiceScannerLoginOtp(models.Model):
         ⚠️ Le contrôleur OTP tourne en `auth='none'` : il n'y a pas
         d'utilisateur de requête, donc `self.env.company` est un recordset
         `res.company` VIDE et son `email_formatted` vaut `False`. On s'appuie
-        donc sur la société de l'utilisateur cible (toujours renseignée), puis
-        sur la première société, pour ne jamais retomber sur `False`.
+        donc sur la société de l'utilisateur CIBLE, toujours renseignée.
+
+        Ordre de résolution :
+
+        1. `mail.default.from` — le réglage prévu pour cela ;
+        2. l'email de la société de l'utilisateur ;
+        3. `mail.force.smtp.from` — la convention du parc, adresse que le
+           serveur SMTP imposera de toute façon (cf. `mail_force_smtp_from`) ;
+        4. à défaut, une erreur qui NOMME le réglage à renseigner.
+
+        Il n'y a délibérément pas de repli « première société trouvée » : en
+        multi-société, il expédiait le code depuis l'adresse d'une société
+        étrangère à l'utilisateur — et masquait l'absence de configuration au
+        lieu de la signaler.
         """
         self.ensure_one()
         icp = self.env['ir.config_parameter'].sudo()
-        return (icp.get_param('mail.default.from')
-                or self.user_id.company_id.sudo().email_formatted
-                or self.env['res.company'].sudo().search([], limit=1).email_formatted
-                or False)
+        sender = (icp.get_param('mail.default.from')
+                  or self.user_id.company_id.sudo().email_formatted
+                  or icp.get_param('mail.force.smtp.from'))
+        if not sender:
+            raise UserError(_(
+                "Impossible d'envoyer le code de connexion : aucune adresse "
+                "d'expéditeur n'est configurée.\n\n"
+                "Renseignez l'un de ces éléments :\n"
+                "• le paramètre système « mail.default.from » ;\n"
+                "• l'email de la société %(company)s ;\n"
+                "• le paramètre système « mail.force.smtp.from ».",
+                company=self.user_id.company_id.display_name or '—',
+            ))
+        return sender
 
     def _send_otp_email(self, code):
         """Envoie le code par email. L'échec SMTP remonte (raise_exception)."""
