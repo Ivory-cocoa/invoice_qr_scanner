@@ -830,11 +830,21 @@ class InvoiceScanRecord(models.Model):
         
         # Créer la facture en deux étapes pour éviter les contraintes de ligne
         # Étape 1: Créer la facture sans lignes
+        # Date COMPTABLE imposée par l'appelant, le cas échéant.
+        #
+        # Sans elle, Odoo la déduit de la date de facturation — donc de la date
+        # du document DGI, qui peut remonter à plusieurs mois. C'est le bon
+        # défaut pour un scan courant, mais pas pour une correction passée dans
+        # un mois déjà déclaré : la requalification des avoirs permet donc de
+        # forcer la période d'imputation sans toucher à la date du document.
+        accounting_date = self.env.context.get('scan_accounting_date')
+
         invoice = self.env['account.move'].create({
             'move_type': 'in_refund' if is_refund else 'in_invoice',
             'journal_id': journal.id,
             'partner_id': partner.id,
             'invoice_date': self.invoice_date or fields.Date.today(),
+            **({'date': accounting_date} if accounting_date else {}),
             'ref': self.invoice_number_dgi,
             'qr_scan_uuid': self.qr_uuid,
             'qr_scan_record_id': self.id,

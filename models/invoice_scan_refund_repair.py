@@ -57,7 +57,7 @@ Chaque appel journalise un rapport et renvoie un dictionnaire de résultats.
 import logging
 import re
 
-from odoo import _, api, models
+from odoo import _, api, fields, models
 
 from .fne_api import FneApiError
 
@@ -89,7 +89,7 @@ class InvoiceScanRefundRepair(models.Model):
 
     @api.model
     def repair_refund_documents(self, dry_run=True, only_suspect=True,
-                                limit=None, scan_ids=None):
+                                limit=None, scan_ids=None, posting_date=None):
         """Requalifier les avoirs enregistrés en factures d'achat.
 
         Args:
@@ -99,14 +99,30 @@ class InvoiceScanRefundRepair(models.Model):
             limit: borne le nombre de scans examinés (essai).
             scan_ids: liste d'identifiants à traiter, court-circuitant la
                 sélection automatique.
+            posting_date: date COMPTABLE imposée aux écritures produites
+                (extourne et avoir), sous forme de `date` ou de chaîne
+                'AAAA-MM-JJ'.
+
+                Par défaut — donc sans cet argument — la correction retombe
+                dans la PÉRIODE D'ORIGINE : l'extourne prend la date de la
+                pièce erronée, et l'avoir celle de son document DGI. C'est le
+                comportement comptablement juste, mais il rouvre des mois
+                parfois déjà déclarés.
+
+                Renseigner `posting_date` (typiquement le dernier jour du mois
+                courant) impute au contraire toute la correction sur la période
+                ouverte, sans jamais toucher à la date du DOCUMENT, qui reste
+                celle de la DGI. Le choix appartient à la comptabilité.
 
         Returns:
             dict: compteurs, détail des corrections et cas bloqués.
         """
         records = self._select_refund_repair_candidates(only_suspect, limit, scan_ids)
+        posting_date = fields.Date.to_date(posting_date) if posting_date else None
 
         result = {
             'dry_run': dry_run,
+            'posting_date': posting_date,
             'examined': len(records),
             'confirmed_invoice': 0,
             'already_refund': 0,
@@ -143,7 +159,8 @@ class InvoiceScanRefundRepair(models.Model):
                     record.write({'document_type_verified': True})
                 continue
 
-            self._requalify_refund_scan(record, nature, dry_run, result)
+            self._requalify_refund_scan(record, nature, dry_run, result,
+                                        posting_date=posting_date)
 
         self._log_refund_repair_report(result)
         return result
@@ -169,10 +186,11 @@ class InvoiceScanRefundRepair(models.Model):
     # ------------------------------------------------------------------
 
     @api.model
-    def _requalify_refund_scan(self, record, nature, dry_run, result):
+    def _requalify_refund_scan(self, record, nature, dry_run, result,
+                               posting_date=None):
         """Traiter un avoir enregistré en facture."""
         move = record.invoice_id
-        blockers = self._refund_reversal_blockers(move)
+        blockers = self._refund_reversal_blockers(move, posting_date)
 
         entry = {
             'scan_id': record.id,
@@ -203,7 +221,7 @@ class InvoiceScanRefundRepair(models.Model):
         previous_processed_by = record.processed_by
         previous_processed_date = record.processed_date
 
-        reversal = self._reverse_wrong_invoice_move(record, move)
+        reversal = self._reverse_wrong_invoice_move(record, move, posting_date)
         entry['reversal_name'] = reversal.name if reversal else None
 
         # Détacher l'ancienne pièce AVANT de requalifier : `_create_invoice`
@@ -216,8 +234,10 @@ class InvoiceScanRefundRepair(models.Model):
             'state': 'draft',
         })
 
-        refund_move = record._create_invoice()
+        refund_move = record.with_context(
+            scan_accounting_date=posting_date)._create_invoice()
         entry['refund_move_name'] = refund_move.name
+        entry['refund_move_date'] = refund_move.date
 
         # Rétablir l'état antérieur : un scan « traité » l'était pour de bonnes
         # raisons, et la correction comptable ne le remet pas en attente.
@@ -244,7 +264,7 @@ class InvoiceScanRefundRepair(models.Model):
         self._flip_refund_cost_lines(record, result, entry)
 
     @api.model
-    def _reverse_wrong_invoice_move(self, record, move):
+    def _reverse_wrong_invoice_move(self, record, move, posting_date=None):
         """Extourner la facture d'achat créée à tort.
 
         `_reverse_moves(cancel=True)` comptabilise l'extourne et solde la pièce
@@ -264,11 +284,14 @@ class InvoiceScanRefundRepair(models.Model):
             'ref': _("Extourne — avoir DGI enregistré à tort en facture (scan %s)")
                    % record.reference,
             'invoice_date': move.invoice_date,
-            'date': move.date,
+            # Par défaut l'extourne reste dans la période de la pièce qu'elle
+            # annule : les deux se neutralisent alors sur le même mois.
+            # `posting_date` déplace le couple sur la période ouverte.
+            'date': posting_date or move.date,
         }], cancel=True)
 
     @api.model
-    def _refund_reversal_blockers(self, move):
+    def _refund_reversal_blockers(self, move, posting_date=None):
         """Raisons de NE PAS toucher automatiquement à cette écriture.
 
         Un script n'a pas à défaire un règlement ni à écrire dans un exercice
@@ -286,8 +309,12 @@ class InvoiceScanRefundRepair(models.Model):
         if move.reversed_entry_id or move.reversal_move_id:
             blockers.append(_("écriture déjà extournée"))
 
+        # La date qui sera RÉELLEMENT écrite : celle imposée, sinon celle de
+        # la pièce d'origine. Contrôler l'autre reviendrait à bloquer des cas
+        # parfaitement traitables — ou pire, à en laisser passer.
+        target_date = posting_date or move.date
         lock_date = move.company_id.fiscalyear_lock_date
-        if lock_date and move.date and move.date <= lock_date:
+        if lock_date and target_date and target_date <= lock_date:
             blockers.append(_("période comptable verrouillée au %s") % lock_date)
 
         return blockers
@@ -352,10 +379,12 @@ class InvoiceScanRefundRepair(models.Model):
     def _log_refund_repair_report(self, result):
         mode = "SIMULATION (aucune écriture)" if result['dry_run'] else "APPLIQUÉ"
         _logger.info(
-            "Requalification des avoirs — %s : %s scans examinés ; "
+            "Requalification des avoirs — %s (imputation : %s) : %s scans examinés ; "
             "%s confirmés factures, %s déjà en avoir, %s requalifiés, "
             "%s bloqués (décision comptable), %s illisibles côté DGI",
-            mode, result['examined'], result['confirmed_invoice'],
+            mode,
+            result['posting_date'] or "période d'origine",
+            result['examined'], result['confirmed_invoice'],
             result['already_refund'], result['requalified'],
             result['blocked'], result['unreachable'],
         )

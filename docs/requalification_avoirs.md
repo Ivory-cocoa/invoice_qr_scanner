@@ -71,15 +71,80 @@ Il **signale et s'arrête** devant une écriture :
 
 Ces cas relèvent d'une décision comptable, pas d'un script.
 
-### 3.3 Procédure
+### 3.3 Où s'impute la correction (à trancher AVANT d'appliquer)
+
+Par défaut, la correction retombe dans la **période d'origine** :
+
+- l'extourne prend la date comptable de la facture erronée (janvier pour une
+  pièce de janvier) ;
+- l'avoir prend celle de son document DGI.
+
+Les deux se neutralisent donc sur le même mois, et le résultat net de chaque
+période redevient juste. C'est comptablement le plus propre — mais cela
+**écrit dans des mois déjà déclarés**, de janvier à juillet 2026.
+
+L'argument `posting_date` impute au contraire toute la correction sur une
+période ouverte :
+
+```python
+env['invoice.scan.record'].repair_refund_documents(
+    dry_run=False, posting_date='2026-08-31')
+```
+
+La date du **document** reste celle de la DGI dans les deux cas ; seule la date
+d'**imputation comptable** change.
+
+| | Sans `posting_date` (défaut) | Avec `posting_date` |
+|---|---|---|
+| Périodes touchées | janvier → juillet | le mois indiqué seulement |
+| Résultat par mois | rétabli | inchangé sur le passé, corrigé sur le mois courant |
+| Déclarations déjà déposées | à revoir | intactes |
+
+Aucune date de verrouillage n'est configurée sur la société : Odoo laissera
+passer les deux options sans broncher. **Le choix appartient donc entièrement
+à la comptabilité, et rien dans l'outil ne l'imposera.**
+
+### 3.4 Procédure
+
+Sur le VPS, dans le répertoire du projet :
 
 ```bash
-# Sur le serveur, dans un shell Odoo pointant la base de PRODUCTION
-odoo shell -d <base_prod> --addons-path=...
+# 0. Nom exact de la base de production
+docker exec odoo17-db-prod psql -U odoo -lqt | cut -d'|' -f1
+DB=<base_prod>
+```
+
+⚠️ `odoo.sh` a `DEFAULT_DATABASE="icp_dev_db"` en dur : **toujours passer le nom
+de la base en troisième argument**, sinon la commande vise une base qui
+n'existe pas côté prod.
+
+```bash
+# 1. Récupérer le code — les DEUX dépôts, et AVANT la mise à jour
+cd /home/digital/ivorycocoa/invoice_qr_scanner && git pull
+cd /home/digital/ivorycocoa/potting_management  && git pull
+
+# 2. Redémarrer, puis mettre à jour les deux modules ENSEMBLE
+cd /home/digital/<projet> && ./restart.sh
+./odoo.sh prod update invoice_qr_scanner,potting_management "$DB"
+```
+
+`odoo.sh` passe déjà le `--addons-path` complet, `/mnt/oca-addons` compris.
+Vérifier ensuite qu'aucun module ne reste en transit :
+
+```sql
+SELECT name, state FROM ir_module_module
+ WHERE state NOT IN ('installed', 'uninstalled', 'uninstallable');
+```
+
+```bash
+# 3. Shell Odoo sur la production
+docker exec -it odoo17-web-prod odoo shell -d "$DB" \
+  --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons,/mnt/oca-addons \
+  --no-http
 ```
 
 ```python
-# ÉTAPE 1 — Rapport, sans aucune écriture. C'est le comportement par défaut.
+# 4. SIMULATION — c'est le comportement par défaut, rien n'est écrit.
 res = env['invoice.scan.record'].repair_refund_documents()
 print(res['examined'], res['requalified'], res['blocked'], res['unreachable'])
 for c in res['changes']:
@@ -89,22 +154,34 @@ for b in res['blocked_details']:
     print('BLOQUÉ', b['scan_reference'], b['move_name'], b['blockers'])
 ```
 
-**Faire valider cette liste par la comptabilité avant d'aller plus loin.**
+**Faire valider cette liste par la comptabilité, et trancher la question de la
+période (§ 3.3), avant d'aller plus loin.**
 
 ```python
-# ÉTAPE 2 — Application
+# 5. APPLICATION — choisir UNE des deux formes
 res = env['invoice.scan.record'].repair_refund_documents(dry_run=False)
-env.cr.commit()
+# ... ou, pour tout imputer sur le mois courant :
+res = env['invoice.scan.record'].repair_refund_documents(
+    dry_run=False, posting_date='2026-08-31')
+
+env.cr.commit()   # indispensable : le shell Odoo ne committe pas tout seul
 ```
 
 ```python
-# ÉTAPE 3 — Balayage exhaustif (facultatif, lent : un appel DGI par scan)
+# 6. Balayage exhaustif (facultatif, lent : un appel DGI par scan, ~40 min)
 # À lancer une fois, hors heures ouvrées, pour confirmer qu'aucun avoir
 # n'échappe à la présélection par référence.
 env['invoice.scan.record'].repair_refund_documents(only_suspect=False)
 ```
 
-### 3.4 Contrôles après application
+Pour reprendre un cas bloqué après arbitrage comptable, cibler les scans :
+
+```python
+env['invoice.scan.record'].repair_refund_documents(
+    dry_run=False, scan_ids=[2596, 2595])
+```
+
+### 3.5 Contrôles après application
 
 ```sql
 -- Les avoirs portent bien des avoirs fournisseur
@@ -179,14 +256,38 @@ inversées.
 > préjugent pas de ceux qui seront attribués en production : les séquences y
 > sont distinctes.
 
-## 5. Ordre de déploiement
+## 5. Ordre de déploiement et retour arrière
 
-1. `git pull` des dépôts `invoice_qr_scanner` **et** `potting_management`
-   (le signe des coûts d'OT est porté par le second).
-2. Mise à jour des deux modules — **toujours avec `--addons-path` complet**,
-   `/mnt/oca-addons` compris.
-3. Vérifier le journal de migration : il indique combien de scans ont la forme
-   d'un avoir.
-4. Lancer la requalification en simulation, faire valider, puis appliquer.
-5. Déployer l'APK `dist/facture_scanner_prod_*.apk` (version 3.3.0) et la PWA
-   (déjà reconstruite dans `static/pwa/`).
+| Étape | Action | Réversible ? |
+|---|---|---|
+| 1 | `git pull` des deux dépôts (`invoice_qr_scanner`, `potting_management`) | oui |
+| 2 | `./restart.sh` puis mise à jour des deux modules | oui (revert + update) |
+| 3 | Simulation de la requalification | rien n'est écrit |
+| 4 | Validation comptable de la liste + choix de la période | — |
+| 5 | Application (`dry_run=False`) | **non** — voir ci-dessous |
+| 6 | Déploiement APK 3.3.0 + PWA | oui |
+
+La PWA est servie par le module (`static/pwa/`) : elle part avec le `git pull`,
+sans manipulation. L'APK `dist/facture_scanner_prod_20260820_103725.apk` se
+distribue par le canal habituel.
+
+**Retour arrière de l'étape 5.** Les écritures produites sont comptabilisées :
+il n'y a pas d'annulation en un clic. Le retour se fait comme n'importe quelle
+correction comptable — extourner l'avoir créé, extourner l'extourne — ce qui
+laisse six pièces au lieu de trois. D'où l'importance de l'étape 4.
+
+**Sauvegarde.** Prendre un instantané de la base avant l'étape 5 ; c'est le
+seul retour arrière réellement propre.
+
+## 6. Après le déploiement
+
+- Filtre back-office **« Nature à confirmer »** : il recense les scans dont la
+  nature n'a jamais été validée par la DGI (tout l'historique y figure au
+  départ, puisque le champ vient de naître). Le bouton « Vérifier la nature
+  auprès de la DGI », disponible aussi en action de masse depuis la liste,
+  les résorbe par lots.
+- Filtre **« Avoirs sans facture d'origine »** : avoirs dont la facture
+  corrigée n'a jamais été scannée. Rien d'anormal en soi ; utile pour repérer
+  une facture manquante.
+- Les nouveaux scans, eux, arrivent déjà confirmés : la nature vient de la DGI
+  à la source.

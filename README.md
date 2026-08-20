@@ -161,8 +161,13 @@ env['invoice.scan.record'].repair_refund_documents()
 # 2. Balayage exhaustif (interroge la DGI pour tous les scans : lent)
 env['invoice.scan.record'].repair_refund_documents(only_suspect=False)
 
-# 3. Application
+# 3. Application — la correction retombe dans la PÉRIODE D'ORIGINE
 env['invoice.scan.record'].repair_refund_documents(dry_run=False)
+
+# 3 bis. …ou imputée sur une période ouverte, sans toucher à la date du
+#        document (qui reste celle de la DGI)
+env['invoice.scan.record'].repair_refund_documents(
+    dry_run=False, posting_date='2026-08-31')
 ```
 
 Pour chaque avoir confirmé par la DGI, il extourne la facture erronée, recrée

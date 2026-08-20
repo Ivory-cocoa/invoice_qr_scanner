@@ -331,6 +331,25 @@ class TestRefundRepair(TransactionCase):
         self.assertEqual(result['requalified'], 0)
         self.assertEqual(scan.document_type, 'invoice')
 
+    def test_posting_date_moves_the_correction_to_the_open_period(self):
+        """Sans `posting_date`, la correction retombe dans la période d'origine.
+
+        Avec, elle s'impute sur la période demandée — sans jamais toucher à la
+        date du DOCUMENT, qui reste celle de la DGI. C'est le point qui permet
+        de corriger sans rouvrir un mois déjà déclaré.
+        """
+        scan, wrong_move = self._make_wrong_scan()
+        target = fields.Date.to_date('2026-08-31')
+
+        with self._patch_nature():
+            self.ScanRecord.repair_refund_documents(
+                scan_ids=scan.ids, dry_run=False, posting_date=target)
+
+        self.assertEqual(scan.invoice_id.date, target)
+        self.assertEqual(wrong_move.reversal_move_id.date, target)
+        # La date du document reste celle de la facturation DGI.
+        self.assertEqual(scan.invoice_id.invoice_date, scan.invoice_date)
+
     def test_a_confirmed_invoice_is_left_alone(self):
         """La DGI dit « facture » : on ne touche à rien, on marque vérifié."""
         scan, move = self._make_wrong_scan()
