@@ -65,6 +65,9 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         final duplicates = (stats['duplicate_scans'] as num?)?.toInt() ?? 0;
         final errors = (stats['error_scans'] as num?)?.toInt() ?? 0;
         final amount = (stats['total_amount'] as num?)?.toDouble() ?? 0.0;
+        final refundCount = (stats['refund_count'] as num?)?.toInt() ?? 0;
+        final refundAmount =
+            (stats['refund_amount'] as num?)?.toDouble() ?? 0.0;
 
         return AnimatedBuilder(
           animation: _animation,
@@ -98,7 +101,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
 
                 // Montant total
                 const Divider(height: 1),
-                _buildAmountSection(context, amount),
+                _buildAmountSection(context, amount, refundCount, refundAmount),
 
                 // Taux de réussite
                 if (!widget.compact) ...[
@@ -490,7 +493,11 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildAmountSection(BuildContext context, double amount) {
+  /// Section « montant ». Le total affiché est NET : les avoirs y sont déjà
+  /// soustraits. La ligne « dont N avoirs » explique l'écart, sans quoi une
+  /// baisse du total resterait incompréhensible.
+  Widget _buildAmountSection(BuildContext context, double amount,
+      int refundCount, double refundAmount) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -520,7 +527,9 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Montant total facturé',
+                  refundCount > 0
+                      ? 'Montant net facturé'
+                      : 'Montant total facturé',
                   style: TextStyle(
                     color: AppTheme.getTextMuted(context),
                     fontSize: 13,
@@ -535,14 +544,36 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                   builder: (context, value, _) {
                     return Text(
                       _formatAmount(value),
-                      style: const TextStyle(
-                        color: AppTheme.accentColor,
+                      style: TextStyle(
+                        color: value < 0
+                            ? AppTheme.getError(context)
+                            : AppTheme.accentColor,
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                       ),
                     );
                   },
                 ),
+                if (refundCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.undo_rounded,
+                            size: 13, color: AppTheme.getError(context)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'dont $refundCount avoir${refundCount > 1 ? 's' : ''} '
+                          '(− ${_formatAmount(refundAmount)})',
+                          style: TextStyle(
+                            color: AppTheme.getError(context),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -679,15 +710,20 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
+  /// Le montant net peut être NÉGATIF (mois où les avoirs l'emportent) :
+  /// les seuils se comparent donc sur la valeur absolue, sinon un net de
+  /// −3 M s'afficherait « −3000000 FCFA » au lieu de « − 3,0 M FCFA ».
   String _formatAmount(double amount) {
-    if (amount >= 1000000000) {
-      return '${(amount / 1000000000).toStringAsFixed(1)} Mrd FCFA';
-    } else if (amount >= 1000000) {
-      return '${(amount / 1000000).toStringAsFixed(1)} M FCFA';
-    } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(0)} K FCFA';
+    final sign = amount < 0 ? '− ' : '';
+    final value = amount.abs();
+    if (value >= 1000000000) {
+      return '$sign${(value / 1000000000).toStringAsFixed(1)} Mrd FCFA';
+    } else if (value >= 1000000) {
+      return '$sign${(value / 1000000).toStringAsFixed(1)} M FCFA';
+    } else if (value >= 1000) {
+      return '$sign${(value / 1000).toStringAsFixed(0)} K FCFA';
     }
-    return '${amount.toStringAsFixed(0)} FCFA';
+    return '$sign${value.toStringAsFixed(0)} FCFA';
   }
 }
 

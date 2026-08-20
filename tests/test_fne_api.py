@@ -27,6 +27,7 @@ FNE_PAYLOAD = {
     'totalDue': 1677566,
     'clientNcc': '1100563G',
     'clientCompanyName': 'IVORY COCOA PRODUCTS',
+    'subtype': 'normal',
     'clientEmail': 'compta@example.ci',
     'commercialMessage': 'OT GSR 001/26 - LTA n°: 078 8534 7083',
     'company': {
@@ -37,6 +38,20 @@ FNE_PAYLOAD = {
         'email': 'contact@example.ci',
     },
 }
+
+
+# Avoir réel : la plateforme le sert sous le MÊME endpoint, avec un `subtype`
+# différent, des montants négatifs et la référence de la facture d'origine.
+FNE_REFUND_PAYLOAD = dict(
+    FNE_PAYLOAD,
+    token='01a0196f-7c15-7006-a5a7-85443a22c929',
+    reference='A7603114Y2600000393',
+    subtype='refund',
+    parentReference='7603114Y26000010087',
+    amount=-250000,
+    totalAfterTaxes=-250000,
+    totalDue=-250000,
+)
 
 
 @tagged('post_install', '-at_install', 'invoice_qr_scanner', 'fne')
@@ -74,6 +89,8 @@ class TestFneApiNormalization(TransactionCase):
             'supplier_name', 'supplier_code_dgi', 'customer_name',
             'customer_code_dgi', 'invoice_number_dgi', 'invoice_date',
             'amount_ttc', 'verification_id', 'commercial_message',
+            'document_type', 'document_type_verified',
+            'origin_invoice_number_dgi',
         }
         self.assertEqual(set(values), expected_keys)
 
@@ -116,6 +133,97 @@ class TestFneApiNormalization(TransactionCase):
         payload = dict(FNE_PAYLOAD, clientCompanyName='  IVORY   COCOA\nPRODUCTS ')
         values = self.FneApi._normalize_payload(payload)
         self.assertEqual(values['customer_name'], 'IVORY COCOA PRODUCTS')
+
+
+@tagged('post_install', '-at_install', 'invoice_qr_scanner', 'fne')
+class TestFneApiRefunds(TransactionCase):
+    """Avoirs : la nature du document et le signe du montant.
+
+    C'est le cœur du correctif. La plateforme FNE certifie les avoirs sous le
+    même QR-code que les factures ; l'ancienne normalisation les rejetait
+    (montant négatif écarté), et l'extraction encore plus ancienne les
+    enregistrait à l'envers. Ces tests fixent le contrat : nature explicite,
+    montant en valeur absolue.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.FneApi = cls.env['fne.api.client']
+
+    def test_invoice_is_typed_as_invoice(self):
+        values = self.FneApi._normalize_payload(FNE_PAYLOAD)
+        self.assertEqual(values['document_type'], 'invoice')
+        self.assertEqual(values['amount_ttc'], 1677566)
+        self.assertFalse(values['origin_invoice_number_dgi'])
+
+    def test_refund_is_typed_and_amount_made_absolute(self):
+        """Un avoir doit ressortir typé, avec un montant POSITIF.
+
+        Le signe appartient à la nature du document, pas au montant : c'est
+        `invoice.scan.record.amount_signed` qui le rétablit. Stocker un négatif
+        casserait la contrainte de montant et tous les cumuls existants.
+        """
+        values = self.FneApi._normalize_payload(FNE_REFUND_PAYLOAD)
+
+        self.assertEqual(values['document_type'], 'refund')
+        self.assertEqual(values['amount_ttc'], 250000)
+        self.assertEqual(values['invoice_number_dgi'], 'A7603114Y2600000393')
+        self.assertEqual(values['origin_invoice_number_dgi'],
+                         '7603114Y26000010087')
+
+    def test_refund_no_longer_raises_incomplete_data(self):
+        """La régression d'origine : l'avoir était refusé faute de montant.
+
+        `_parse_amount` n'acceptait que les montants >= 0 ; les trois champs
+        de montant d'un avoir étant négatifs, il renvoyait None et la
+        normalisation levait FNE_INCOMPLETE_DATA. L'utilisateur voyait
+        « données non extraites » sur un QR-code parfaitement valide.
+        """
+        values = self.FneApi._normalize_payload(FNE_REFUND_PAYLOAD)
+        self.assertTrue(values['amount_ttc'])
+
+    def test_negative_amount_alone_implies_refund(self):
+        """Sans `subtype`, le signe du montant suffit à conclure."""
+        payload = dict(FNE_PAYLOAD, totalDue=-1000, totalAfterTaxes=-1000,
+                       amount=-1000)
+        payload.pop('subtype')
+        values = self.FneApi._normalize_payload(payload)
+        self.assertEqual(values['document_type'], 'refund')
+        self.assertEqual(values['amount_ttc'], 1000)
+
+    def test_refund_subtype_alone_implies_refund(self):
+        """Et inversement : un `subtype` d'avoir prime sur un montant positif.
+
+        Redondance volontaire : l'endpoint n'est pas contractuel, un émetteur
+        peut très bien produire un avoir à montant positif.
+        """
+        payload = dict(FNE_PAYLOAD, subtype='refund')
+        values = self.FneApi._normalize_payload(payload)
+        self.assertEqual(values['document_type'], 'refund')
+        self.assertEqual(values['amount_ttc'], 1677566)
+
+    def test_values_from_the_platform_are_marked_verified(self):
+        values = self.FneApi._normalize_payload(FNE_REFUND_PAYLOAD)
+        self.assertTrue(values['document_type_verified'])
+
+    def test_fetch_document_nature_tolerates_incomplete_payloads(self):
+        """La nature se lit même sur un payload amputé.
+
+        `fetch_document_nature` sert à rattraper les clients qui n'envoient pas
+        le type : exiger un fournisseur ou un numéro les priverait justement du
+        rattrapage.
+        """
+        payload = dict(FNE_REFUND_PAYLOAD)
+        payload.pop('company')
+        payload.pop('reference')
+        with patch('odoo.addons.invoice_qr_scanner.models.fne_api.requests.get',
+                   return_value=_FakeResponse(payload=payload)):
+            nature = self.FneApi.fetch_document_nature(
+                '01a0196f-7c15-7006-a5a7-85443a22c929')
+        self.assertEqual(nature['document_type'], 'refund')
+        self.assertEqual(nature['origin_invoice_number_dgi'],
+                         '7603114Y26000010087')
 
 
 class _FakeResponse:

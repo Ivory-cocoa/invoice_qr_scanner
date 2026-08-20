@@ -7,7 +7,8 @@ Module Odoo 17 pour créer des factures fournisseur en scannant les QR-codes des
 ### Module Odoo
 
 - ✅ **Scan QR-code DGI** : Récupère automatiquement les données de la facture depuis le site DGI
-- ✅ **Création automatique** : Crée la facture fournisseur avec les données récupérées
+- ✅ **Factures ET avoirs** : Distingue les deux natures de document certifiées par la DGI
+- ✅ **Création automatique** : Crée la facture fournisseur (ou l'avoir) avec les données récupérées
 - ✅ **Détection doublons** : Empêche la création de factures en double grâce à l'UUID unique
 - ✅ **Création fournisseur** : Crée automatiquement le fournisseur s'il n'existe pas
 - ✅ **Configuration flexible** : Choix entre validation automatique ou manuelle des factures
@@ -110,6 +111,68 @@ et se corrige ; imputer une facture au mauvais tiers ne se voit pas.
 
 Un code DGI non conforme n'est jamais utilisé pour identifier un partenaire, ni
 recopié sur sa fiche.
+
+### Factures et avoirs
+
+La plateforme FNE certifie deux natures de document sous un QR-code de forme
+identique : les **factures** (`subtype: normal`) et les **avoirs**
+(`subtype: refund`, montants négatifs). Rien dans l'URL scannée ne les
+distingue.
+
+Le module porte donc une nature explicite sur chaque scan
+(`document_type`), et en tire tout le reste :
+
+| | Facture | Avoir |
+|---|---|---|
+| Pièce Odoo créée | `in_invoice` (facture d'achat) | `in_refund` (avoir fournisseur) |
+| Sens | dette envers le fournisseur | créance sur le fournisseur |
+| `amount_ttc` | positif | positif (valeur absolue) |
+| `amount_signed` | positif | **négatif** |
+| Coût d'OT | s'ajoute | **se retranche** |
+
+Deux règles à retenir :
+
+1. **`amount_ttc` est toujours positif.** Le sens est porté par la nature, pas
+   par le signe. Le seul montant qu'il soit juste d'additionner est
+   `amount_signed` — tous les cumuls (tableaux de bord, statistiques mobiles,
+   coûts d'OT) passent par lui.
+2. **La nature vient de la DGI, jamais d'une déduction.** Quand la plateforme
+   n'a pas pu la confirmer (hors ligne, saisie manuelle),
+   `document_type_verified` reste faux et le scan remonte dans le filtre
+   « Nature à confirmer ». Le bouton « Vérifier la nature auprès de la DGI »
+   du formulaire tranche a posteriori.
+
+Un avoir porte en outre la référence de la facture qu'il corrige
+(`origin_invoice_number_dgi`, champ `parentReference` de la DGI) et se
+rattache automatiquement au scan de cette facture — quel que soit l'ordre dans
+lequel les deux ont été scannés.
+
+### Requalifier les avoirs enregistrés en factures
+
+Avant la version 17.0.1.5.0, l'extraction lisait le montant sur le texte de la
+page DGI, qui affiche les avoirs en valeur absolue : chaque avoir scanné
+devenait une facture d'achat. L'outil de requalification interroge la DGI puis
+extourne et recrée les pièces concernées :
+
+```python
+# 1. Rapport, sans AUCUNE écriture (comportement par défaut)
+env['invoice.scan.record'].repair_refund_documents()
+
+# 2. Balayage exhaustif (interroge la DGI pour tous les scans : lent)
+env['invoice.scan.record'].repair_refund_documents(only_suspect=False)
+
+# 3. Application
+env['invoice.scan.record'].repair_refund_documents(dry_run=False)
+```
+
+Pour chaque avoir confirmé par la DGI, il extourne la facture erronée, recrée
+un avoir fournisseur, rétablit l'état du scan et inverse le signe des lignes de
+coût d'OT dérivées. Trois pièces comptables subsistent — la fausse facture, son
+extourne, l'avoir : une correction comptable se lit dans le grand livre, elle
+ne s'y efface pas.
+
+Il **refuse** de toucher une écriture payée, rapprochée ou dans une période
+verrouillée : ces cas sont signalés pour arbitrage comptable.
 
 ### Réparer les données antérieures
 
@@ -307,7 +370,9 @@ Content-Type: application/json
 | Client | Nom et code DGI | IVORY COCOA PRODUCTS - 1100563G |
 | N° Facture | Numéro attribué par DGI | 2502298K26000000003 |
 | Date | Date de facturation | 19/01/2026 |
-| Montant TTC | Montant en FCFA | 1 677 566 CFA |
+| Montant TTC | Montant en FCFA (valeur absolue) | 1 677 566 CFA |
+| Nature | Facture ou avoir (`subtype` DGI) | refund |
+| Facture d'origine | Référence corrigée par un avoir (`parentReference`) | 7603114Y26000010087 |
 | UUID | Identifiant unique | 019bd62c-467e-7000-82ac-45c8389c7f05 |
 
 ## Structure du module

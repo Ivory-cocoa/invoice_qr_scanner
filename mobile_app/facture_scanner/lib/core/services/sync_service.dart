@@ -196,6 +196,12 @@ class SyncService {
         'invoice_date': scan['invoice_date'],
         'verification_id': scan['verification_id'],
         'amount_ttc': scan['amount_ttc'],
+        // Nature du document telle que le client l'a comprise hors ligne.
+        // Le serveur ne la re-vérifie PAS auprès de la DGI sur un lot (il y
+        // tiendrait le sémaphore trop longtemps) : il la reprend en la
+        // marquant « à confirmer ». Sans ce champ, tout avoir synchronisé
+        // hors ligne redeviendrait une facture.
+        'document_type': scan['document_type'] ?? 'invoice',
       },
     }).toList();
     

@@ -100,13 +100,24 @@ class HistoryList extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              record.reference,
-                              style: TextStyle(
-                                color: AppTheme.getTextPrimary(context),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 17,
-                              ),
+                            Row(
+                              children: [
+                                if (record.isRefund) ...[
+                                  _buildRefundChip(context),
+                                  const SizedBox(width: 6),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    record.reference,
+                                    style: TextStyle(
+                                      color: AppTheme.getTextPrimary(context),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 17,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
                             if (record.supplierName.isNotEmpty)
                               Padding(
@@ -162,10 +173,11 @@ class HistoryList extends StatelessWidget {
                       Expanded(
                         child: _buildDetailColumn(
                           context,
-                          'Montant',
+                          record.isRefund ? 'Montant (avoir)' : 'Montant',
                           record.formattedAmount,
                           Icons.payments_rounded,
                           isAmount: true,
+                          isNegative: record.isRefund,
                         ),
                       ),
                     ],
@@ -421,7 +433,34 @@ class HistoryList extends StatelessWidget {
     );
   }
   
-  Widget _buildDetailColumn(BuildContext context, String label, String value, IconData icon, {bool isAmount = false}) {
+  /// Pastille « AVOIR » de la liste d'historique.
+  Widget _buildRefundChip(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.getError(context),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.undo_rounded, color: Colors.white, size: 11),
+          SizedBox(width: 3),
+          Text(
+            'AVOIR',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailColumn(BuildContext context, String label, String value, IconData icon, {bool isAmount = false, bool isNegative = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
@@ -445,7 +484,11 @@ class HistoryList extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              color: isAmount ? AppTheme.getSuccess(context) : AppTheme.getTextPrimary(context),
+              color: isNegative
+                  ? AppTheme.getError(context)
+                  : (isAmount
+                      ? AppTheme.getSuccess(context)
+                      : AppTheme.getTextPrimary(context)),
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -676,9 +719,33 @@ class _RecordDetailsSheet extends StatelessWidget {
                   _buildDetailRow(context, 'Fournisseur', record.supplierName, Icons.business_rounded),
                 if (record.invoiceNumberDgi.isNotEmpty)
                   _buildDetailRow(context, 'N° Facture DGI', record.invoiceNumberDgi, Icons.receipt_long_rounded),
-                _buildDetailRow(context, 'Montant', record.formattedAmount, Icons.payments_rounded, highlight: true),
+                _buildDetailRow(
+                    context,
+                    record.isRefund ? 'Nature' : 'Nature',
+                    record.isRefund ? 'AVOIR fournisseur' : 'Facture',
+                    record.isRefund
+                        ? Icons.undo_rounded
+                        : Icons.receipt_long_rounded),
+                _buildDetailRow(
+                    context,
+                    record.isRefund ? 'Montant de l\'avoir' : 'Montant',
+                    record.formattedAmount,
+                    Icons.payments_rounded,
+                    highlight: true),
+                if (record.isRefund && record.originInvoiceNumberDgi.isNotEmpty)
+                  _buildDetailRow(
+                      context,
+                      'Facture d\'origine',
+                      record.originScanReference.isNotEmpty
+                          ? '${record.originInvoiceNumberDgi} (${record.originScanReference})'
+                          : record.originInvoiceNumberDgi,
+                      Icons.call_split_rounded),
                 if (record.invoiceName != null)
-                  _buildDetailRow(context, 'Facture Odoo', record.invoiceName!, Icons.link_rounded),
+                  _buildDetailRow(
+                      context,
+                      record.isRefund ? 'Avoir Odoo' : 'Facture Odoo',
+                      record.invoiceName!,
+                      Icons.link_rounded),
                 if (record.scanDate != null)
                   _buildDetailRow(context, 'Date du scan', dateFormat.format(record.scanDate!), Icons.schedule_rounded),
                 if (record.isProcessed && record.processedBy != null)

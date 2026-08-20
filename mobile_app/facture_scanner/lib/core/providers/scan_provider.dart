@@ -430,10 +430,12 @@ class ScanProvider extends ChangeNotifier {
     required String invoiceNumberDgi,
     String? invoiceDate,
     required double amountTtc,
+    DocumentType documentType = DocumentType.invoice,
     required double verificationDuration,
   }) async {
+    final isRefund = documentType == DocumentType.refund;
     _state = ScanState.processing;
-    _message = 'Création de la facture...';
+    _message = isRefund ? 'Enregistrement de l\'avoir...' : 'Création de la facture...';
     notifyListeners();
 
     try {
@@ -446,13 +448,17 @@ class ScanProvider extends ChangeNotifier {
         invoiceNumberDgi: invoiceNumberDgi,
         invoiceDate: invoiceDate,
         amountTtc: amountTtc,
+        documentType: documentType,
         verificationDuration: verificationDuration,
         isManualEntry: true,
       );
 
       if (response.success && response.data != null) {
         _state = ScanState.success;
-        _message = response.data!['message'] ?? 'Facture créée avec succès (saisie manuelle)';
+        _message = response.data!['message'] ??
+            (isRefund
+                ? 'Avoir enregistré avec succès (saisie manuelle)'
+                : 'Facture créée avec succès (saisie manuelle)');
         _localSuccessCount++;
 
         if (response.data!.containsKey('record')) {

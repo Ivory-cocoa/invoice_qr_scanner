@@ -320,6 +320,7 @@ class QueueStatusBanner extends StatelessWidget {
         invoiceNumberDgi: result.invoiceNumberDgi,
         invoiceDate: result.invoiceDate,
         amountTtc: result.amountTtc,
+        documentType: result.documentType,
         verificationDuration: result.verificationDuration,
       );
     }

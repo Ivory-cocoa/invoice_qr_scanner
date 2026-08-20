@@ -30,6 +30,18 @@ journalisé. ``_normalize_payload`` applique une liste blanche explicite et ne
 retourne que les champs nécessaires à la facture. Le champ ``raw_html`` du
 modèle de scan ne doit pas non plus être alimenté depuis cette source.
 
+⚠️ Factures ET avoirs
+=====================
+La plateforme certifie deux natures de document sous le même endpoint : les
+factures (``subtype: "normal"``) et les **avoirs** (``subtype: "refund"``), dont
+les montants sont NÉGATIFS. Les deux se scannent avec le même QR-code, et rien
+dans l'URL ne les distingue — seul le payload le dit.
+
+Ce client renvoie donc systématiquement un ``document_type`` explicite et un
+``amount_ttc`` en valeur ABSOLUE : le signe est porté par le type, jamais par le
+montant. Confondre les deux revient à enregistrer un avoir en dette
+fournisseur ; c'est arrivé 24 fois avant que ce champ n'existe.
+
 ⚠️ Endpoint non contractuel
 ===========================
 Cet endpoint est celui du site public, il n'est pas documenté. Il peut changer
@@ -114,6 +126,44 @@ class FneApiClient(models.AbstractModel):
         Raises:
             FneApiError: avec un ``code`` exploitable par l'API mobile.
         """
+        return self._normalize_payload(self._fetch_payload(qr_uuid))
+
+    @api.model
+    def fetch_document_nature(self, qr_uuid):
+        """Nature du document (facture ou avoir), SANS exiger sa complétude.
+
+        Sert aux clients qui ont extrait les données eux-mêmes (APK avec
+        WebView, saisie manuelle) et n'ont donc pas vu le ``subtype`` : le
+        serveur va le chercher pour eux. C'est le point qui garantit qu'aucun
+        avoir ne peut plus être enregistré en facture par un client ancien.
+
+        Volontairement distinct de `fetch_invoice` : ici, un fournisseur ou un
+        numéro manquant n'est pas bloquant — seule la NATURE nous intéresse.
+
+        Returns:
+            dict: ``{'document_type': 'invoice'|'refund',
+                     'origin_invoice_number_dgi': str|False}``
+
+        Raises:
+            FneApiError: si la plateforme est injoignable ou désactivée.
+        """
+        payload = self._fetch_payload(qr_uuid)
+        document_type, _amount = self._parse_document_type_and_amount(payload)
+        return {
+            'document_type': document_type,
+            'origin_invoice_number_dgi': self._clean_text(payload.get('parentReference')),
+        }
+
+    @api.model
+    def _fetch_payload(self, qr_uuid):
+        """Appel réseau brut + contrôles de transport, sans normalisation.
+
+        ⚠️ Le dict renvoyé contient les données SENSIBLES du fournisseur (clé
+        d'API, coordonnées bancaires). Il ne doit ni sortir de ce module, ni
+        être stocké, ni être journalisé : seuls `_normalize_payload` et
+        `fetch_document_nature` ont le droit de le lire, et ils n'en ressortent
+        qu'une liste blanche.
+        """
         if not qr_uuid:
             raise FneApiError('FNE_INVALID_RESPONSE', "UUID de vérification manquant")
 
@@ -173,7 +223,7 @@ class FneApiClient(models.AbstractModel):
                 "Réponse inattendue de la plateforme DGI.",
             )
 
-        return self._normalize_payload(payload)
+        return payload
 
     # ------------------------------------------------------------------
     # Normalisation (fonction pure — testée sans réseau)
@@ -195,13 +245,17 @@ class FneApiClient(models.AbstractModel):
             clientNcc            → customer_code_dgi
             reference            → invoice_number_dgi
             date                 → invoice_date
-            totalDue / totalAfterTaxes / amount → amount_ttc
+            totalDue / totalAfterTaxes / amount → amount_ttc (VALEUR ABSOLUE)
+            subtype / signe du montant          → document_type
+            parentReference      → origin_invoice_number_dgi (avoirs)
             token                → verification_id
             commercialMessage    → commercial_message (peut porter la réf. d'OT)
         """
         company = payload.get('company')
         if not isinstance(company, dict):
             company = {}
+
+        document_type, amount_ttc = self._parse_document_type_and_amount(payload)
 
         values = {
             'supplier_name': self._clean_text(company.get('name')),
@@ -210,7 +264,14 @@ class FneApiClient(models.AbstractModel):
             'customer_code_dgi': self._clean_text(payload.get('clientNcc')),
             'invoice_number_dgi': self._clean_text(payload.get('reference')),
             'invoice_date': self._parse_date(payload.get('date')),
-            'amount_ttc': self._parse_amount(payload),
+            'amount_ttc': amount_ttc,
+            'document_type': document_type,
+            # Ces valeurs viennent de la plateforme elle-même : la nature du
+            # document est confirmée à la source, pas déduite.
+            'document_type_verified': True,
+            # Sur un avoir, la DGI donne la référence de la facture d'origine.
+            # C'est ce qui permet de rattacher l'avoir au scan de sa facture.
+            'origin_invoice_number_dgi': self._clean_text(payload.get('parentReference')),
             'verification_id': self._clean_text(payload.get('token')),
             'commercial_message': self._clean_text(payload.get('commercialMessage'), limit=512),
         }
@@ -264,14 +325,36 @@ class FneApiClient(models.AbstractModel):
             _logger.info("FNE: date non exploitable (%r)", value[:32])
             return False
 
-    @api.model
-    def _parse_amount(self, payload):
-        """Montant TTC, par ordre de préférence des champs FNE.
+    # Valeurs de ``subtype`` désignant un avoir côté FNE.
+    REFUND_SUBTYPES = ('refund', 'credit', 'creditnote', 'credit_note', 'avoir')
 
-        ``totalDue`` est le net à payer affiché comme « Montant TTC » sur la page
-        de vérification ; ``totalAfterTaxes`` et ``amount`` servent de repli si
-        la plateforme cesse de le renseigner.
+    @api.model
+    def _parse_document_type_and_amount(self, payload):
+        """Déterminer la NATURE du document et son montant en valeur absolue.
+
+        Deux signaux, volontairement redondants :
+
+        - ``subtype`` vaut ``refund`` sur les avoirs (``normal`` sur les
+          factures). C'est la source d'autorité.
+        - le montant est négatif sur les avoirs.
+
+        Un seul des deux suffit à conclure « avoir ». Cette redondance n'est pas
+        de la coquetterie : l'endpoint n'est pas contractuel, et un fournisseur
+        peut très bien émettre un avoir avec un montant positif ou un
+        ``subtype`` absent. Se fier à un seul signal, c'est reproduire le défaut
+        que cette méthode existe pour corriger.
+
+        Le montant est renvoyé en VALEUR ABSOLUE : le signe appartient au type,
+        pas au montant (cf. ``invoice.scan.record.amount_signed``).
+
+        Returns:
+            tuple: ``('invoice'|'refund', float|None)``.
         """
+        subtype = payload.get('subtype') or payload.get('type')
+        subtype = str(subtype).strip().lower() if subtype else ''
+        is_refund = subtype in self.REFUND_SUBTYPES
+
+        amount = None
         for key in ('totalDue', 'totalAfterTaxes', 'amount'):
             value = payload.get(key)
             if value is None or isinstance(value, bool):
@@ -280,6 +363,15 @@ class FneApiClient(models.AbstractModel):
                 amount = float(value)
             except (TypeError, ValueError):
                 continue
-            if amount >= 0:
-                return amount
-        return None
+            break
+
+        if amount is not None and amount < 0:
+            is_refund = True
+
+        return ('refund' if is_refund else 'invoice',
+                abs(amount) if amount is not None else None)
+
+    @api.model
+    def _parse_amount(self, payload):
+        """Montant TTC en valeur absolue (compatibilité ascendante)."""
+        return self._parse_document_type_and_amount(payload)[1]

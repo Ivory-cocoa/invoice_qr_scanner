@@ -791,13 +791,20 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                     fontSize: 13,
                   ),
                 ),
-              Text(
-                _formatAmount(record.amountTtc),
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: AppTheme.getPrimary(context),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (record.isRefund) _refundChip(context),
+                  Text(
+                    _formatAmount(record.amountSigned),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: _amountColor(
+                          context, record, AppTheme.getPrimary(context)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -893,9 +900,18 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                     Text(record.supplierName, style: TextStyle(color: AppTheme.getTextMuted(context), fontSize: 13)),
                   ],
                   const SizedBox(height: 4),
-                  Text(
-                    _formatAmount(record.amountTtc),
-                    style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.getPrimary(context), fontSize: 14),
+                  Row(
+                    children: [
+                      if (record.isRefund) _refundChip(context),
+                      Text(
+                        _formatAmount(record.amountSigned),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: _amountColor(
+                                context, record, AppTheme.getPrimary(context)),
+                            fontSize: 14),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1015,13 +1031,20 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
         record.supplierName.isNotEmpty ? record.supplierName : 'Fournisseur inconnu',
         style: TextStyle(fontSize: 12, color: AppTheme.getTextMuted(context)),
       ),
-      trailing: Text(
-        _formatAmount(record.amountTtc),
-        style: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-          color: AppTheme.getSuccess(context),
-        ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (record.isRefund) _refundChip(context),
+          Text(
+            _formatAmount(record.amountSigned),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+              color:
+                  _amountColor(context, record, AppTheme.getSuccess(context)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1030,14 +1053,42 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
   // Utilities
   // ─────────────────────────────────────────
 
+  /// Montant abrégé. Le signe est conservé : un avoir doit se lire « − 250K ».
   String _formatAmount(dynamic amount) {
-    final value = (amount is num) ? amount.toDouble() : 0.0;
+    final raw = (amount is num) ? amount.toDouble() : 0.0;
+    final sign = raw < 0 ? '− ' : '';
+    final value = raw.abs();
     if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M FCFA';
+      return '$sign${(value / 1000000).toStringAsFixed(1)}M FCFA';
     } else if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(0)}K FCFA';
+      return '$sign${(value / 1000).toStringAsFixed(0)}K FCFA';
     }
-    return '${value.toStringAsFixed(0)} FCFA';
+    return '$sign${value.toStringAsFixed(0)} FCFA';
+  }
+
+  /// Couleur d'un montant : rouge dès qu'il s'agit d'un avoir.
+  Color _amountColor(BuildContext context, ScanRecord record, Color fallback) =>
+      record.isRefund ? AppTheme.getError(context) : fallback;
+
+  /// Pastille « AVOIR » compacte, pour les listes du traiteur.
+  Widget _refundChip(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.getError(context),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: const Text(
+        'AVOIR',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
   }
 
   String _formatDate(DateTime date) {

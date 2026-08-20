@@ -11,7 +11,8 @@
             <field name="arch" type="xml">
                 <tree string="Scans de factures" decoration-success="state=='done'" 
                       decoration-danger="state=='error'" decoration-muted="state=='draft'"
-                      decoration-bf="state=='processed'">
+                      decoration-bf="state=='processed'"
+                      decoration-warning="document_type=='refund'">
                     <header>
                         <button name="action_mark_processed" type="object"
                                 string="✅ Marquer traité(s)"
@@ -23,12 +24,23 @@
                     <!-- Identification -->
                     <field name="reference"/>
                     <field name="scan_date" string="Date scan" widget="date"/>
+                    <!-- Nature : facture ou AVOIR. Colonne non masquable :
+                         c'est l'information qui change le sens de la ligne. -->
+                    <field name="document_type" string="Nature" widget="badge"
+                           decoration-info="document_type == 'invoice'"
+                           decoration-danger="document_type == 'refund'"/>
                     <!-- Fournisseur & Facture -->
                     <field name="supplier_name" string="Fournisseur"/>
                     <field name="invoice_number_dgi" string="N° Facture DGI" optional="show"/>
                     <field name="invoice_date" optional="hide"/>
-                    <!-- Financier -->
-                    <field name="amount_ttc" string="Montant TTC" sum="Total"/>
+                    <!-- Financier : on somme le montant SIGNÉ, jamais la valeur
+                         absolue — sans quoi les avoirs gonflent le total. -->
+                    <field name="amount_signed" string="Montant" sum="Net"
+                           decoration-danger="amount_signed &lt; 0"/>
+                    <field name="amount_ttc" string="Montant TTC (absolu)" optional="hide"/>
+                    <field name="origin_invoice_number_dgi" string="Facture d'origine" optional="hide"/>
+                    <field name="document_type_verified" string="Nature confirmée"
+                           widget="boolean" optional="hide"/>
                     <field name="currency_id" column_invisible="1"/>
                     <!-- Statut & Traitement -->
                     <field name="state" widget="badge" 
@@ -81,17 +93,42 @@
                         <button name="action_retry_create_invoice" string="Réessayer création facture"
                                 type="object" class="btn-primary"
                                 invisible="state != 'error' or invoice_id"/>
-                        <button name="action_view_invoice" string="Voir la facture"
+                        <button name="action_view_invoice" string="Voir la pièce comptable"
                                 type="object" class="btn-secondary"
                                 invisible="not invoice_id"/>
+                        <button name="action_verify_document_type"
+                                string="Vérifier la nature auprès de la DGI"
+                                type="object" class="btn-secondary"
+                                invisible="document_type_verified"/>
                         <field name="state" widget="statusbar" statusbar_visible="draft,done,processed"/>
                     </header>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
                             <button name="action_view_invoice" type="object" class="oe_stat_button"
                                     icon="fa-file-text-o" invisible="not invoice_id">
-                                <field name="invoice_id" widget="statinfo" string="Facture"/>
+                                <field name="invoice_id" widget="statinfo" string="Pièce"/>
                             </button>
+                            <button name="action_view_refunds" type="object" class="oe_stat_button"
+                                    icon="fa-undo" invisible="refund_count == 0">
+                                <field name="refund_count" widget="statinfo" string="Avoirs"/>
+                            </button>
+                        </div>
+                        <!-- Un avoir n'est PAS une facture : il doit se voir
+                             avant même de lire le montant. -->
+                        <div class="alert alert-danger" role="alert"
+                             invisible="document_type != 'refund'">
+                            <strong><i class="fa fa-undo"/> AVOIR FOURNISSEUR</strong> —
+                            créance sur le fournisseur, et non une dette.
+                            La pièce comptable créée est un
+                            <em>avoir fournisseur</em>, pas une facture d'achat.
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="document_type_verified or state == 'draft'">
+                            <strong><i class="fa fa-question-circle"/> Nature non confirmée</strong> —
+                            la nature de ce document (facture ou avoir) n'a pas été
+                            confirmée par la plateforme DGI : elle a été déduite ou
+                            saisie. Utilisez le bouton
+                            « Vérifier la nature auprès de la DGI » avant comptabilisation.
                         </div>
                         <div class="oe_title">
                             <h1>
@@ -113,11 +150,14 @@
                             </group>
                         </group>
                         <group>
-                            <group string="Facture">
+                            <group string="Document">
+                                <field name="document_type" readonly="1"/>
+                                <field name="document_type_verified" readonly="1"/>
                                 <field name="invoice_number_dgi" readonly="1"/>
                                 <field name="invoice_date" readonly="1"/>
                                 <field name="verification_id" readonly="1"/>
                                 <field name="amount_ttc" readonly="1"/>
+                                <field name="amount_signed" readonly="1"/>
                                 <field name="currency_id" readonly="1"/>
                                 <field name="commercial_message" readonly="1" invisible="not commercial_message"/>
                             </group>
@@ -125,6 +165,19 @@
                                 <field name="partner_id" readonly="1"/>
                                 <field name="invoice_id" readonly="1"/>
                                 <field name="company_id" groups="base.group_multi_company" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="Rattachement de l'avoir"
+                               invisible="document_type != 'refund'">
+                            <group>
+                                <field name="origin_invoice_number_dgi" readonly="1"/>
+                                <field name="origin_scan_id" readonly="1"/>
+                                <div colspan="2" class="text-muted"
+                                     invisible="origin_scan_id or not origin_invoice_number_dgi">
+                                    <i class="fa fa-info-circle"/>
+                                    La facture d'origine n'a pas (encore) été scannée :
+                                    le rattachement se fera automatiquement dès qu'elle le sera.
+                                </div>
                             </group>
                         </group>
                         <group string="Tentatives de doublons" invisible="duplicate_count == 0">
@@ -187,6 +240,14 @@
                     <field name="invoice_number_dgi"/>
                     <field name="qr_uuid"/>
                     <field name="scanned_by"/>
+                    <field name="origin_invoice_number_dgi"/>
+                    <separator/>
+                    <filter string="Factures" name="filter_invoice" domain="[('document_type', '=', 'invoice')]"/>
+                    <filter string="Avoirs" name="filter_refund" domain="[('document_type', '=', 'refund')]"/>
+                    <filter string="Nature à confirmer" name="filter_type_unverified"
+                            domain="[('document_type_verified', '=', False), ('state', 'in', ['done', 'processed'])]"/>
+                    <filter string="Avoirs sans facture d'origine" name="filter_refund_orphan"
+                            domain="[('document_type', '=', 'refund'), ('origin_scan_id', '=', False)]"/>
                     <separator/>
                     <filter string="Factures créées" name="filter_done" domain="[('state', '=', 'done')]"/>
                     <filter string="Traités" name="filter_processed" domain="[('state', '=', 'processed')]"/>
@@ -204,6 +265,7 @@
                     <separator/>
                     <filter string="Mes scans" name="filter_mine" domain="[('scanned_by', '=', uid)]"/>
                     <group expand="0" string="Regrouper par">
+                        <filter string="Nature du document" name="group_document_type" context="{'group_by': 'document_type'}"/>
                         <filter string="État" name="group_state" context="{'group_by': 'state'}"/>
                         <filter string="Fournisseur" name="group_supplier" context="{'group_by': 'supplier_name'}"/>
                         <filter string="Date du scan" name="group_date" context="{'group_by': 'scan_date:day'}"/>
@@ -211,6 +273,7 @@
                     </group>
                     <!-- Search Panel -->
                     <searchpanel>
+                        <field name="document_type" icon="fa-files-o" select="one" enable_counters="1"/>
                         <field name="state" icon="fa-tasks" select="one" enable_counters="1"/>
                         <field name="scanned_by" icon="fa-user" select="multi" enable_counters="1"/>
                         <field name="partner_id" string="Fournisseur" icon="fa-building" select="multi" enable_counters="1"/>
@@ -233,6 +296,8 @@
                     <field name="amount_ttc"/>
                     <field name="currency_id"/>
                     <field name="state"/>
+                    <field name="document_type"/>
+                    <field name="amount_signed"/>
                     <field name="scan_date"/>
                     <field name="duplicate_count"/>
                     <field name="is_processed"/>
@@ -254,9 +319,15 @@
                                            decoration-info="state == 'draft'"/>
                                 </div>
                                 <div class="o_kanban_record_body">
+                                    <div t-if="record.document_type.raw_value == 'refund'"
+                                         class="mb-1">
+                                        <span class="badge text-bg-danger">
+                                            <i class="fa fa-undo"/> AVOIR
+                                        </span>
+                                    </div>
                                     <div><strong><field name="supplier_name"/></strong></div>
-                                    <div class="text-muted mt-1">
-                                        <field name="amount_ttc" widget="monetary"/> 
+                                    <div t-attf-class="mt-1 #{record.document_type.raw_value == 'refund' ? 'text-danger fw-bold' : 'text-muted'}">
+                                        <field name="amount_signed" widget="monetary"/> 
                                         <field name="currency_id"/>
                                     </div>
                                     <div t-if="record.is_manual_entry.raw_value" class="text-info mt-1">
@@ -290,8 +361,8 @@
             <field name="arch" type="xml">
                 <pivot string="Analyse des scans" sample="1">
                     <field name="scan_date" type="row" interval="month"/>
-                    <field name="state" type="col"/>
-                    <field name="amount_ttc" type="measure"/>
+                    <field name="document_type" type="col"/>
+                    <field name="amount_signed" type="measure"/>
                 </pivot>
             </field>
         </record>
@@ -305,7 +376,7 @@
             <field name="arch" type="xml">
                 <graph string="Scans de factures" type="bar" sample="1">
                     <field name="scan_date" interval="day"/>
-                    <field name="amount_ttc" type="measure"/>
+                    <field name="amount_signed" type="measure"/>
                 </graph>
             </field>
         </record>
@@ -340,6 +411,15 @@
             <field name="binding_view_types">list</field>
             <field name="state">code</field>
             <field name="code">records.action_mark_processed()</field>
+        </record>
+
+        <record id="action_verify_document_type_mass" model="ir.actions.server">
+            <field name="name">Vérifier la nature auprès de la DGI</field>
+            <field name="model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_view_types">list,form</field>
+            <field name="state">code</field>
+            <field name="code">action = records.action_verify_document_type()</field>
         </record>
 
         <record id="action_mark_unprocessed_mass" model="ir.actions.server">

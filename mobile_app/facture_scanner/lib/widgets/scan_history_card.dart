@@ -143,6 +143,10 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
                 // Référence et badge
                 Row(
                   children: [
+                    if (record.isRefund) ...[
+                      _buildRefundChip(),
+                      const SizedBox(width: 6),
+                    ],
                     Expanded(
                       child: Text(
                         record.reference,
@@ -221,6 +225,37 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
               Icons.keyboard_arrow_down_rounded,
               color: AppTheme.getTextMuted(context),
               size: 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pastille « AVOIR », posée avant la référence.
+  ///
+  /// Dans une liste, l'œil balaie les montants : sans marqueur, un avoir de
+  /// 250 000 F se lit exactement comme une facture de 250 000 F.
+  Widget _buildRefundChip() {
+    final errorColor = AppTheme.getError(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: errorColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.undo_rounded, color: Colors.white, size: 11),
+          SizedBox(width: 3),
+          Text(
+            'AVOIR',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
             ),
           ),
         ],
@@ -527,6 +562,9 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
   }
 
   Color _getAmountColor() {
+    // Un montant d'avoir est rouge quel que soit l'état du scan : c'est la
+    // nature du document qui prime sur son avancement.
+    if (widget.record.isRefund) return AppTheme.getError(context);
     switch (widget.record.state) {
       case 'validated':
         return AppTheme.getSuccess(context);

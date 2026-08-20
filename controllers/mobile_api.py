@@ -349,6 +349,18 @@ class InvoiceScannerMobileAPI(http.Controller):
             'invoice_number_dgi': record.invoice_number_dgi or '',
             'invoice_date': record.invoice_date.isoformat() if record.invoice_date else None,
             'amount_ttc': record.amount_ttc,
+            # Nature du document. `amount_ttc` est TOUJOURS positif : c'est
+            # `document_type` qui porte le sens, et `amount_signed` qui doit
+            # être additionné. Un client qui ignorerait ces champs afficherait
+            # un avoir comme une facture — exactement le défaut d'origine.
+            'document_type': record.document_type,
+            'is_refund': record.document_type == 'refund',
+            'amount_signed': record.amount_signed,
+            'document_type_verified': record.document_type_verified,
+            'origin_invoice_number_dgi': record.origin_invoice_number_dgi or '',
+            'origin_scan_id': record.origin_scan_id.id if record.origin_scan_id else None,
+            'origin_scan_reference': record.origin_scan_id.reference if record.origin_scan_id else '',
+            'refund_count': record.refund_count,
             'currency': record.currency_id.name if record.currency_id else 'XOF',
             'state': record.state,
             'state_label': dict(record._fields['state'].selection).get(record.state, ''),
@@ -676,7 +688,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         - customer_code_dgi: Code DGI client (optionnel)
         - invoice_number_dgi: Numéro de facture DGI (requis)
         - invoice_date: Date de facturation (DD/MM/YYYY ou YYYY-MM-DD)
-        - amount_ttc: Montant TTC (requis, nombre)
+        - amount_ttc: Montant TTC (requis, nombre ; un montant négatif vaut avoir)
+        - document_type: 'invoice' ou 'refund' (optionnel ; à défaut, le serveur
+          demande la nature à la DGI)
         - verification_id: ID de vérification DGI (optionnel)
         - is_manual_entry: Boolean (true si saisie manuelle)
         - verification_duration: Durée de vérification en secondes (float)
@@ -711,10 +725,19 @@ class InvoiceScannerMobileAPI(http.Controller):
         
         try:
             amount_ttc = float(str(amount_ttc).replace(' ', '').replace('\u00a0', ''))
-            if amount_ttc < 0:
-                return api_error('VALIDATION_ERROR', 'Le montant TTC doit être positif', status=400)
         except (ValueError, TypeError):
             return api_error('VALIDATION_ERROR', 'Montant TTC invalide', status=400)
+
+        # Un montant négatif n'est plus une erreur : c'est la signature d'un
+        # AVOIR. Le refuser, c'était renvoyer l'utilisateur vers une saisie
+        # manuelle qui le refusait tout autant ; l'accepter sans le qualifier,
+        # c'était l'enregistrer en dette fournisseur. On le qualifie donc, et
+        # le montant repart en valeur absolue.
+        client_type = (data.get('document_type') or '').strip().lower()
+        if client_type not in ('invoice', 'refund'):
+            client_type = None
+        document_type = client_type or ('refund' if amount_ttc < 0 else 'invoice')
+        amount_ttc = abs(amount_ttc)
         
         # Parser la date
         invoice_date = None
@@ -738,6 +761,12 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not qr_uuid:
             return api_error('INVALID_URL', 'Impossible d\'extraire l\'UUID du QR-code', status=400)
         
+        # Filet de sécurité pour les clients qui n'envoient pas la nature du
+        # document (APK antérieurs à la 3.3.0, extraction par WebView) : le
+        # serveur va la chercher à la source. C'est ce qui garantit qu'un avoir
+        # scanné avec une ancienne version ne peut plus devenir une facture.
+        nature = self._resolve_document_nature(qr_uuid, client_type, document_type)
+
         record_vals = {
             'supplier_name': supplier_name,
             'supplier_code_dgi': data.get('supplier_code_dgi', '').strip() or False,
@@ -747,12 +776,65 @@ class InvoiceScannerMobileAPI(http.Controller):
             'invoice_date': invoice_date,
             'verification_id': data.get('verification_id', '').strip() or False,
             'amount_ttc': amount_ttc,
+            'document_type': nature['document_type'],
+            'document_type_verified': nature['verified'],
+            'origin_invoice_number_dgi': nature['origin_invoice_number_dgi'],
             'is_manual_entry': bool(data.get('is_manual_entry', False)),
             'verification_duration': verification_duration,
         }
 
         return self._create_scan_and_invoice(
             user, qr_url, qr_uuid, record_vals, origin='scan-with-data')
+
+    def _resolve_document_nature(self, qr_uuid, client_type, fallback_type,
+                                 verify_remote=True):
+        """Nature du document, confirmée par la DGI chaque fois que possible.
+
+        Trois cas, du plus sûr au moins sûr :
+
+        1. la DGI répond → sa réponse fait foi, et `verified` est vrai ;
+        2. la DGI est injoignable mais le client a déclaré la nature → on lui
+           fait confiance, sans la marquer vérifiée ;
+        3. ni l'un ni l'autre → repli sur le signe du montant, non vérifié.
+
+        Dans les cas 2 et 3, `document_type_verified` reste faux : le scan
+        remonte alors dans le filtre « Nature à confirmer » du back-office. Un
+        doute assumé et visible vaut mieux qu'une certitude inventée.
+
+        `verify_remote=False` saute l'appel réseau. Réservé aux traitements par
+        LOT : `/sync-parsed` tient un slot du sémaphore pendant toute la boucle,
+        et cinquante appels à la DGI à 12 s de délai maximum y bloqueraient le
+        serveur pour tout le monde. Les lots n'interrogent donc la DGI que pour
+        les items dont le client n'a pas déclaré la nature — les seuls, de fait,
+        qui risquent l'inversion.
+        """
+        if not verify_remote:
+            return {
+                'document_type': client_type or fallback_type,
+                'origin_invoice_number_dgi': False,
+                'verified': False,
+            }
+
+        try:
+            nature = request.env['fne.api.client'].sudo().fetch_document_nature(qr_uuid)
+            return {
+                'document_type': nature['document_type'],
+                'origin_invoice_number_dgi': nature.get('origin_invoice_number_dgi') or False,
+                'verified': True,
+            }
+        except FneApiError as exc:
+            _logger.info(
+                "Nature du document non confirmée par la DGI pour %s (%s) : "
+                "repli sur la déclaration du client (%s)",
+                qr_uuid, exc.code, client_type or fallback_type)
+        except Exception as exc:  # pragma: no cover - robustesse défensive
+            _logger.warning("Vérification de nature en échec (%s)", type(exc).__name__)
+
+        return {
+            'document_type': client_type or fallback_type,
+            'origin_invoice_number_dgi': False,
+            'verified': False,
+        }
 
     def _create_scan_and_invoice(self, user, qr_url, qr_uuid, values, origin='scan'):
         """Réponse HTTP du parcours de scan (le travail est fait par `_process_scan`)."""
@@ -810,19 +892,10 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'message': 'Cette facture a déjà été scannée',
                 'status': 400,
                 'data': {
-                    'existing_record': {
-                        'id': existing.id,
-                        'reference': existing.reference,
-                        'supplier_name': existing.supplier_name or '',
-                        'supplier_code_dgi': existing.supplier_code_dgi or '',
-                        'invoice_number_dgi': existing.invoice_number_dgi or '',
-                        'amount_ttc': existing.amount_ttc or 0,
-                        'invoice_id': existing.invoice_id.id if existing.invoice_id else None,
-                        'invoice_name': existing.invoice_id.name if existing.invoice_id else None,
-                        'scan_date': existing.scan_date.isoformat() if existing.scan_date else None,
-                        'scanned_by': existing.scanned_by.name if existing.scanned_by else '',
-                        'duplicate_count': existing.duplicate_count,
-                    },
+                    # Enregistrement COMPLET : le client doit pouvoir afficher
+                    # la nature du document (facture ou avoir) même sur un
+                    # doublon, sinon l'écran ment sur ce qu'il montre.
+                    'existing_record': self._format_scan_record(existing),
                     'duplicate_count': existing.duplicate_count,
                 },
             }
@@ -879,15 +952,19 @@ class InvoiceScannerMobileAPI(http.Controller):
         # Créer la facture
         try:
             invoice = record._create_invoice()
+            is_refund = record.document_type == 'refund'
             return {
                 'ok': True,
                 'data': {
                     'success': True,
-                    'message': 'Facture créée avec succès',
-                    'record': {
-                        'id': record.id,
-                        'reference': record.reference,
-                    },
+                    'message': ("Avoir enregistré avec succès" if is_refund
+                                else "Facture créée avec succès"),
+                    'document_type': record.document_type,
+                    'is_refund': is_refund,
+                    # Enregistrement COMPLET (et non plus le seul couple
+                    # id/référence) : sans lui, l'écran de résultat mobile n'a
+                    # ni fournisseur, ni montant, ni nature à afficher.
+                    'record': self._format_scan_record(record),
                     'invoice': {
                         'id': invoice.id,
                         'name': invoice.name,
@@ -1059,6 +1136,9 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'supplier_code_dgi': existing.supplier_code_dgi or '',
                 'invoice_number_dgi': existing.invoice_number_dgi or '',
                 'amount_ttc': existing.amount_ttc or 0,
+                'amount_signed': existing.amount_signed or 0,
+                'document_type': existing.document_type,
+                'is_refund': existing.document_type == 'refund',
                 'state': existing.state,
                 'state_label': dict(existing._fields['state'].selection).get(existing.state, ''),
                 'invoice_id': existing.invoice_id.id if existing.invoice_id else None,
@@ -1237,10 +1317,11 @@ class InvoiceScannerMobileAPI(http.Controller):
             ('processed_by', '=', user.id),
         ]
         
+        # Cumuls sur le montant SIGNÉ : un avoir se retranche du total.
         pending_res = ScanRecord._read_group(
-            pending_domain, groupby=[], aggregates=['__count', 'amount_ttc:sum'])
+            pending_domain, groupby=[], aggregates=['__count', 'amount_signed:sum'])
         my_processed_res = ScanRecord._read_group(
-            my_processed_domain, groupby=[], aggregates=['__count', 'amount_ttc:sum'])
+            my_processed_domain, groupby=[], aggregates=['__count', 'amount_signed:sum'])
         
         pending, pending_amount = pending_res[0] if pending_res else (0, 0.0)
         my_processed, processed_amount = my_processed_res[0] if my_processed_res else (0, 0.0)
@@ -1581,7 +1662,7 @@ class InvoiceScannerMobileAPI(http.Controller):
             ('company_id', '=', company_id),
             ('state', 'in', ['done', 'processed'])
         ])
-        total_amount = sum(r.amount_ttc for r in records)
+        total_amount = sum(r.amount_signed for r in records)
         
         # Durée moyenne de vérification
         records_with_duration = ScanRecord.search([
@@ -1599,6 +1680,16 @@ class InvoiceScannerMobileAPI(http.Controller):
                 sum(r.verification_duration for r in records_with_duration) / len(records_with_duration), 1
             )
         
+        # Avoirs : comptés à part. `total_amount` est déjà net (les avoirs y
+        # sont soustraits) ; sans ce détail, une baisse du total resterait
+        # inexplicable pour qui lit l'écran.
+        refund_records = records.filtered(lambda r: r.document_type == 'refund')
+        unverified_type_count = ScanRecord.search_count([
+            ('company_id', '=', company_id),
+            ('state', 'in', ['done', 'processed']),
+            ('document_type_verified', '=', False),
+        ])
+
         return api_response({
             'total_scans': total_scans,
             'successful_scans': successful_scans,
@@ -1607,7 +1698,11 @@ class InvoiceScannerMobileAPI(http.Controller):
             'error_scans': error_scans,
             'duplicate_attempts': total_duplicate_attempts,
             'records_with_duplicates': len(records_with_duplicates),
+            # Montant NET : factures moins avoirs.
             'total_amount': total_amount,
+            'refund_count': len(refund_records),
+            'refund_amount': sum(abs(r.amount_ttc or 0) for r in refund_records),
+            'unverified_type_count': unverified_type_count,
             'currency': 'XOF',
             'avg_verification_duration': avg_verification_duration,
             'manual_entry_count': manual_entry_count,
@@ -1741,7 +1836,12 @@ class InvoiceScannerMobileAPI(http.Controller):
                 - invoice_number_dgi: Numéro de facture DGI
                 - invoice_date: Date de facturation (DD/MM/YYYY)
                 - verification_id: ID de vérification
-                - amount_ttc: Montant TTC
+                - amount_ttc: Montant TTC (valeur absolue)
+                - document_type: 'invoice' ou 'refund'. Sur un LOT, le serveur
+                  ne re-vérifie pas cette nature auprès de la DGI (il tiendrait
+                  le sémaphore trop longtemps) : il la reprend telle quelle en
+                  la marquant « à confirmer ». Son absence, elle, déclenche la
+                  vérification — c'est le cas des clients anciens.
         
         Returns:
         - results: Résultat pour chaque scan
@@ -1853,6 +1953,18 @@ class InvoiceScannerMobileAPI(http.Controller):
                     ('company_id', '=', request.env.company.id)
                 ], limit=1)
                 
+                # Nature du document : même règle que `scan-with-data`, y
+                # compris pour les lots synchronisés hors ligne — un avoir
+                # scanné sans réseau reste un avoir une fois remonté.
+                raw_amount = amount_ttc if isinstance(amount_ttc, (int, float)) else 0
+                client_type = (parsed_data.get('document_type') or '').strip().lower()
+                if client_type not in ('invoice', 'refund'):
+                    client_type = None
+                nature = self._resolve_document_nature(
+                    qr_uuid, client_type,
+                    'refund' if raw_amount < 0 else 'invoice',
+                    verify_remote=client_type is None)
+
                 # Créer l'enregistrement de scan avec les données pré-parsées
                 record_vals = {
                     'qr_url': qr_url,
@@ -1863,7 +1975,10 @@ class InvoiceScannerMobileAPI(http.Controller):
                     'invoice_number_dgi': invoice_number_dgi,
                     'invoice_date': invoice_date,
                     'verification_id': (parsed_data.get('verification_id') or '').strip(),
-                    'amount_ttc': amount_ttc if isinstance(amount_ttc, (int, float)) else 0,
+                    'amount_ttc': abs(raw_amount),
+                    'document_type': nature['document_type'],
+                    'document_type_verified': nature['verified'],
+                    'origin_invoice_number_dgi': nature['origin_invoice_number_dgi'],
                     'scanned_by': user.id,
                     'state': 'draft',
                     'error_message': False,
@@ -1888,8 +2003,12 @@ class InvoiceScannerMobileAPI(http.Controller):
                         'qr_url': qr_url,
                         'scanned_at': scanned_at,
                         'success': True,
-                        'message': 'Facture créée avec succès (données pré-parsées)',
+                        'message': ('Avoir enregistré avec succès (données pré-parsées)'
+                                    if record.document_type == 'refund'
+                                    else 'Facture créée avec succès (données pré-parsées)'),
                         'record_id': record.id,
+                        'document_type': record.document_type,
+                        'is_refund': record.document_type == 'refund',
                         'invoice_id': invoice.id,
                         'invoice_name': invoice.name,
                     })
@@ -1996,6 +2115,9 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'supplier_name': r.supplier_name or '',
                 'invoice_number_dgi': r.invoice_number_dgi or '',
                 'amount_ttc': r.amount_ttc,
+                'amount_signed': r.amount_signed,
+                'document_type': r.document_type,
+                'is_refund': r.document_type == 'refund',
                 'error_message': r.error_message or 'Erreur inconnue',
                 'error_type': self._classify_error(r.error_message),
                 'scan_date': r.scan_date.isoformat() if r.scan_date else None,

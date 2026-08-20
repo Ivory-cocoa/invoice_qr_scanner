@@ -100,9 +100,83 @@ class InvoiceScanRecord(models.Model):
     amount_ttc = fields.Monetary(
         string="Montant TTC",
         currency_field='currency_id',
-        tracking=True
+        tracking=True,
+        help="Montant TTC en VALEUR ABSOLUE. Le sens (dette ou créance) est "
+             "porté par la nature du document, jamais par le signe du montant."
     )
-    
+
+    # ------------------------------------------------------------------
+    # Nature du document : facture ou AVOIR
+    # ------------------------------------------------------------------
+    # La plateforme FNE certifie les deux sous le même format de QR-code. Rien
+    # dans l'URL ne les distingue : seul le payload de vérification le dit.
+    # Tant que ce champ n'existait pas, tout avoir scanné devenait une facture
+    # d'achat — 24 avoirs, 167,9 M FCFA, enregistrés en dette au lieu de
+    # créance. C'est le champ qui rend cette confusion impossible.
+    document_type = fields.Selection(
+        [
+            ('invoice', "Facture"),
+            ('refund', "Avoir"),
+        ],
+        string="Nature du document",
+        default='invoice',
+        required=True,
+        index=True,
+        tracking=True,
+        help="Facture : dette envers le fournisseur (facture d'achat Odoo).\n"
+             "Avoir : créance sur le fournisseur (avoir fournisseur Odoo)."
+    )
+
+    document_type_verified = fields.Boolean(
+        string="Nature confirmée par la DGI",
+        default=False,
+        readonly=True,
+        tracking=True,
+        help="Vrai lorsque la nature du document provient de la plateforme FNE "
+             "elle-même. Faux quand elle a été déduite ou saisie : dans ce cas "
+             "le scan mérite une vérification avant comptabilisation."
+    )
+
+    amount_signed = fields.Monetary(
+        string="Montant net",
+        currency_field='currency_id',
+        compute='_compute_amount_signed',
+        store=True,
+        help="Montant SIGNÉ : positif pour une facture, négatif pour un avoir. "
+             "C'est le seul montant qu'il soit juste d'additionner."
+    )
+
+    origin_invoice_number_dgi = fields.Char(
+        string="N° facture d'origine (DGI)",
+        index=True,
+        tracking=True,
+        help="Référence de la facture que cet avoir vient corriger "
+             "(champ `parentReference` de la plateforme FNE)."
+    )
+
+    origin_scan_id = fields.Many2one(
+        'invoice.scan.record',
+        string="Scan de la facture d'origine",
+        readonly=True,
+        ondelete='set null',
+        index=True,
+        help="Scan de la facture corrigée par cet avoir, lorsqu'elle a elle-même "
+             "été scannée."
+    )
+
+    refund_scan_ids = fields.One2many(
+        'invoice.scan.record',
+        'origin_scan_id',
+        string="Avoirs rattachés",
+        readonly=True,
+        help="Avoirs émis par le fournisseur en correction de cette facture."
+    )
+
+    refund_count = fields.Integer(
+        string="Nombre d'avoirs",
+        compute='_compute_refund_count',
+    )
+
     currency_id = fields.Many2one(
         'res.currency',
         string="Devise",
@@ -259,12 +333,33 @@ class InvoiceScanRecord(models.Model):
         xof = self.env['res.currency'].search([('name', '=', 'XOF')], limit=1)
         return xof or self.env.company.currency_id
 
+    @api.depends('amount_ttc', 'document_type')
+    def _compute_amount_signed(self):
+        """Montant signé : le seul qu'il soit juste d'additionner.
+
+        `amount_ttc` est toujours stocké en valeur absolue (cf. son aide) ;
+        additionner des factures et des avoirs sur ce champ gonfle les totaux
+        du double de chaque avoir. Tous les cumuls — tableaux de bord, coûts
+        d'OT, statistiques mobiles — doivent passer par ici.
+        """
+        for record in self:
+            amount = abs(record.amount_ttc or 0.0)
+            record.amount_signed = -amount if record.document_type == 'refund' else amount
+
+    @api.depends('refund_scan_ids')
+    def _compute_refund_count(self):
+        for record in self:
+            record.refund_count = len(record.refund_scan_ids)
+
     @api.constrains('amount_ttc')
     def _check_amount_ttc(self):
         for record in self:
             if record.amount_ttc and record.amount_ttc < 0:
                 raise ValidationError(_(
-                    "Le montant TTC ne peut pas être négatif (%s)."
+                    "Le montant TTC ne peut pas être négatif (%s).\n\n"
+                    "Un avoir se déclare par sa NATURE (champ « Nature du "
+                    "document » = Avoir), pas par un montant négatif : le "
+                    "montant reste saisi en valeur absolue."
                 ) % record.amount_ttc)
             if record.amount_ttc and record.amount_ttc > self.AMOUNT_TTC_MAX:
                 raise ValidationError(_(
@@ -312,12 +407,88 @@ class InvoiceScanRecord(models.Model):
                 vals['reference'] = self.env['ir.sequence'].next_by_code('invoice.scan.record') or '/'
             if vals.get('qr_uuid'):
                 vals['qr_uuid'] = self._normalize_qr_uuid(vals['qr_uuid'])
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        records._link_refunds_to_origin()
+        return records
 
     def write(self, vals):
         if vals.get('qr_uuid'):
             vals = dict(vals, qr_uuid=self._normalize_qr_uuid(vals['qr_uuid']))
-        return super().write(vals)
+        self._check_document_type_change(vals)
+        result = super().write(vals)
+        if 'origin_invoice_number_dgi' in vals or 'document_type' in vals:
+            self._link_refunds_to_origin()
+        return result
+
+    def _check_document_type_change(self, vals):
+        """Interdire de requalifier un scan dont la facture est comptabilisée.
+
+        Passer de « Facture » à « Avoir » ne change PAS l'écriture comptable
+        déjà produite : on obtiendrait un scan qui affiche « Avoir » au-dessus
+        d'une facture d'achat bien vivante — le pire des deux mondes, une
+        incohérence invisible.
+
+        La requalification d'un document déjà comptabilisé passe donc par
+        `repair_refund_documents()`, qui extourne puis recrée l'écriture dans
+        le bon sens et fournit ce contexte en connaissance de cause.
+        """
+        if 'document_type' not in vals:
+            return
+        if self.env.context.get('allow_document_type_change'):
+            return
+        blocked = self.filtered(
+            lambda r: r.document_type != vals['document_type']
+            and r.invoice_id and r.invoice_id.state == 'posted')
+        if not blocked:
+            return
+        raise UserError(_(
+            "Impossible de changer la nature d'un scan dont la facture est "
+            "déjà comptabilisée : l'écriture comptable, elle, ne changerait "
+            "pas de sens.\n\n"
+            "Scan(s) concerné(s) : %s\n\n"
+            "Utilisez la réparation dédiée (« Requalifier les avoirs »), qui "
+            "extourne l'écriture erronée avant de la recréer dans le bon sens."
+        ) % ', '.join(blocked.mapped('display_name')))
+
+    def _link_refunds_to_origin(self):
+        """Rattacher chaque avoir au scan de la facture qu'il corrige.
+
+        Le lien se fait dans les DEUX SENS, parce que l'ordre des scans n'est
+        pas garanti : on scanne parfois l'avoir avant d'avoir scanné la facture
+        d'origine (ou l'inverse). Un simple champ calculé sur l'avoir ne se
+        recalculerait jamais à l'arrivée tardive de la facture — d'où ce
+        rattachement explicite, appelé à chaque création.
+        """
+        refunds = self.filtered(
+            lambda r: r.document_type == 'refund' and r.origin_invoice_number_dgi)
+        invoices = self.filtered(lambda r: r.document_type == 'invoice')
+
+        for refund in refunds:
+            if refund.origin_scan_id:
+                continue
+            origin = self.search([
+                ('document_type', '=', 'invoice'),
+                ('invoice_number_dgi', '=', refund.origin_invoice_number_dgi),
+                ('company_id', '=', refund.company_id.id),
+                ('id', '!=', refund.id),
+            ], limit=1)
+            if origin:
+                refund.origin_scan_id = origin.id
+
+        # Sens inverse : une facture qui arrive après son avoir.
+        numbers = [r.invoice_number_dgi for r in invoices if r.invoice_number_dgi]
+        if not numbers:
+            return
+        pending = self.search([
+            ('document_type', '=', 'refund'),
+            ('origin_scan_id', '=', False),
+            ('origin_invoice_number_dgi', 'in', numbers),
+        ])
+        by_number = {r.invoice_number_dgi: r for r in invoices if r.invoice_number_dgi}
+        for refund in pending:
+            origin = by_number.get(refund.origin_invoice_number_dgi)
+            if origin and origin.company_id == refund.company_id:
+                refund.origin_scan_id = origin.id
 
     @api.ondelete(at_uninstall=False)
     def _unlink_except_processed(self):
@@ -622,7 +793,14 @@ class InvoiceScanRecord(models.Model):
         return Account.sudo().create(account_vals)
 
     def _create_invoice(self):
-        """Créer la facture fournisseur."""
+        """Créer la pièce comptable fournisseur : facture OU avoir.
+
+        Le `move_type` est déduit de `document_type` et de rien d'autre. Odoo
+        attend dans les deux cas un montant POSITIF : c'est le type de pièce
+        qui porte le sens (`in_invoice` = dette, `in_refund` = créance), pas le
+        signe des lignes. `amount_ttc` étant déjà stocké en valeur absolue, il
+        s'utilise tel quel de part et d'autre.
+        """
         self.ensure_one()
         
         # Vérifier si pas déjà fait
@@ -632,6 +810,8 @@ class InvoiceScanRecord(models.Model):
         # Valider le montant
         if not self.amount_ttc or self.amount_ttc <= 0:
             raise UserError(_("Le montant TTC doit être supérieur à zéro pour créer une facture."))
+
+        is_refund = self.document_type == 'refund'
         
         # Obtenir le fournisseur
         partner = self._get_or_create_supplier()
@@ -651,7 +831,7 @@ class InvoiceScanRecord(models.Model):
         # Créer la facture en deux étapes pour éviter les contraintes de ligne
         # Étape 1: Créer la facture sans lignes
         invoice = self.env['account.move'].create({
-            'move_type': 'in_invoice',
+            'move_type': 'in_refund' if is_refund else 'in_invoice',
             'journal_id': journal.id,
             'partner_id': partner.id,
             'invoice_date': self.invoice_date or fields.Date.today(),
@@ -662,9 +842,10 @@ class InvoiceScanRecord(models.Model):
         })
         
         # Étape 2: Ajouter la ligne de facture avec le bon contexte
+        label = _("Avoir scanné") if is_refund else _("Facture scannée")
         invoice.write({
             'invoice_line_ids': [(0, 0, {
-                'name': f"Facture scannée - {self.invoice_number_dgi or self.qr_uuid}",
+                'name': f"{label} - {self.invoice_number_dgi or self.qr_uuid}",
                 'quantity': 1,
                 'price_unit': self.amount_ttc or 0,
                 'account_id': expense_account.id,
@@ -686,7 +867,25 @@ class InvoiceScanRecord(models.Model):
             'invoice_id': invoice.id,
             'state': 'done',
         })
-        
+
+        if is_refund:
+            # Trace explicite : un avoir ne se lit pas comme une facture, et la
+            # personne qui rouvrira ce scan dans six mois doit le voir tout de
+            # suite dans l'historique.
+            origin = (self.origin_scan_id.reference if self.origin_scan_id
+                      else self.origin_invoice_number_dgi)
+            self.message_post(
+                body=_(
+                    "AVOIR enregistré : avoir fournisseur %(move)s de %(amount)s "
+                    "(créance sur le fournisseur, pas une dette).%(origin)s"
+                ) % {
+                    'move': invoice.name or '',
+                    'amount': self.amount_ttc,
+                    'origin': _(" Facture d'origine : %s.") % origin if origin else '',
+                },
+                message_type='notification',
+            )
+
         return invoice
 
     def action_retry_create_invoice(self):
@@ -714,6 +913,85 @@ class InvoiceScanRecord(models.Model):
             'res_id': self.invoice_id.id,
             'view_mode': 'form',
             'target': 'current',
+        }
+
+    def action_verify_document_type(self):
+        """Redemander à la DGI la nature du document (facture ou avoir).
+
+        Bouton de secours du formulaire : il sert quand `document_type_verified`
+        est faux, c'est-à-dire quand la nature vient d'une déduction ou d'une
+        saisie et n'a jamais été confirmée à la source.
+
+        Il NE requalifie jamais tout seul un scan déjà comptabilisé : dans ce
+        cas il se contente de signaler l'écart et renvoie vers la réparation,
+        qui sait extourner l'écriture.
+        """
+        FneApi = self.env['fne.api.client']
+        requalified, confirmed, mismatched, unreachable = [], [], [], []
+
+        for record in self:
+            try:
+                nature = FneApi.fetch_document_nature(record.qr_uuid)
+            except Exception as exc:  # FneApiError et imprévus réseau
+                unreachable.append(record.display_name)
+                _logger.info("Vérification de nature impossible pour %s (%s)",
+                             record.reference, exc)
+                continue
+
+            values = {'document_type_verified': True}
+            if nature.get('origin_invoice_number_dgi'):
+                values['origin_invoice_number_dgi'] = nature['origin_invoice_number_dgi']
+
+            if nature['document_type'] == record.document_type:
+                record.write(values)
+                confirmed.append(record.display_name)
+                continue
+
+            if record.invoice_id and record.invoice_id.state == 'posted':
+                mismatched.append(record.display_name)
+                record.message_post(
+                    body=_(
+                        "ÉCART DE NATURE : la DGI déclare « %(dgi)s » alors que "
+                        "ce scan est enregistré en « %(local)s », et sa pièce "
+                        "comptable est déjà comptabilisée. Requalification à "
+                        "faire par la réparation dédiée."
+                    ) % {
+                        'dgi': dict(self._fields['document_type'].selection)[nature['document_type']],
+                        'local': dict(self._fields['document_type'].selection)[record.document_type],
+                    },
+                    message_type='notification',
+                )
+                continue
+
+            values['document_type'] = nature['document_type']
+            record.with_context(allow_document_type_change=True).write(values)
+            requalified.append(record.display_name)
+
+        message = _("Nature confirmée : %(ok)s ; requalifiés : %(req)s ; "
+                    "écarts à réparer : %(bad)s ; DGI injoignable : %(ko)s.") % {
+            'ok': len(confirmed), 'req': len(requalified),
+            'bad': len(mismatched), 'ko': len(unreachable),
+        }
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Vérification auprès de la DGI"),
+                'message': message,
+                'type': 'warning' if (mismatched or unreachable) else 'success',
+                'sticky': bool(mismatched),
+            },
+        }
+
+    def action_view_refunds(self):
+        """Ouvrir les avoirs rattachés à cette facture."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Avoirs rattachés"),
+            'res_model': 'invoice.scan.record',
+            'domain': [('origin_scan_id', '=', self.id)],
+            'view_mode': 'tree,form',
         }
 
     @api.model
@@ -761,7 +1039,19 @@ class InvoiceScanRecord(models.Model):
             
             # Montant total des factures réussies
             successful_records = self.search(period_domain + [('state', 'in', ['done', 'processed'])])
-            total_amount = sum(r.amount_ttc for r in successful_records)
+            # Cumul sur le montant SIGNÉ : un avoir se soustrait.
+            total_amount = sum(r.amount_signed for r in successful_records)
+
+            # Avoirs : comptés et cumulés à part. Noyés dans le total, ils
+            # deviennent invisibles ; c'est précisément ce qui a permis à 24
+            # d'entre eux d'être comptabilisés à l'envers sans que personne
+            # ne le remarque.
+            refund_records = successful_records.filtered(
+                lambda r: r.document_type == 'refund')
+            refunds_amount = sum(abs(r.amount_ttc or 0) for r in refund_records)
+            unverified_count = self.search_count(
+                period_domain + [('document_type_verified', '=', False),
+                                 ('state', 'in', ['done', 'processed'])])
             
             # Statistiques temporelles
             today_start = datetime.combine(today, datetime.min.time())
@@ -785,6 +1075,9 @@ class InvoiceScanRecord(models.Model):
                 'reference': r.reference or '',
                 'supplier_name': r.supplier_name or '',
                 'amount_ttc': r.amount_ttc or 0,
+                'amount_signed': r.amount_signed or 0,
+                'document_type': r.document_type,
+                'is_refund': r.document_type == 'refund',
                 'state': r.state or 'draft',
                 'scan_date': r.scan_date.isoformat() if r.scan_date else None,
                 'scanned_by_name': r.scanned_by.name if r.scanned_by else '',
@@ -848,6 +1141,9 @@ class InvoiceScanRecord(models.Model):
                     'recordsWithDuplicates': len(records_with_duplicates),
                     'errorScans': error_scans,
                     'totalAmount': total_amount,
+                    'refundScans': len(refund_records),
+                    'refundsAmount': refunds_amount,
+                    'unverifiedTypeScans': unverified_count,
                     'todayScans': today_scans,
                     'weekScans': week_scans,
                     'monthScans': month_scans,
@@ -884,6 +1180,9 @@ class InvoiceScanRecord(models.Model):
                     'recordsWithDuplicates': 0,
                     'errorScans': 0,
                     'totalAmount': 0,
+                    'refundScans': 0,
+                    'refundsAmount': 0,
+                    'unverifiedTypeScans': 0,
                     'todayScans': 0,
                     'weekScans': 0,
                     'monthScans': 0,
@@ -961,11 +1260,12 @@ class InvoiceScanRecord(models.Model):
             # Total scans = Réussis + Doublons + Erreurs
             all_time_total = all_time_done + all_time_duplicates + all_time_error
             all_time_records = self.search(base_domain + [('state', 'in', ['done', 'processed'])])
-            all_time_amount = sum(r.amount_ttc for r in all_time_records)
+            all_time_amount = sum(r.amount_signed for r in all_time_records)
             
             # Montant total des factures réussies
             successful_records = self.search(period_domain + [('state', 'in', ['done', 'processed'])])
-            total_amount = sum(r.amount_ttc for r in successful_records)
+            # Cumul sur le montant SIGNÉ : un avoir se soustrait.
+            total_amount = sum(r.amount_signed for r in successful_records)
             
             # Scans récents (5 derniers)
             recent_scans = self.search(base_domain, limit=5, order='create_date desc')
@@ -974,6 +1274,9 @@ class InvoiceScanRecord(models.Model):
                 'reference': r.reference or '',
                 'nom_fournisseur': r.supplier_name or 'N/A',
                 'montant_ttc': r.amount_ttc or 0,
+                'montant_signe': r.amount_signed or 0,
+                'document_type': r.document_type,
+                'is_refund': r.document_type == 'refund',
                 'state': 'processed' if r.state == 'processed' else ('verified' if r.state == 'done' else ('error' if r.state == 'error' else 'pending')),
                 'duplicate_count': r.duplicate_count,
             } for r in recent_scans]
@@ -1159,7 +1462,8 @@ class InvoiceScanRecord(models.Model):
             
             # Montant total
             successful_records = self.search(period_domain + [('state', 'in', ['done', 'processed'])])
-            total_amount = sum(r.amount_ttc for r in successful_records)
+            # Cumul sur le montant SIGNÉ : un avoir se soustrait.
+            total_amount = sum(r.amount_signed for r in successful_records)
             
             # Stats globales (all-time)
             all_time_successful = self.search_count(base_domain + [('state', 'in', ['done', 'processed'])])
@@ -1168,7 +1472,7 @@ class InvoiceScanRecord(models.Model):
             all_time_duplicates = sum(r.duplicate_count for r in all_time_dup_records)
             all_time_total = all_time_successful + all_time_duplicates + all_time_error
             all_time_records = self.search(base_domain + [('state', 'in', ['done', 'processed'])])
-            all_time_amount = sum(r.amount_ttc for r in all_time_records)
+            all_time_amount = sum(r.amount_signed for r in all_time_records)
             
             # Scans récents (5 derniers)
             recent_scans = self.search(base_domain, limit=5, order='create_date desc')
@@ -1177,6 +1481,9 @@ class InvoiceScanRecord(models.Model):
                 'reference': r.reference or '',
                 'nom_fournisseur': r.supplier_name or 'N/A',
                 'montant_ttc': r.amount_ttc or 0,
+                'montant_signe': r.amount_signed or 0,
+                'document_type': r.document_type,
+                'is_refund': r.document_type == 'refund',
                 'state': r.state,
                 'duplicate_count': r.duplicate_count,
                 'scan_date': r.scan_date.isoformat() if r.scan_date else None,
@@ -1208,7 +1515,7 @@ class InvoiceScanRecord(models.Model):
             top_suppliers = []
             try:
                 self.env.cr.execute("""
-                    SELECT supplier_name, COUNT(*) as scan_count, SUM(amount_ttc) as total_amount
+                    SELECT supplier_name, COUNT(*) as scan_count, SUM(amount_signed) as total_amount
                     FROM invoice_scan_record
                     WHERE company_id = %s AND scanned_by = %s
                     AND supplier_name IS NOT NULL AND supplier_name != ''
@@ -1317,7 +1624,7 @@ class InvoiceScanRecord(models.Model):
             ]
             pending_count = self.search_count(pending_domain)
             pending_records = self.search(pending_domain)
-            pending_amount = sum(r.amount_ttc for r in pending_records)
+            pending_amount = sum(r.amount_signed for r in pending_records)
             
             # Factures traitées par ce traiteur (période)
             my_processed_domain = [
@@ -1329,7 +1636,7 @@ class InvoiceScanRecord(models.Model):
             ]
             processed_period = self.search_count(my_processed_domain)
             processed_records_period = self.search(my_processed_domain)
-            processed_amount_period = sum(r.amount_ttc for r in processed_records_period)
+            processed_amount_period = sum(r.amount_signed for r in processed_records_period)
             
             # Factures traitées par ce traiteur (all-time)
             my_processed_all = [
@@ -1339,7 +1646,7 @@ class InvoiceScanRecord(models.Model):
             ]
             processed_all_time = self.search_count(my_processed_all)
             processed_all_records = self.search(my_processed_all)
-            processed_all_amount = sum(r.amount_ttc for r in processed_all_records)
+            processed_all_amount = sum(r.amount_signed for r in processed_all_records)
             
             # Total traités par tous les traiteurs (période) 
             all_processed_domain = [
@@ -1361,6 +1668,9 @@ class InvoiceScanRecord(models.Model):
                 'reference': r.reference or '',
                 'nom_fournisseur': r.supplier_name or 'N/A',
                 'montant_ttc': r.amount_ttc or 0,
+                'montant_signe': r.amount_signed or 0,
+                'document_type': r.document_type,
+                'is_refund': r.document_type == 'refund',
                 'state': r.state,
                 'processed_date': r.processed_date.isoformat() if r.processed_date else None,
                 'scanned_by_name': r.scanned_by.name if r.scanned_by else '',
@@ -1373,6 +1683,9 @@ class InvoiceScanRecord(models.Model):
                 'reference': r.reference or '',
                 'nom_fournisseur': r.supplier_name or 'N/A',
                 'montant_ttc': r.amount_ttc or 0,
+                'montant_signe': r.amount_signed or 0,
+                'document_type': r.document_type,
+                'is_refund': r.document_type == 'refund',
                 'state': r.state,
                 'scan_date': r.scan_date.isoformat() if r.scan_date else None,
                 'scanned_by_name': r.scanned_by.name if r.scanned_by else '',

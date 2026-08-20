@@ -106,8 +106,16 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
         isError: false,
       );
       final qrUrl = scan.pendingQrUrl ?? qrContent;
-      final ok = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
+      // `ManualEntryScreen` renvoie DEUX choses selon le chemin emprunté :
+      //   - `true` si sa nouvelle tentative auprès de la DGI a réussi et que
+      //     la pièce a déjà été créée côté serveur ;
+      //   - un `ManualEntryResult` si l'utilisateur a saisi les données, qu'il
+      //     reste alors à soumettre.
+      // L'écran l'attendait typé `bool` : soumettre le formulaire levait une
+      // erreur de type et la saisie manuelle était en pratique inaccessible
+      // aux gestionnaires OT.
+      final result = await Navigator.of(context).push<Object?>(
+        MaterialPageRoute<Object?>(
           builder: (_) => ManualEntryScreen(
             qrUrl: qrUrl,
             prefillData: scan.extractedDgiData,
@@ -117,7 +125,27 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
         ),
       );
       if (!mounted) return;
-      if (ok == true) {
+
+      if (result is ManualEntryResult) {
+        await scan.submitManualEntry(
+          qrUrl: qrUrl,
+          supplierName: result.supplierName,
+          supplierCodeDgi: result.supplierCodeDgi,
+          customerName: result.customerName,
+          customerCodeDgi: result.customerCodeDgi,
+          invoiceNumberDgi: result.invoiceNumberDgi,
+          invoiceDate: result.invoiceDate,
+          amountTtc: result.amountTtc,
+          documentType: result.documentType,
+          verificationDuration: result.verificationDuration,
+        );
+        if (!mounted) return;
+        if (scan.state != ScanState.success) {
+          _toast(scan.message ?? 'Enregistrement impossible', isError: true);
+        }
+      }
+
+      if (result == true || result is ManualEntryResult) {
         final r = scan.lastScanResult;
         if (r != null && r.id > 0) {
           await _pushLinkToOt(r);

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/services/api_service.dart';
 
+import '../core/models/scan_record.dart' show DocumentType;
 import '../core/services/dgi_parser_service.dart';
 import '../core/theme/app_theme.dart';
 
@@ -57,6 +58,16 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   /// Afficher/masquer les détails supplémentaires
   bool _showOptionalFields = false;
 
+  /// Nature du document saisi : facture ou AVOIR.
+  ///
+  /// Choix explicite et non déductible du montant : la page DGI affiche les
+  /// avoirs en valeur absolue, exactement comme les factures. Sans cette
+  /// question posée à l'utilisateur, la saisie manuelle reste le dernier
+  /// endroit par lequel un avoir peut entrer en dette fournisseur.
+  DocumentType _documentType = DocumentType.invoice;
+
+  bool get _isRefund => _documentType == DocumentType.refund;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +81,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     _amountTtcCtrl = TextEditingController(
       text: d != null && d.amountTtc > 0 ? d.amountTtc.toStringAsFixed(0) : '',
     );
+    _documentType = d?.documentType ?? DocumentType.invoice;
 
     // Lancer la ré-extraction automatique en arrière-plan
     _startBackgroundReExtraction();
@@ -161,9 +173,12 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       customerCodeDgi: _customerCodeCtrl.text.trim(),
       invoiceNumberDgi: _invoiceNumberCtrl.text.trim(),
       invoiceDate: _invoiceDateCtrl.text.trim(),
-      amountTtc: double.tryParse(
-        _amountTtcCtrl.text.replaceAll(' ', '').replaceAll('\u00a0', ''),
-      ) ?? 0,
+      amountTtc: (double.tryParse(
+            _amountTtcCtrl.text.replaceAll(' ', '').replaceAll('\u00a0', ''),
+          ) ??
+              0)
+          .abs(),
+      documentType: _documentType,
       verificationDuration: widget.verificationDuration,
     );
 
@@ -377,8 +392,18 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                   ),
                 ),
 
+              // --- Nature du document (facture / avoir) ---
+              _buildSectionTitle(
+                  context, 'Nature du document', Icons.rule_folder_rounded),
+              const SizedBox(height: 8),
+              _buildDocumentTypeSelector(context, isDark),
+              const SizedBox(height: 20),
+
               // --- Champs essentiels ---
-              _buildSectionTitle(context, 'Facture', Icons.receipt_long_rounded),
+              _buildSectionTitle(
+                  context,
+                  _isRefund ? 'Avoir' : 'Facture',
+                  _isRefund ? Icons.undo_rounded : Icons.receipt_long_rounded),
               const SizedBox(height: 8),
               _buildTextField(
                 controller: _supplierNameCtrl,
@@ -390,7 +415,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
               const SizedBox(height: 12),
               _buildTextField(
                 controller: _invoiceNumberCtrl,
-                label: 'Numéro de facture *',
+                label: _isRefund ? 'Numéro de l\'avoir *' : 'Numéro de facture *',
                 icon: Icons.numbers_rounded,
                 textCapitalization: TextCapitalization.characters,
                 validator: (v) =>
@@ -399,7 +424,9 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
               const SizedBox(height: 12),
               _buildTextField(
                 controller: _amountTtcCtrl,
-                label: 'Montant TTC (FCFA) *',
+                label: _isRefund
+                    ? 'Montant TTC de l\'avoir (FCFA, sans le signe) *'
+                    : 'Montant TTC (FCFA) *',
                 icon: Icons.payments_rounded,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -429,17 +456,24 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.getPrimary(context),
+                    backgroundColor: _isRefund
+                        ? AppTheme.getError(context)
+                        : AppTheme.getPrimary(context),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                     elevation: 2,
                   ),
-                  icon: const Icon(Icons.check_circle_rounded),
-                  label: const Text(
-                    'Valider et créer la facture',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  icon: Icon(_isRefund
+                      ? Icons.undo_rounded
+                      : Icons.check_circle_rounded),
+                  label: Text(
+                    _isRefund
+                        ? 'Valider et enregistrer l\'avoir'
+                        : 'Valider et créer la facture',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -462,6 +496,87 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         ),
       ),
       ),
+    );
+  }
+
+  /// Sélecteur Facture / Avoir.
+  ///
+  /// Volontairement en haut du formulaire et impossible à manquer : c'est la
+  /// seule information que ni le QR-code, ni la page DGI ne donnent d'un coup
+  /// d'œil, et c'est celle qui décide du SENS de l'écriture comptable.
+  Widget _buildDocumentTypeSelector(BuildContext context, bool isDark) {
+    final errorColor = AppTheme.getError(context);
+    final primaryColor = AppTheme.getPrimary(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<DocumentType>(
+          segments: const [
+            ButtonSegment<DocumentType>(
+              value: DocumentType.invoice,
+              icon: Icon(Icons.receipt_long_rounded, size: 18),
+              label: Text('Facture'),
+            ),
+            ButtonSegment<DocumentType>(
+              value: DocumentType.refund,
+              icon: Icon(Icons.undo_rounded, size: 18),
+              label: Text('Avoir'),
+            ),
+          ],
+          selected: <DocumentType>{_documentType},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) {
+            HapticFeedback.selectionClick();
+            setState(() => _documentType = selection.first);
+          },
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (!states.contains(WidgetState.selected)) return null;
+              return (_isRefund ? errorColor : primaryColor)
+                  .withValues(alpha: isDark ? 0.35 : 0.15);
+            }),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: (_isRefund ? errorColor : primaryColor)
+                .withValues(alpha: isDark ? 0.18 : 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: (_isRefund ? errorColor : primaryColor)
+                  .withValues(alpha: 0.35),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _isRefund ? Icons.undo_rounded : Icons.info_outline_rounded,
+                color: _isRefund ? errorColor : primaryColor,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _isRefund
+                      ? 'AVOIR : le fournisseur vous doit ce montant. '
+                          'Un avoir fournisseur sera créé, et il viendra en '
+                          'DÉDUCTION des coûts.'
+                      : 'FACTURE : vous devez ce montant au fournisseur. '
+                          'Une facture d\'achat sera créée.',
+                  style: TextStyle(
+                    color: AppTheme.getTextPrimary(context),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -699,7 +814,10 @@ class ManualEntryResult {
   final String customerCodeDgi;
   final String invoiceNumberDgi;
   final String invoiceDate;
+
+  /// Montant TTC en valeur absolue : le sens est porté par [documentType].
   final double amountTtc;
+  final DocumentType documentType;
   final double verificationDuration;
 
   const ManualEntryResult({
@@ -710,6 +828,9 @@ class ManualEntryResult {
     required this.invoiceNumberDgi,
     this.invoiceDate = '',
     required this.amountTtc,
+    this.documentType = DocumentType.invoice,
     this.verificationDuration = 0,
   });
+
+  bool get isRefund => documentType == DocumentType.refund;
 }

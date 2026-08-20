@@ -299,6 +299,7 @@ class BackgroundScanQueue extends ChangeNotifier {
         invoiceNumberDgi: data.invoiceNumberDgi,
         invoiceDate: data.invoiceDate,
         amountTtc: data.amountTtc,
+        documentType: data.documentType,
         verificationDuration: item.verificationDuration,
         isManualEntry: isManual,
       );
@@ -306,7 +307,10 @@ class BackgroundScanQueue extends ChangeNotifier {
       if (response.success && response.data != null) {
         item.state = QueueItemState.completed;
         item.progressMessage = null;
-        item.resultMessage = response.data!['message'] ?? 'Facture créée avec succès';
+        item.resultMessage = response.data!['message'] ??
+            (data.isRefund
+                ? 'Avoir enregistré avec succès'
+                : 'Facture créée avec succès');
         if (response.data!.containsKey('record')) {
           item.scanRecord = ScanRecord.fromJson(response.data!['record']);
         }
@@ -362,6 +366,7 @@ class BackgroundScanQueue extends ChangeNotifier {
     required String invoiceNumberDgi,
     String? invoiceDate,
     required double amountTtc,
+    DocumentType documentType = DocumentType.invoice,
     required double verificationDuration,
   }) async {
     final item = _queue[itemId];
@@ -380,6 +385,7 @@ class BackgroundScanQueue extends ChangeNotifier {
       invoiceDate: invoiceDate,
       verificationId: '',
       amountTtc: amountTtc,
+      documentType: documentType,
       rawText: '',
     );
 

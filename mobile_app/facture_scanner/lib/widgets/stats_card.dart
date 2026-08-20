@@ -177,7 +177,9 @@ class StatsCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Montant total facturé',
+                            ((stats['refund_count'] as num?)?.toInt() ?? 0) > 0
+                                ? 'Montant net facturé'
+                                : 'Montant total facturé',
                             style: TextStyle(
                               color: AppTheme.getTextMuted(context),
                               fontSize: 13,
@@ -188,11 +190,26 @@ class StatsCard extends StatelessWidget {
                           Text(
                             _formatAmount(stats['total_amount']),
                             style: TextStyle(
-                              color: AppTheme.getSuccess(context),
+                              color: ((stats['total_amount'] as num?) ?? 0) < 0
+                                  ? AppTheme.getError(context)
+                                  : AppTheme.getSuccess(context),
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
+                          if (((stats['refund_count'] as num?)?.toInt() ?? 0) > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                'dont ${stats['refund_count']} avoir(s) '
+                                '(− ${_formatAmount(stats['refund_amount'])})',
+                                style: TextStyle(
+                                  color: AppTheme.getError(context),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -330,13 +347,17 @@ class StatsCard extends StatelessWidget {
     return '${mins}min ${remainSecs}s';
   }
 
+  /// Le montant est NET : négatif si les avoirs l'emportent sur les factures.
+  /// Le signe est sorti du nombre pour que le séparateur de milliers ne se
+  /// pose pas sur le « - ».
   String _formatAmount(dynamic amount) {
     if (amount == null) return '0 FCFA';
-    final value = (amount as num).toInt();
-    final formatted = value.toString().replaceAllMapped(
+    final raw = (amount as num).toInt();
+    final sign = raw < 0 ? '− ' : '';
+    final formatted = raw.abs().toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]} ',
     );
-    return '$formatted FCFA';
+    return '$sign$formatted FCFA';
   }
 }

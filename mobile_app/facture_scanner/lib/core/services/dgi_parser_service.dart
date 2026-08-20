@@ -3,6 +3,8 @@
 /// Extrait les données de facture depuis le texte rendu de la page DGI
 library;
 
+import '../models/scan_record.dart' show DocumentType;
+
 class DgiParserService {
   // Singleton
   static final DgiParserService _instance = DgiParserService._internal();
@@ -82,7 +84,7 @@ class DgiParserService {
 
     // MONTANT TTC: 1 677 566 CFA ou FCFA
     final amountRegex = RegExp(
-      r'MONTANT TTC:\s*\n*\s*([\d\s\u00a0]+)\s*(?:F?CFA)',
+      r'MONTANT TTC:\s*\n*\s*(-?[\d\s\u00a0]+)\s*(?:F?CFA)',
       caseSensitive: false,
       multiLine: true,
     );
@@ -95,6 +97,22 @@ class DgiParserService {
           .trim();
       amountTtc = double.tryParse(amountStr);
     }
+
+    // Nature du document. La page DGI affiche le montant d'un avoir en valeur
+    // absolue : c'est exactement ce qui a rendu les avoirs indiscernables des
+    // factures pendant des mois. On cherche donc AUSSI le mot « avoir » dans
+    // le texte, et la référence préfixée « A » qu'emploie la plateforme.
+    //
+    // Cette détection n'est qu'un filet : le serveur reconfirme la nature
+    // auprès de l'API FNE, seule source d'autorité.
+    final looksLikeRefund = RegExp(
+              r'\bAVOIRS?\b|\bREFUND\b|NOTE DE CR[EÉ]DIT',
+              caseSensitive: false)
+            .hasMatch(textContent) ||
+        (amountTtc != null && amountTtc < 0) ||
+        (invoiceNumberDgi != null &&
+            RegExp(r'^A[0-9]{7}[A-Z]', caseSensitive: false)
+                .hasMatch(invoiceNumberDgi));
 
     // Vérifier qu'on a au moins un champ exploitable
     final hasData = supplierName != null ||
@@ -111,7 +129,9 @@ class DgiParserService {
       invoiceNumberDgi: invoiceNumberDgi ?? '',
       invoiceDate: invoiceDate,
       verificationId: verificationId ?? '',
-      amountTtc: amountTtc ?? 0,
+      amountTtc: (amountTtc ?? 0).abs(),
+      documentType:
+          looksLikeRefund ? DocumentType.refund : DocumentType.invoice,
       rawText: textContent.length > 3000
           ? textContent.substring(0, 3000)
           : textContent,
@@ -158,7 +178,14 @@ class DgiParsedData {
   final String invoiceNumberDgi;
   final String? invoiceDate; // Format DD/MM/YYYY
   final String verificationId;
+
+  /// Montant TTC en valeur absolue. Le sens est porté par [documentType].
   final double amountTtc;
+
+  /// Facture ou AVOIR. Transmis au serveur avec les données : sans lui, le
+  /// serveur devrait le deviner, et un avoir redeviendrait une facture.
+  final DocumentType documentType;
+
   final String rawText;
 
   const DgiParsedData({
@@ -170,8 +197,11 @@ class DgiParsedData {
     this.invoiceDate,
     required this.verificationId,
     required this.amountTtc,
+    this.documentType = DocumentType.invoice,
     required this.rawText,
   });
+
+  bool get isRefund => documentType == DocumentType.refund;
 
   Map<String, dynamic> toMap() {
     return {
@@ -183,6 +213,7 @@ class DgiParsedData {
       'invoice_date': invoiceDate,
       'verification_id': verificationId,
       'amount_ttc': amountTtc,
+      'document_type': documentType.code,
       'raw_text': rawText,
     };
   }
@@ -196,7 +227,8 @@ class DgiParsedData {
       invoiceNumberDgi: map['invoice_number_dgi'] ?? '',
       invoiceDate: map['invoice_date'],
       verificationId: map['verification_id'] ?? '',
-      amountTtc: (map['amount_ttc'] as num?)?.toDouble() ?? 0,
+      amountTtc: ((map['amount_ttc'] as num?)?.toDouble() ?? 0).abs(),
+      documentType: DocumentType.parse(map['document_type']),
       rawText: map['raw_text'] ?? '',
     );
   }
@@ -206,7 +238,7 @@ class DgiParsedData {
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]} ',
     );
-    return '$formatted FCFA';
+    return isRefund ? '− $formatted FCFA' : '$formatted FCFA';
   }
 
   bool get hasSupplier => supplierName.isNotEmpty;

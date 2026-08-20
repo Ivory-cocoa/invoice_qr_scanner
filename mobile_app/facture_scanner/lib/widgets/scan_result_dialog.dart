@@ -76,6 +76,13 @@ class ScanResultDialog extends StatelessWidget {
                         ),
                       ),
                     
+                    if (scanRecord != null && scanRecord!.isRefund)
+                      _buildRefundBanner(context),
+
+                    if (scanRecord != null &&
+                        scanRecord!.needsTypeConfirmation)
+                      _buildUnverifiedTypeBanner(context),
+
                     if (scanRecord != null) _buildRecordDetails(context),
 
                     if (scanRecord != null && scanRecord!.hasOtLinks)
@@ -101,20 +108,28 @@ class ScanResultDialog extends StatelessWidget {
     String title;
     String subtitle;
     
+    final isRefund = scanRecord?.isRefund ?? false;
+
     switch (state) {
       case ScanState.success:
-        color = AppTheme.getSuccess(context);
-        icon = Icons.check_circle_rounded;
-        title = 'Succès!';
-        subtitle = 'Facture créée avec succès';
+        // Un avoir enregistré est un succès, mais PAS le même succès : la
+        // pièce créée est une créance. L'en-tête le dit avant tout le reste.
+        color = isRefund
+            ? AppTheme.getError(context)
+            : AppTheme.getSuccess(context);
+        icon = isRefund ? Icons.undo_rounded : Icons.check_circle_rounded;
+        title = isRefund ? 'Avoir enregistré' : 'Succès!';
+        subtitle = isRefund
+            ? 'Avoir fournisseur — créance, pas une dette'
+            : 'Facture créée avec succès';
         break;
       case ScanState.duplicate:
         color = AppTheme.getWarning(context);
         icon = Icons.content_copy_rounded;
-        title = 'Doublon détecté';
+        title = isRefund ? 'Avoir déjà scanné' : 'Doublon détecté';
         subtitle = scanRecord != null && scanRecord!.duplicateCount > 0
             ? 'Tentative #${scanRecord!.duplicateCount + 1}'
-            : 'Cette facture existe déjà';
+            : (isRefund ? 'Cet avoir existe déjà' : 'Cette facture existe déjà');
         break;
       case ScanState.alreadyProcessed:
         color = AppTheme.getWarning(context);
@@ -183,6 +198,100 @@ class ScanResultDialog extends StatelessWidget {
     );
   }
   
+  /// Bandeau « AVOIR » : la première chose que l'œil doit rencontrer.
+  ///
+  /// Sans lui, l'écran de succès d'un avoir est visuellement indiscernable de
+  /// celui d'une facture — et c'est cette indiscernabilité qui a permis à des
+  /// avoirs d'être traités comme des factures pendant des mois.
+  Widget _buildRefundBanner(BuildContext context) {
+    final errorColor = AppTheme.getError(context);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.getErrorLight(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: errorColor.withValues(alpha: 0.45), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: errorColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.undo_rounded, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AVOIR FOURNISSEUR',
+                  style: TextStyle(
+                    color: errorColor,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Ce document n\'est pas une facture : le fournisseur vous doit '
+                  'ce montant. Il vient en déduction des coûts.',
+                  style: TextStyle(
+                    color: AppTheme.getTextPrimary(context),
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Bandeau « nature non confirmée ».
+  ///
+  /// Apparaît quand la DGI n'a pas pu confirmer s'il s'agit d'une facture ou
+  /// d'un avoir (plateforme injoignable, saisie manuelle). Le doute est dit,
+  /// plutôt que masqué derrière une valeur par défaut d'apparence sûre.
+  Widget _buildUnverifiedTypeBanner(BuildContext context) {
+    final warningColor = AppTheme.getWarning(context);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.getWarningLight(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: warningColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.help_outline_rounded, color: warningColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Nature du document non confirmée par la DGI : à vérifier au '
+              'bureau avant comptabilisation.',
+              style: TextStyle(
+                color: AppTheme.getTextPrimary(context),
+                fontSize: 12.5,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRecordDetails(BuildContext context) {
     final record = scanRecord!;
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
@@ -216,18 +325,29 @@ class ScanResultDialog extends StatelessWidget {
           if (record.amountTtc > 0)
             _buildDetailRow(
               context,
-              'Montant',
+              record.isRefund ? 'Montant de l\'avoir' : 'Montant',
               record.formattedAmount,
               Icons.payments_rounded,
               isHighlight: true,
+              isNegative: record.isRefund,
             ),
           
           if (record.invoiceName != null)
             _buildDetailRow(
               context,
-              'Facture Odoo',
+              record.isRefund ? 'Avoir Odoo' : 'Facture Odoo',
               record.invoiceName!,
               Icons.link_rounded,
+            ),
+
+          if (record.isRefund && record.originInvoiceNumberDgi.isNotEmpty)
+            _buildDetailRow(
+              context,
+              'Facture d\'origine',
+              record.originScanReference.isNotEmpty
+                  ? '${record.originInvoiceNumberDgi} (${record.originScanReference})'
+                  : record.originInvoiceNumberDgi,
+              Icons.call_split_rounded,
             ),
           
           if (record.scanDate != null)
@@ -378,10 +498,14 @@ class ScanResultDialog extends StatelessWidget {
     IconData icon, {
     bool isHighlight = false,
     bool isLast = false,
+    bool isNegative = false,
   }) {
     final isDark = AppTheme.isDark(context);
     final primaryColor = AppTheme.getPrimary(context);
-    final successColor = AppTheme.getSuccess(context);
+    // Un montant d'avoir se lit en rouge : la couleur porte l'information
+    // aussi vite que le signe, et ne se perd pas au premier coup d'œil.
+    final successColor =
+        isNegative ? AppTheme.getError(context) : AppTheme.getSuccess(context);
     
     return Container(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 12),

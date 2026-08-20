@@ -104,6 +104,30 @@ List<OtLink> _parseOtLinks(dynamic value) {
   return result;
 }
 
+/// Nature d'un document certifié DGI.
+///
+/// La plateforme FNE certifie les factures ET les avoirs sous un QR-code de
+/// forme identique : rien dans l'URL scannée ne les distingue. Confondre les
+/// deux revient à enregistrer une créance en dette — d'où ce type explicite,
+/// présent de bout en bout plutôt qu'un signe deviné sur le montant.
+enum DocumentType {
+  invoice,
+  refund;
+
+  static DocumentType parse(dynamic value) {
+    final raw = (value ?? '').toString().trim().toLowerCase();
+    return raw == 'refund' ? DocumentType.refund : DocumentType.invoice;
+  }
+
+  String get code => this == DocumentType.refund ? 'refund' : 'invoice';
+
+  /// Libellé court, tel qu'affiché sur les badges.
+  String get label => this == DocumentType.refund ? 'AVOIR' : 'FACTURE';
+
+  /// Libellé long, pour les phrases.
+  String get longLabel => this == DocumentType.refund ? 'Avoir' : 'Facture';
+}
+
 class ScanRecord {
   final int id;
   final String reference;
@@ -112,7 +136,26 @@ class ScanRecord {
   final String supplierCodeDgi;
   final String invoiceNumberDgi;
   final DateTime? invoiceDate;
+
+  /// Montant TTC en VALEUR ABSOLUE (le serveur ne stocke jamais de négatif).
   final double amountTtc;
+
+  /// Nature du document : facture (dette) ou avoir (créance).
+  final DocumentType documentType;
+
+  /// Vrai quand la nature a été confirmée par la plateforme DGI elle-même.
+  /// Faux = déduite ou saisie : à confirmer avant comptabilisation.
+  final bool documentTypeVerified;
+
+  /// Référence de la facture que cet avoir corrige (vide sur une facture).
+  final String originInvoiceNumberDgi;
+
+  /// Référence du scan de cette facture d'origine, si elle a été scannée.
+  final String originScanReference;
+
+  /// Nombre d'avoirs rattachés à cette facture.
+  final int refundCount;
+
   final String currency;
   final String state;
   final String stateLabel;
@@ -155,6 +198,11 @@ class ScanRecord {
     required this.invoiceNumberDgi,
     this.invoiceDate,
     required this.amountTtc,
+    this.documentType = DocumentType.invoice,
+    this.documentTypeVerified = false,
+    this.originInvoiceNumberDgi = '',
+    this.originScanReference = '',
+    this.refundCount = 0,
     required this.currency,
     required this.state,
     required this.stateLabel,
@@ -193,7 +241,12 @@ class ScanRecord {
       invoiceDate: json['invoice_date'] != null 
           ? DateTime.tryParse(json['invoice_date']) 
           : null,
-      amountTtc: (json['amount_ttc'] as num?)?.toDouble() ?? 0.0,
+      amountTtc: ((json['amount_ttc'] as num?)?.toDouble() ?? 0.0).abs(),
+      documentType: DocumentType.parse(json['document_type']),
+      documentTypeVerified: _asBool(json['document_type_verified']),
+      originInvoiceNumberDgi: json['origin_invoice_number_dgi'] as String? ?? '',
+      originScanReference: json['origin_scan_reference'] as String? ?? '',
+      refundCount: (json['refund_count'] as num?)?.toInt() ?? 0,
       currency: json['currency'] as String? ?? 'XOF',
       state: json['state'] as String? ?? '',
       stateLabel: json['state_label'] as String? ?? '',
@@ -238,7 +291,12 @@ class ScanRecord {
       invoiceDate: map['invoice_date'] != null 
           ? DateTime.tryParse(map['invoice_date']) 
           : null,
-      amountTtc: (map['amount_ttc'] as num?)?.toDouble() ?? 0.0,
+      amountTtc: ((map['amount_ttc'] as num?)?.toDouble() ?? 0.0).abs(),
+      documentType: DocumentType.parse(map['document_type']),
+      documentTypeVerified: _asBool(map['document_type_verified']),
+      originInvoiceNumberDgi: map['origin_invoice_number_dgi'] as String? ?? '',
+      originScanReference: map['origin_scan_reference'] as String? ?? '',
+      refundCount: (map['refund_count'] as num?)?.toInt() ?? 0,
       currency: map['currency'] as String? ?? 'XOF',
       state: map['state'] as String? ?? '',
       stateLabel: map['state_label'] as String? ?? '',
@@ -284,6 +342,11 @@ class ScanRecord {
       'invoice_number_dgi': invoiceNumberDgi,
       'invoice_date': invoiceDate?.toIso8601String(),
       'amount_ttc': amountTtc,
+      'document_type': documentType.code,
+      'document_type_verified': documentTypeVerified ? 1 : 0,
+      'origin_invoice_number_dgi': originInvoiceNumberDgi,
+      'origin_scan_reference': originScanReference,
+      'refund_count': refundCount,
       'currency': currency,
       'state': state,
       'state_label': stateLabel,
@@ -314,13 +377,28 @@ class ScanRecord {
   bool get isError => state == 'error';
   bool get hasDuplicates => duplicateCount > 0;
   bool get hasReprocessAttempts => reprocessAttemptCount > 0;
-  
+
+  /// Ce scan est-il un avoir ?
+  bool get isRefund => documentType == DocumentType.refund;
+
+  /// La nature du document mérite-t-elle une confirmation ?
+  bool get needsTypeConfirmation => !documentTypeVerified && isSuccess;
+
+  /// Montant SIGNÉ : négatif pour un avoir. Le seul qu'il soit juste
+  /// d'additionner.
+  double get amountSigned => isRefund ? -amountTtc : amountTtc;
+
+  /// Montant tel qu'il doit s'AFFICHER : préfixé d'un moins sur un avoir.
+  ///
+  /// Le signe est porté ici, à la source, plutôt que dans chaque écran :
+  /// un avoir affiché comme une facture est le défaut même que cette version
+  /// corrige, et il ne doit pas pouvoir revenir par un écran oublié.
   String get formattedAmount {
     final formatted = amountTtc.toStringAsFixed(0).replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]} ',
     );
-    return '$formatted $currency';
+    return isRefund ? '− $formatted $currency' : '$formatted $currency';
   }
   
   @override

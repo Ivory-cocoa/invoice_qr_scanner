@@ -55,7 +55,7 @@ class DatabaseService {
     
     final db = await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -88,7 +88,8 @@ class DatabaseService {
         amount_ttc REAL,
         raw_text TEXT,
         parsed INTEGER DEFAULT 0,
-        extraction_attempts INTEGER DEFAULT 0
+        extraction_attempts INTEGER DEFAULT 0,
+        document_type TEXT DEFAULT 'invoice'
       )
     ''');
 
@@ -144,6 +145,11 @@ class DatabaseService {
         verification_duration REAL DEFAULT 0,
         is_manual_entry INTEGER DEFAULT 0,
         ot_links TEXT,
+        document_type TEXT DEFAULT 'invoice',
+        document_type_verified INTEGER DEFAULT 0,
+        origin_invoice_number_dgi TEXT,
+        origin_scan_reference TEXT,
+        refund_count INTEGER DEFAULT 0,
         cached_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
@@ -245,6 +251,26 @@ class DatabaseService {
         // Colonne déjà présente : ignorer.
       }
     }
+    if (oldVersion < 8) {
+      // Nature du document : facture ou AVOIR. Sans ces colonnes, un avoir
+      // relu du cache hors ligne réapparaîtrait comme une facture ordinaire —
+      // et le montant affiché aurait le mauvais signe.
+      const refundColumns = <String>[
+        "ALTER TABLE scan_history ADD COLUMN document_type TEXT DEFAULT 'invoice'",
+        'ALTER TABLE scan_history ADD COLUMN document_type_verified INTEGER DEFAULT 0',
+        'ALTER TABLE scan_history ADD COLUMN origin_invoice_number_dgi TEXT',
+        'ALTER TABLE scan_history ADD COLUMN origin_scan_reference TEXT',
+        'ALTER TABLE scan_history ADD COLUMN refund_count INTEGER DEFAULT 0',
+        "ALTER TABLE pending_scans ADD COLUMN document_type TEXT DEFAULT 'invoice'",
+      ];
+      for (final stmt in refundColumns) {
+        try {
+          await db.execute(stmt);
+        } catch (_) {
+          // Colonne déjà présente : ignorer.
+        }
+      }
+    }
   }
   
   /// Nettoyer les anciennes données.
@@ -323,6 +349,9 @@ class DatabaseService {
       'verification_id': parsedData.verificationId,
       'amount_ttc': parsedData.amountTtc,
       'raw_text': parsedData.rawText,
+      // Nature du document : sans elle, un avoir mis en attente hors ligne
+      // remonterait en facture à la synchronisation.
+      'document_type': parsedData.documentType.code,
     });
   }
   

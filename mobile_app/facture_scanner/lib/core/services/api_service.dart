@@ -11,6 +11,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../config/environment.dart';
 import '../models/api_response.dart';
+import '../models/scan_record.dart' show DocumentType;
 import '../models/user.dart';
 
 class ApiService {
@@ -288,6 +289,7 @@ class ApiService {
     required String invoiceNumberDgi,
     String? invoiceDate,
     required double amountTtc,
+    DocumentType documentType = DocumentType.invoice,
     double verificationDuration = 0,
     bool isManualEntry = false,
   }) async {
@@ -299,7 +301,11 @@ class ApiService {
       if (customerCodeDgi != null) 'customer_code_dgi': customerCodeDgi,
       'invoice_number_dgi': invoiceNumberDgi,
       if (invoiceDate != null) 'invoice_date': invoiceDate,
-      'amount_ttc': amountTtc,
+      // Montant TOUJOURS en valeur absolue, nature transmise à part : le
+      // serveur reconfirme cette nature auprès de la DGI, mais il doit savoir
+      // ce que le client, lui, a compris.
+      'amount_ttc': amountTtc.abs(),
+      'document_type': documentType.code,
       'verification_duration': verificationDuration,
       'is_manual_entry': isManualEntry,
     });
