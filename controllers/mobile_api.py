@@ -2234,39 +2234,50 @@ class InvoiceScannerMobileAPI(http.Controller):
     @require_auth
     def bulk_retry_errors(self, user=None, **kw):
         """Réessayer en masse les scans en erreur.
-        
+
+        Délègue à `invoice.scan.record._bulk_create_invoice`, qui isole chaque
+        création par un point de sauvegarde. La boucle d'origine n'en avait
+        pas : une erreur de niveau base de données invalidait la transaction
+        entière — emportant les pièces déjà créées ET l'écriture du motif
+        d'échec — et la requête échouait en bloc.
+
         Body JSON:
         - record_ids: Liste des IDs à réessayer (optionnel, sinon tous les éligibles)
         - max_records: Nombre maximum à traiter (défaut: 10, max: 50)
-        
+
         Returns:
-        - results: Résultat pour chaque enregistrement
-        - summary: Résumé des résultats
+        - results / summary : format historique
+        - processed / successful / failed / details : mêmes chiffres À PLAT.
+          C'est ce que lit `BulkRetryResult.fromJson` dans l'application, qui
+          cherchait ces clés au premier niveau et affichait donc « 0/0 scan(s)
+          traité(s) » quel que soit le résultat. Les émettre ici corrige
+          l'APK déjà déployé, sans reconstruction.
         """
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200)
-            
+
         data = get_json_body()
         record_ids = data.get('record_ids', [])
         try:
             max_records = min(50, max(1, int(data.get('max_records', 10))))
         except (ValueError, TypeError):
             max_records = 10
-        
+
         ScanRecord = request.env['invoice.scan.record'].sudo()
-        
+
         # Construire le domaine
         domain = [
             ('company_id', '=', request.env.company.id),
             ('state', '=', 'error'),
             ('invoice_id', '=', False)  # Seulement ceux sans facture
         ]
-        
+
         if record_ids:
             domain.append(('id', 'in', record_ids))
-        
+
+        eligible_count = ScanRecord.search_count(domain)
         records = ScanRecord.search(domain, limit=max_records, order='scan_date asc')
-        
+
         # Acquérir un slot du sémaphore pour le traitement groupé
         if not acquire_scan_slot():
             _logger.warning("Bulk-retry rejeté (serveur occupé) pour user=%s, records=%d", user.id, len(records))
@@ -2276,40 +2287,46 @@ class InvoiceScannerMobileAPI(http.Controller):
                 status=503,
                 details=get_semaphore_status()
             )
-        
+
         try:
-            results = []
-            for record in records:
-                try:
-                    invoice = record._create_invoice()
-                    results.append({
-                        'record_id': record.id,
-                        'reference': record.reference,
-                        'success': True,
-                        'invoice_id': invoice.id,
-                        'invoice_name': invoice.name,
-                    })
-                except Exception as e:
-                    _logger.error(f"Échec bulk-retry record {record.id}: {e}")
-                    record.write({
-                        'error_message': f'Tentative groupée échouée: {str(e)}'
-                    })
-                    results.append({
-                        'record_id': record.id,
-                        'reference': record.reference,
-                        'success': False,
-                        'error': safe_error_message(e),
-                    })
+            entries = records._bulk_create_invoice()
         finally:
             release_scan_slot()
-        
+
+        results = []
+        for entry in entries:
+            record = ScanRecord.browse(entry['scan_id'])
+            success = entry['status'] == 'done'
+            line = {
+                'record_id': entry['scan_id'],
+                'reference': entry['reference'],
+                'success': success,
+                'new_state': record.state,
+            }
+            if success:
+                line['invoice_id'] = record.invoice_id.id
+                line['invoice_name'] = record.invoice_id.name
+            else:
+                line['error'] = entry['message']
+            results.append(line)
+
         successful = sum(1 for r in results if r.get('success'))
-        
+        summary = {
+            'total_processed': len(results),
+            'successful': successful,
+            'failed': len(results) - successful,
+            'eligible_total': eligible_count,
+            'truncated': eligible_count > len(records),
+            'limit': max_records,
+        }
+
         return api_response({
             'results': results,
-            'summary': {
-                'total_processed': len(results),
-                'successful': successful,
-                'failed': len(results) - successful,
-            }
+            'summary': summary,
+            # Alias à plat : format attendu par l'écran « Erreurs » de l'APK.
+            'processed': len(results),
+            'successful': successful,
+            'failed': len(results) - successful,
+            'details': results,
         })
+

@@ -453,3 +453,99 @@ class TestAPIHelpers(HttpCase):
 # `TestDGIExtraction` pour l'extraction d'UUID — y compris
 # `test_extract_uuid_does_not_validate_domain`, qui documente l'absence de
 # contrôle du domaine d'origine.
+
+
+@tagged('post_install', '-at_install', 'invoice_qr_scanner', 'api', 'bulk_process')
+class TestBulkRetryContract(HttpCase):
+    """Contrat de réponse de `/errors/bulk-retry`.
+
+    L'écran « Erreurs » de l'application lit `processed`, `successful`,
+    `failed` et `details` au PREMIER niveau de `data` — alors que le serveur
+    ne publiait ces chiffres que sous `summary`. Résultat : le bandeau
+    annonçait « 0/0 scan(s) traité(s) » quel que soit le résultat réel.
+
+    Les deux formats sont désormais émis. Ce test fixe le contrat pour que
+    l'APK déjà déployé ne redevienne pas aveugle à un retry qui a réussi.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        Currency = cls.env['res.currency'].with_context(active_test=False)
+        xof = Currency.search([('name', '=', 'XOF')], limit=1)
+        if xof:
+            xof.active = True
+
+        groups = [cls.env.ref('base.group_user').id,
+                  cls.env.ref('invoice_qr_scanner.group_invoice_scanner_verificateur').id]
+        cls.user = cls.env['res.users'].create({
+            'name': 'API Bulk Retry User',
+            'login': 'api_bulk_retry_user',
+            'password': 'test_password',
+            'email': 'api_bulk_retry@example.com',
+            'groups_id': [(6, 0, groups)],
+        })
+
+    def _token(self):
+        """Jeton d'API obtenu par le parcours OTP réel."""
+        Otp = self.env['invoice.scanner.login.otp'].sudo()
+        sent = {}
+
+        def _capture(self_otp, code):
+            sent['code'] = code
+
+        with patch.object(type(Otp), '_send_otp_email', _capture):
+            self.url_open(
+                '/api/v1/invoice-scanner/auth/request-otp',
+                data=json.dumps({'login': self.user.login}),
+                headers={'Content-Type': 'application/json'})
+        response = self.url_open(
+            '/api/v1/invoice-scanner/auth/verify-otp',
+            data=json.dumps({'login': self.user.login, 'otp': sent['code']}),
+            headers={'Content-Type': 'application/json'})
+        return json.loads(response.content)['data']['token']
+
+    def _make_scan(self, suffix, amount=250000):
+        uuid = '019bd62c-467e-7000-82ac-45c838retry%s' % suffix
+        return self.env['invoice.scan.record'].sudo().create({
+            'qr_uuid': uuid,
+            'qr_url': 'https://www.services.fne.dgi.gouv.ci/fr/verification/%s' % uuid,
+            'supplier_name': 'FOURNISSEUR TEST RETRY',
+            'invoice_number_dgi': 'RETRY%s' % suffix,
+            'invoice_date': fields.Date.today(),
+            'amount_ttc': amount,
+            'state': 'error',
+        })
+
+    def test_bulk_retry_publishes_both_response_shapes(self):
+        journal = self.env['account.journal'].search([('type', '=', 'purchase')], limit=1)
+        self.assertTrue(journal, "Base de test sans journal d'achats")
+
+        good = self._make_scan('01', amount=250000)
+        bad = self._make_scan('02', amount=0)
+        token = self._token()
+
+        response = self.url_open(
+            '/api/v1/invoice-scanner/errors/bulk-retry',
+            data=json.dumps({'record_ids': [good.id, bad.id]}),
+            headers={'Content-Type': 'application/json',
+                     'Authorization': 'Bearer %s' % token})
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)['data']
+
+        # Format historique
+        self.assertEqual(data['summary']['successful'], 1)
+        self.assertEqual(data['summary']['failed'], 1)
+        # Format à plat, lu par l'APK déjà déployé
+        self.assertEqual(data['processed'], 2)
+        self.assertEqual(data['successful'], 1)
+        self.assertEqual(data['failed'], 1)
+        self.assertEqual(len(data['details']), 2)
+        detail = next(d for d in data['details'] if d['record_id'] == bad.id)
+        self.assertFalse(detail['success'])
+        self.assertTrue(detail['error'], "Le motif de l'échec doit être renvoyé")
+
+        # Et l'échec voisin n'a pas emporté la pièce créée.
+        self.assertTrue(good.invoice_id)
+        self.assertFalse(bad.invoice_id)
