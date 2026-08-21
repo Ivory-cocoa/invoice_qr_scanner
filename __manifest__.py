@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Scanner QR Factures Fournisseur',
-    'version': '17.0.1.5.0',
+    'version': '17.0.1.6.0',
     'category': 'Accounting/Invoicing',
     'summary': 'Création de factures fournisseur par scan QR-code DGI',
     'description': """
@@ -14,6 +14,9 @@ Ce module permet de :
 - Éviter les doublons grâce à l'UUID de vérification
 - Créer automatiquement le fournisseur s'il n'existe pas
 - Tableau de bord OWL pour le Responsable Scanner
+- Traitement groupé : assistant de traitement de plusieurs scans en une fois
+  (marquage traité, création de la pièce comptable manquante, vérification de
+  la nature auprès de la DGI) avec compte-rendu ligne à ligne
 
 Application mobile Flutter (APK Android) et application web installable
 (PWA, servie sur /facture) pour les utilisateurs sans téléphone Android.
@@ -47,6 +50,8 @@ Source des données : services.fne.dgi.gouv.ci (DGI Côte d'Ivoire)
         'data/ir_sequence_data.xml',
         'data/ir_cron_data.xml',
         'data/res_users_data.xml',
+        # Wizards
+        'wizards/invoice_scan_bulk_process_views.xml',
         # Views
         'views/invoice_scan_record_views.xml',
         'views/account_move_views.xml',

@@ -13,6 +13,9 @@ Module Odoo 17 pour créer des factures fournisseur en scannant les QR-codes des
 - ✅ **Création fournisseur** : Crée automatiquement le fournisseur s'il n'existe pas
 - ✅ **Configuration flexible** : Choix entre validation automatique ou manuelle des factures
 - ✅ **API REST** : Endpoints pour l'application mobile Flutter
+- ✅ **Traitement groupé** : Assistant appliquant une opération à toute une
+  sélection (marquage traité, création de la pièce manquante, vérification de
+  la nature, rattachement à un OT) avec compte-rendu ligne à ligne
 - ✅ **Traçabilité** : Historique complet des scans avec détails
 
 ### Application Mobile Flutter
@@ -254,6 +257,49 @@ partiel.
 La **duplication** d'un scan est également refusée : chaque enregistrement
 correspond à un QR-code DGI unique.
 
+## Traitement groupé
+
+Depuis la liste des scans, **⚙ Traitement groupé…** (bouton d'en-tête ou menu
+Actions) ouvre un assistant qui applique une même opération à toute la
+sélection :
+
+| Opération | Ce qu'elle fait | Scans concernés |
+|---|---|---|
+| Marquer comme traité(s) | passe à l'état « Traité », inscrit le traiteur et la date | état « Facture créée » |
+| Remettre non traité(s) | retour à « Facture créée » | état « Traité » |
+| Créer la pièce comptable manquante | (re)tente la création de la facture ou de l'avoir | brouillon ou erreur, sans pièce |
+| Vérifier la nature auprès de la DGI | confirme facture / avoir à la source | tous |
+| Rattacher à un Ordre de Transit | crée une ligne de coût par scan (module `potting_management`) | montant non nul, pas déjà rattaché à cet OT |
+
+Deux garanties structurent l'assistant :
+
+- **Rien n'est écrémé en silence.** L'assistant annonce d'abord la ventilation
+  de la sélection (combien de scans sont concernés, combien ne le sont pas),
+  puis rend un compte-rendu **ligne à ligne** : chaque scan reçu y figure,
+  traité ou non, avec le motif. Une action de masse qui traite 3 lignes sur 50
+  sans le dire laisse croire que le lot est soldé.
+- **Un échec n'emporte pas le lot.** La création de pièce comptable s'exécute
+  sous point de sauvegarde, scan par scan : la facture qui passe reste acquise
+  même si la suivante échoue, et le motif de l'échec est écrit sur le scan
+  concerné.
+
+Les actions d'un clic (« ✅ Marquer traité(s) », « ↩ Remettre non traité(s) »,
+« Vérifier la nature ») restent disponibles pour les petits lots ; elles
+affichent désormais elles aussi le décompte de ce qui a été fait, ignoré ou
+échoué.
+
+⚠️ La vérification auprès de la DGI émet **un appel réseau par scan** : elle
+est bornée à 200 scans par lot (`BULK_NETWORK_LIMIT`), au-delà desquels la
+requête du navigateur expirerait avant la fin du traitement.
+
+**Un seul moteur pour tous les canaux.** Les règles d'éligibilité et les
+traces de chatter vivent dans `models/invoice_scan_bulk.py`
+(`_bulk_mark_processed`, `_bulk_create_invoice`…). L'assistant, les actions de
+la liste et l'endpoint mobile `/api/v1/invoice-scanner/bulk-mark-processed`
+passent tous par là : une règle ajoutée d'un côté vaut pour les autres.
+L'endpoint mobile signale par ailleurs sa troncature (`summary.truncated`)
+quand `max_records` a écarté des scans éligibles.
+
 ## Utilisation
 
 ### Via l'application mobile
@@ -419,9 +465,14 @@ invoice_qr_scanner/
 ├── models/
 │   ├── __init__.py
 │   ├── invoice_scan_record.py    # Modèle principal de scan
+│   ├── invoice_scan_bulk.py      # Moteur de traitement groupé (tous canaux)
 │   ├── invoice_scanner_api_token.py  # Tokens API
 │   ├── account_move.py           # Extension factures
 │   └── res_config_settings.py    # Configuration
+├── wizards/
+│   ├── __init__.py
+│   ├── invoice_scan_bulk_process.py       # Assistant de traitement groupé
+│   └── invoice_scan_bulk_process_views.xml
 ├── controllers/
 │   ├── __init__.py
 │   └── mobile_api.py             # API REST

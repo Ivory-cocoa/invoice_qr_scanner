@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_invoice_scan_bulk_process_form" model="ir.ui.view">
+            <field name="name">invoice.scan.bulk.process.form</field>
+            <field name="model">invoice.scan.bulk.process</field>
+            <field name="arch" type="xml">
+                <form string="Traitement groupé des scans">
+                    <field name="state" invisible="1"/>
+
+                    <!-- ========== ÉTAPE 1 : SÉLECTION ========== -->
+                    <div invisible="state != 'draft'">
+                        <group>
+                            <field name="operation" widget="radio"/>
+                        </group>
+
+                        <div class="alert alert-info" role="alert"
+                             invisible="count_eligible == 0">
+                            <i class="fa fa-info-circle" title="Information"/>
+                            <field name="eligibility_message" nolabel="1" readonly="1"
+                                   class="d-inline ms-1"/>
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="count_eligible > 0">
+                            <i class="fa fa-exclamation-triangle" title="Attention"/>
+                            <field name="eligibility_message" nolabel="1" readonly="1"
+                                   class="d-inline ms-1"/>
+                        </div>
+
+                        <group string="Ventilation de la sélection" col="4">
+                            <field name="count_total"/>
+                            <field name="count_eligible"/>
+                            <field name="count_draft"/>
+                            <field name="count_done"/>
+                            <field name="count_processed"/>
+                            <field name="count_error"/>
+                        </group>
+
+                        <!-- Avertissement propre à la création de pièce :
+                             elle écrit en comptabilité, ce n'est pas anodin. -->
+                        <div class="alert alert-warning" role="alert"
+                             invisible="operation != 'create_invoice'">
+                            <i class="fa fa-exclamation-triangle" title="Attention"/>
+                            <strong>Écriture comptable.</strong>
+                            Cette opération crée une pièce comptable par scan
+                            (facture ou avoir fournisseur), et la valide si la
+                            configuration le prévoit. Un échec sur un scan
+                            n'annule pas les autres : le scan concerné passe en
+                            erreur et le motif figure au compte-rendu.
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="operation != 'verify_nature'">
+                            <i class="fa fa-clock-o" title="Durée"/>
+                            Cette opération interroge la plateforme DGI
+                            <strong>une fois par scan</strong> : sur une grande
+                            sélection, comptez plusieurs secondes.
+                        </div>
+
+                        <notebook>
+                            <page string="Scans sélectionnés">
+                                <field name="scan_ids" nolabel="1">
+                                    <tree create="false" delete="true">
+                                        <field name="reference"/>
+                                        <field name="scan_date" widget="date"/>
+                                        <field name="document_type" widget="badge"
+                                               decoration-info="document_type == 'invoice'"
+                                               decoration-danger="document_type == 'refund'"/>
+                                        <field name="supplier_name"/>
+                                        <field name="amount_signed" sum="Net"/>
+                                        <field name="currency_id" column_invisible="1"/>
+                                        <field name="state" widget="badge"
+                                               decoration-success="state == 'done'"
+                                               decoration-danger="state == 'error'"
+                                               decoration-info="state == 'draft'"
+                                               decoration-warning="state == 'processed'"/>
+                                    </tree>
+                                </field>
+                            </page>
+                        </notebook>
+                    </div>
+
+                    <!-- ========== ÉTAPE 2 : COMPTE-RENDU ========== -->
+                    <div invisible="state != 'done'">
+                        <div class="alert alert-success" role="alert"
+                             invisible="result_skipped > 0 or result_error > 0">
+                            <i class="fa fa-check-circle" title="Succès"/>
+                            <strong>Traitement terminé.</strong>
+                            Toute la sélection a été traitée.
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="result_error > 0 or result_skipped == 0">
+                            <i class="fa fa-exclamation-triangle" title="Attention"/>
+                            <strong>Traitement partiel.</strong>
+                            Des scans ont été ignorés : le motif figure sur
+                            chaque ligne ci-dessous.
+                        </div>
+                        <div class="alert alert-danger" role="alert"
+                             invisible="result_error == 0">
+                            <i class="fa fa-times-circle" title="Erreur"/>
+                            <strong>Des scans sont en erreur.</strong>
+                            Les autres restent acquis : chaque scan a été traité
+                            sous point de sauvegarde.
+                        </div>
+
+                        <group col="6" string="Résultat">
+                            <field name="result_done"/>
+                            <field name="result_skipped"/>
+                            <field name="result_error"/>
+                        </group>
+
+                        <field name="line_ids" nolabel="1" readonly="1">
+                            <tree create="false" delete="false" edit="false"
+                                  decoration-success="status == 'done'"
+                                  decoration-muted="status == 'skipped'"
+                                  decoration-danger="status == 'error'">
+                                <field name="reference"/>
+                                <field name="supplier_name"/>
+                                <field name="amount_signed" optional="show"/>
+                                <field name="currency_id" column_invisible="1"/>
+                                <field name="status" widget="badge"
+                                       decoration-success="status == 'done'"
+                                       decoration-warning="status == 'skipped'"
+                                       decoration-danger="status == 'error'"/>
+                                <field name="message"/>
+                            </tree>
+                        </field>
+                    </div>
+
+                    <footer>
+                        <button name="action_apply" string="Traiter la sélection"
+                                type="object" class="btn-primary"
+                                invisible="state != 'draft'"
+                                confirm="Appliquer l'opération à toute la sélection ?"/>
+                        <button name="action_view_scans" string="Voir les scans"
+                                type="object" class="btn-primary"
+                                invisible="state != 'done'"/>
+                        <button string="Annuler" class="btn-secondary" special="cancel"
+                                invisible="state != 'draft'"/>
+                        <button name="action_close" string="Fermer" type="object"
+                                class="btn-secondary" invisible="state != 'done'"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- Action de masse : ouvre l'assistant sur la sélection -->
+        <record id="action_invoice_scan_bulk_process" model="ir.actions.act_window">
+            <field name="name">Traitement groupé…</field>
+            <field name="res_model">invoice.scan.bulk.process</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="binding_model_id" ref="model_invoice_scan_record"/>
+            <field name="binding_view_types">list</field>
+        </record>
+
+    </data>
+</odoo>

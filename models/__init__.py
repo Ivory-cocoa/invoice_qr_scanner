@@ -2,6 +2,7 @@
 
 from . import fne_api
 from . import invoice_scan_record
+from . import invoice_scan_bulk
 from . import invoice_scan_refund_repair
 from . import invoice_scan_repair
 from . import invoice_scanner_api_token

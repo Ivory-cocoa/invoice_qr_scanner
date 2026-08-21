@@ -1444,74 +1444,72 @@ class InvoiceScannerMobileAPI(http.Controller):
     @require_role('invoice_qr_scanner.group_invoice_scanner_traiteur')
     def bulk_mark_processed(self, user=None, **kw):
         """Marquer plusieurs scans comme traités en masse.
-        
+
+        Le travail est délégué au moteur commun
+        `invoice.scan.record._bulk_mark_processed` — le même que celui de
+        l'assistant du back-office. Cet endpoint réimplémentait auparavant sa
+        propre boucle : les messages de chatter divergeaient d'un canal à
+        l'autre, et toute règle d'éligibilité ajoutée d'un côté manquait de
+        l'autre.
+
         Body JSON:
         - record_ids: Liste des IDs à marquer (optionnel, sinon tous les 'done' éligibles)
         - max_records: Nombre maximum à traiter (défaut: 50, max: 200)
-        
+
         Returns:
         - results: Résultat pour chaque enregistrement
-        - summary: Résumé des résultats
+        - summary: Résumé des résultats, `truncated` signalant que la borne
+          `max_records` a écarté des scans éligibles.
         """
         if request.httprequest.method == 'OPTIONS':
             return Response(status=200)
-            
+
         data = get_json_body()
         record_ids = data.get('record_ids', [])
         try:
             max_records = min(200, max(1, int(data.get('max_records', 50))))
         except (ValueError, TypeError):
             max_records = 50
-        
+
         ScanRecord = request.env['invoice.scan.record'].sudo()
-        
+
         # Construire le domaine
         domain = [
             ('company_id', '=', request.env.company.id),
             ('state', '=', 'done'),
         ]
-        
+
         if record_ids:
             domain.append(('id', 'in', record_ids))
-        
+
+        # La troncature à `max_records` doit être DITE : sans cela, un client
+        # qui envoie 120 identifiants en voit 50 traités et croit le lot soldé.
+        eligible_count = ScanRecord.search_count(domain)
         records = ScanRecord.search(domain, limit=max_records, order='scan_date asc')
-        
-        results = []
-        now = fields.Datetime.now()
-        
-        for record in records:
-            try:
-                record.write({
-                    'state': 'processed',
-                    'processed_by': user.id,
-                    'processed_date': now,
-                })
-                record.message_post(
-                    body=f"Scan marqué comme traité par {user.name} (marquage en masse depuis l'application mobile)",
-                    message_type='notification'
-                )
-                results.append({
-                    'record_id': record.id,
-                    'reference': record.reference,
-                    'success': True,
-                })
-            except Exception as e:
-                _logger.error(f"Erreur marquage traité record {record.id}: {e}")
-                results.append({
-                    'record_id': record.id,
-                    'reference': record.reference,
-                    'success': False,
-                    'error': safe_error_message(e),
-                })
-        
+
+        entries = records._bulk_mark_processed(
+            user=user, origin="application mobile")
+
+        results = [
+            {
+                'record_id': entry['scan_id'],
+                'reference': entry['reference'],
+                'success': entry['status'] == 'done',
+                **({} if entry['status'] == 'done' else {'error': entry['message']}),
+            }
+            for entry in entries
+        ]
         successful = sum(1 for r in results if r.get('success'))
-        
+
         return api_response({
             'results': results,
             'summary': {
                 'total_processed': len(results),
                 'successful': successful,
                 'failed': len(results) - successful,
+                'eligible_total': eligible_count,
+                'truncated': eligible_count > len(records),
+                'limit': max_records,
             }
         })
 

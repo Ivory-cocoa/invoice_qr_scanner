@@ -20,6 +20,12 @@
                         <button name="action_mark_unprocessed" type="object"
                                 string="↩ Remettre non traité(s)"
                                 class="btn-secondary"/>
+                        <!-- Traitement groupé : même sélection, mais avec
+                             ventilation avant action et compte-rendu après.
+                             C'est le chemin à privilégier sur un gros lot. -->
+                        <button name="action_open_bulk_process_wizard" type="object"
+                                string="⚙ Traitement groupé…"
+                                class="btn-secondary"/>
                     </header>
                     <!-- Identification -->
                     <field name="reference"/>

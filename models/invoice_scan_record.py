@@ -567,44 +567,36 @@ class InvoiceScanRecord(models.Model):
         ))
 
     def action_mark_processed(self):
-        """Marquer le(s) scan(s) comme traité(s)/enregistré(s)."""
-        records = self.filtered(lambda r: r.state == 'done')
-        if not records:
-            raise UserError(_("Seuls les scans avec facture créée peuvent être marqués comme traités."))
-        
-        records.write({
-            'state': 'processed',
-            'processed_by': self.env.user.id,
-            'processed_date': fields.Datetime.now(),
-        })
-        
-        for record in records:
-            record.message_post(
-                body=_("Scan marqué comme traité par %s") % self.env.user.name,
-                message_type='notification'
-            )
-        
-        return True
+        """Marquer le(s) scan(s) comme traité(s)/enregistré(s).
+
+        Le travail lui-même est confié au moteur de traitement groupé
+        (`models/invoice_scan_bulk.py`), seul endroit où vit désormais la règle
+        d'éligibilité. Cette méthode n'en garde que l'habillage : l'erreur
+        franche quand rien n'est éligible, et la notification de synthèse.
+
+        Cette notification n'est pas un ornement : jusqu'ici l'action renvoyait
+        `True` et écartait en silence les lignes non éligibles. Sur une
+        sélection de cinquante scans dont trois seulement pouvaient être
+        traités, l'utilisateur repartait convaincu d'avoir soldé son lot.
+        """
+        entries = self._bulk_mark_processed()
+        counters = self._bulk_counters(entries)
+        if not counters['done']:
+            raise UserError(_(
+                "Aucun des %s scan(s) sélectionné(s) ne peut être marqué comme "
+                "traité : seuls les scans dont la pièce comptable est créée le "
+                "peuvent.", counters['total']))
+        return self._bulk_notification(_("Scans marqués comme traités"), entries)
 
     def action_mark_unprocessed(self):
         """Remettre le(s) scan(s) à l'état 'Facture créée' (non traité)."""
-        records = self.filtered(lambda r: r.state == 'processed')
-        if not records:
-            raise UserError(_("Seuls les scans traités peuvent être remis à l'état 'Facture créée'."))
-        
-        records.write({
-            'state': 'done',
-            'processed_by': False,
-            'processed_date': False,
-        })
-        
-        for record in records:
-            record.message_post(
-                body=_("Scan remis à 'Facture créée' par %s") % self.env.user.name,
-                message_type='notification'
-            )
-        
-        return True
+        entries = self._bulk_mark_unprocessed()
+        counters = self._bulk_counters(entries)
+        if not counters['done']:
+            raise UserError(_(
+                "Aucun des %s scan(s) sélectionné(s) n'est traité : il n'y a "
+                "rien à remettre à « Facture créée ».", counters['total']))
+        return self._bulk_notification(_("Scans remis à « Facture créée »"), entries)
 
     @api.model
     def extract_uuid_from_url(self, url):
@@ -934,64 +926,18 @@ class InvoiceScanRecord(models.Model):
 
         Il NE requalifie jamais tout seul un scan déjà comptabilisé : dans ce
         cas il se contente de signaler l'écart et renvoie vers la réparation,
-        qui sait extourner l'écriture.
+        qui sait extourner l'écriture. Cette règle vit désormais dans
+        `_bulk_verify_document_type`, partagée avec l'assistant de traitement
+        groupé.
         """
-        FneApi = self.env['fne.api.client']
-        requalified, confirmed, mismatched, unreachable = [], [], [], []
-
-        for record in self:
-            try:
-                nature = FneApi.fetch_document_nature(record.qr_uuid)
-            except Exception as exc:  # FneApiError et imprévus réseau
-                unreachable.append(record.display_name)
-                _logger.info("Vérification de nature impossible pour %s (%s)",
-                             record.reference, exc)
-                continue
-
-            values = {'document_type_verified': True}
-            if nature.get('origin_invoice_number_dgi'):
-                values['origin_invoice_number_dgi'] = nature['origin_invoice_number_dgi']
-
-            if nature['document_type'] == record.document_type:
-                record.write(values)
-                confirmed.append(record.display_name)
-                continue
-
-            if record.invoice_id and record.invoice_id.state == 'posted':
-                mismatched.append(record.display_name)
-                record.message_post(
-                    body=_(
-                        "ÉCART DE NATURE : la DGI déclare « %(dgi)s » alors que "
-                        "ce scan est enregistré en « %(local)s », et sa pièce "
-                        "comptable est déjà comptabilisée. Requalification à "
-                        "faire par la réparation dédiée."
-                    ) % {
-                        'dgi': dict(self._fields['document_type'].selection)[nature['document_type']],
-                        'local': dict(self._fields['document_type'].selection)[record.document_type],
-                    },
-                    message_type='notification',
-                )
-                continue
-
-            values['document_type'] = nature['document_type']
-            record.with_context(allow_document_type_change=True).write(values)
-            requalified.append(record.display_name)
-
-        message = _("Nature confirmée : %(ok)s ; requalifiés : %(req)s ; "
-                    "écarts à réparer : %(bad)s ; DGI injoignable : %(ko)s.") % {
-            'ok': len(confirmed), 'req': len(requalified),
-            'bad': len(mismatched), 'ko': len(unreachable),
-        }
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _("Vérification auprès de la DGI"),
-                'message': message,
-                'type': 'warning' if (mismatched or unreachable) else 'success',
-                'sticky': bool(mismatched),
-            },
-        }
+        if len(self) > self.BULK_NETWORK_LIMIT:
+            raise UserError(_(
+                "La vérification interroge la DGI une fois par scan : "
+                "%(count)s dépasse la limite de %(limit)s par lot. "
+                "Réduisez la sélection.",
+                count=len(self), limit=self.BULK_NETWORK_LIMIT))
+        entries = self._bulk_verify_document_type()
+        return self._bulk_notification(_("Vérification auprès de la DGI"), entries)
 
     def action_view_refunds(self):
         """Ouvrir les avoirs rattachés à cette facture."""
