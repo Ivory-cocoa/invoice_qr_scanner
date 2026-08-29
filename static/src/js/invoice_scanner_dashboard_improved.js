@@ -5,6 +5,11 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { loadJS } from "@web/core/assets";
 
+// Chart.js est SERVI PAR LE MODULE, pas par un CDN : les graphiques doivent
+// se dessiner sur un poste sans accès Internet. Fichier vendu :
+// static/lib/chartjs/chart.umd.min.js (Chart.js 4.4.1, licence MIT).
+const CHART_JS_URL = "/invoice_qr_scanner/static/lib/chartjs/chart.umd.min.js";
+
 export class InvoiceScannerDashboardImproved extends Component {
     static template = "invoice_qr_scanner.DashboardImproved";
     static props = ["*"];
@@ -50,7 +55,13 @@ export class InvoiceScannerDashboardImproved extends Component {
         this.statusChart = null;
 
         onMounted(async () => {
-            await loadJS("https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js");
+            // Un graphique absent ne doit pas emporter l'écran : le rendu
+            // est déjà gardé par `typeof Chart === "undefined"`.
+            try {
+                await loadJS(CHART_JS_URL);
+            } catch (e) {
+                console.warn("Chart.js non chargé :", e);
+            }
             await this.loadDashboardData();
         });
     }
