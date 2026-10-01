@@ -128,7 +128,7 @@ class TestMobileAPI(HttpCase):
         # qu'à cet instant : la base ne stocke que son hash).
         sent = {}
 
-        def _capture(self_otp, code):
+        def _capture(self_otp, code, app_label=None):
             sent['code'] = code
 
         with patch.object(type(Otp), '_send_otp_email', _capture):
@@ -182,6 +182,41 @@ class TestMobileAPI(HttpCase):
                 "notification dont on peut se désabonner")
         if 'notification_category' in fields_:
             self.assertEqual(mail.notification_category, 'validation')
+
+    def test_otp_email_names_the_requesting_app(self):
+        """La ligne OTP est partagée par plusieurs applications mobiles :
+        l'email nomme celle qui a demandé le code."""
+        otp = self.env['invoice.scanner.login.otp'].sudo()._get_or_create(
+            self.test_user)
+        Mail = self.env['mail.mail'].sudo()
+        with patch.object(type(self.env['mail.mail']), 'send'):
+            otp._send_otp_email('123456')
+            default = Mail.search([('email_to', '=', self.test_user.email)],
+                                  order='id desc', limit=1)
+            otp._send_otp_email('654321', app_label="Scan des connaissements")
+            other = Mail.search([('email_to', '=', self.test_user.email)],
+                                order='id desc', limit=1)
+        self.assertIn("Scanner de factures", default.subject)
+        self.assertIn("Scan des connaissements", other.subject)
+        self.assertIn("Scan des connaissements", other.body_html)
+
+    def test_token_of_another_app_is_refused(self):
+        """Un jeton émis pour une autre application n'ouvre pas cette API."""
+        Token = self.env['invoice.scanner.api.token'].sudo()
+        others = [key for key, _label in Token._fields['app'].selection
+                  if key != 'invoice_scanner']
+        if not others:
+            self.skipTest("Aucune autre application mobile installée.")
+        token, _exp = Token._issue_token(self.test_user, others[0], hours=1)
+        response = self._make_request(
+            '/api/v1/invoice-scanner/history', method='GET',
+            headers={'Authorization': 'Bearer %s' % token})
+        self.assertEqual(response.status_code, 401)
+        token, _exp = Token._issue_token(self.test_user, 'invoice_scanner', hours=1)
+        response = self._make_request(
+            '/api/v1/invoice-scanner/history', method='GET',
+            headers={'Authorization': 'Bearer %s' % token})
+        self.assertEqual(response.status_code, 200)
 
     def test_otp_sender_falls_back_when_company_email_missing(self):
         """L'expéditeur est résolu même sans email de société ni paramètre.
@@ -492,7 +527,7 @@ class TestBulkRetryContract(HttpCase):
         Otp = self.env['invoice.scanner.login.otp'].sudo()
         sent = {}
 
-        def _capture(self_otp, code):
+        def _capture(self_otp, code, app_label=None):
             sent['code'] = code
 
         with patch.object(type(Otp), '_send_otp_email', _capture):

@@ -267,6 +267,9 @@ class InvoiceScannerMobileAPI(http.Controller):
             ApiToken = request.env['invoice.scanner.api.token'].sudo()
             token_record = ApiToken.search([
                 ('token_hash', '=', token_hash),
+                # Seuls les jetons émis par CETTE application (la table est
+                # partagée avec d'autres apps mobiles, cf. champ `app`).
+                ('app', '=', 'invoice_scanner'),
                 ('expires_at', '>', fields.Datetime.now()),
                 ('is_active', '=', True)
             ], limit=1)
@@ -625,6 +628,7 @@ class InvoiceScannerMobileAPI(http.Controller):
         # Sauvegarder le token
         request.env['invoice.scanner.api.token'].sudo().create({
             'user_id': user.id,
+            'app': 'invoice_scanner',
             'token_hash': token_hash,
             'expires_at': expires_at,
             'device_info': request.httprequest.headers.get('User-Agent', '')[:200],
@@ -662,7 +666,8 @@ class InvoiceScannerMobileAPI(http.Controller):
             token_hash = self._hash_token(token)
             
             request.env['invoice.scanner.api.token'].sudo().search([
-                ('token_hash', '=', token_hash)
+                ('token_hash', '=', token_hash),
+                ('app', '=', 'invoice_scanner'),
             ]).write({'is_active': False})
         
         return api_response(message='Déconnexion réussie')

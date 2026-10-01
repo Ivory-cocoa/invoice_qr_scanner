@@ -116,7 +116,11 @@ class InvoiceScannerLoginOtp(models.Model):
 
     # ==================== ENVOI ====================
 
-    def send_otp(self, ip_address=None):
+    # Libellé de l'application cité dans l'email quand l'appelant n'en donne
+    # pas (la ligne OTP est partagée par toutes les applications mobiles).
+    DEFAULT_APP_LABEL = "Scanner de factures"
+
+    def send_otp(self, ip_address=None, app_label=None):
         """Génère un code à 6 chiffres, le stocke haché et l'envoie par email.
 
         Lève une exception si le SMTP échoue : l'appelant doit pouvoir dire à
@@ -134,7 +138,7 @@ class InvoiceScannerLoginOtp(models.Model):
             'ip_address': ip_address or False,
         })
         try:
-            self._send_otp_email(code)
+            self._send_otp_email(code, app_label=app_label)
         except Exception:
             # Le code n'est pas parti : ne pas le laisser « actif » en base,
             # et réarmer l'anti-spam pour permettre un nouvel essai tout de suite.
@@ -183,18 +187,19 @@ class InvoiceScannerLoginOtp(models.Model):
             ))
         return sender
 
-    def _send_otp_email(self, code):
+    def _send_otp_email(self, code, app_label=None):
         """Envoie le code par email. L'échec SMTP remonte (raise_exception)."""
         self.ensure_one()
+        app_label = app_label or self.DEFAULT_APP_LABEL
         email_to = self.user_id.email or self.user_id.login
         body = (
             "<p>Bonjour %s,</p>"
-            "<p>Votre code de connexion à l'application Scanner de factures est :</p>"
+            "<p>Votre code de connexion à l'application %s est :</p>"
             "<p style=\"font-size:28px;font-weight:bold;letter-spacing:4px\">%s</p>"
             "<p>Ce code expire dans %d minutes. Si vous n'êtes pas à l'origine "
             "de cette demande, ignorez cet email et signalez-le à votre "
             "administrateur.</p>"
-        ) % (self.user_id.name or '', code, self.OTP_TTL_MINUTES)
+        ) % (self.user_id.name or '', app_label, code, self.OTP_TTL_MINUTES)
         # « transactional » : le gestionnaire de notifications ICP ne doit ni
         # différer ce mail en digest ni le supprimer pour un utilisateur en
         # mode « aucun email » — le code EST l'action attendue. Le contexte est
@@ -202,7 +207,7 @@ class InvoiceScannerLoginOtp(models.Model):
         mail = self.env['mail.mail'].sudo().with_context(
             icp_notification_category='transactional',
         ).create({
-            'subject': "Votre code de connexion — Scanner de factures",
+            'subject': "Votre code de connexion — %s" % app_label,
             'email_from': self._otp_email_from(),
             'email_to': email_to,
             'body_html': body,
