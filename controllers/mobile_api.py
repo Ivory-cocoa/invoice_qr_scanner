@@ -28,6 +28,7 @@ from functools import wraps
 import psycopg2
 
 from odoo import http, _, fields
+from odoo.tools import html2plaintext
 from odoo.http import request, Response
 from odoo.exceptions import AccessError, AccessDenied
 import json
@@ -1618,6 +1619,39 @@ class InvoiceScannerMobileAPI(http.Controller):
             'api_version': API_VERSION,
             'module': 'invoice_qr_scanner',
             'semaphore': get_semaphore_status(),
+        })
+
+    # Codes de l'application dans le catalogue « Applications mobiles »
+    # (module mobile_app_distribution, facultatif) : le premier actif gagne.
+    APP_CODES = ('scanner_facture', 'facture_scanner')
+
+    @http.route('/api/v1/invoice-scanner/app/update', type='http', auth='none',
+                methods=['GET', 'POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    def get_app_update(self, user=None, **kw):
+        """Dernière version publiée de Facture Scanner : métadonnées, empreinte
+        SHA-256 et URL de téléchargement signée (TTL court), pour le bandeau
+        de mise à jour de l'application."""
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+        if 'mobile.app' not in request.env:
+            return api_response({'available': False})
+        app = request.env['mobile.app'].sudo().search(
+            [('code', 'in', self.APP_CODES), ('active', '=', True)], limit=1)
+        version = app.latest_version_id
+        if not version:
+            return api_response({'available': False})
+        if app.group_ids and not (app.group_ids & user.groups_id):
+            return api_response({'available': False})
+        return api_response({
+            'available': True,
+            'version': version.version or '',
+            'version_code': version.version_code or 0,
+            'release_notes': html2plaintext(version.release_notes or '').strip(),
+            'file_size': version.file_size or 0,
+            'sha256': version.sha256 or '',
+            'download_url': app._build_download_url(user),
         })
 
     @http.route('/api/v1/invoice-scanner/stats', type='http', auth='none',

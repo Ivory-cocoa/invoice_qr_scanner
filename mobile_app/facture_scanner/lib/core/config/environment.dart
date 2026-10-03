@@ -116,8 +116,12 @@ class AppConfig {
   // ligne « NOM - CODE » de la page DGI et se trompait sur les raisons
   // sociales contenant un tiret, produisant de faux codes DGI — et des
   // factures imputées au mauvais fournisseur.
-  static const String appVersion = '3.2.0';
-  static const int buildNumber = 6;
+  //
+  // 3.5.0 : bandeau de mise à jour (téléchargement dans l'application,
+  // empreinte vérifiée, installeur Android). Version alignée sur le pubspec
+  // (elle affichait encore 3.2.0) : comparée à la version publiée dans Odoo.
+  static const String appVersion = '3.5.0';
+  static const int buildNumber = 9;
   
   // Nom de l'application
   static const String appName = 'Facture Scanner';

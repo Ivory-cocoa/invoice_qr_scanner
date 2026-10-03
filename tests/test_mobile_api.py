@@ -3,6 +3,7 @@
 Tests unitaires pour l'API mobile REST
 """
 
+import base64
 import json
 from unittest.mock import patch
 from datetime import timedelta
@@ -217,6 +218,34 @@ class TestMobileAPI(HttpCase):
             '/api/v1/invoice-scanner/history', method='GET',
             headers={'Authorization': 'Bearer %s' % token})
         self.assertEqual(response.status_code, 200)
+
+    def test_app_update_route(self):
+        """Bandeau de mise à jour : version publiée, empreinte et lien signé."""
+        response = self._make_request('/api/v1/invoice-scanner/app/update', method='GET')
+        self.assertEqual(response.status_code, 401)  # jeton requis
+        token, _exp = self.env['invoice.scanner.api.token'].sudo()._issue_token(
+            self.test_user, 'invoice_scanner', hours=1)
+        headers = {'Authorization': 'Bearer %s' % token}
+        response = self._make_request('/api/v1/invoice-scanner/app/update', method='GET', headers=headers)
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)['data']
+        if 'mobile.app' not in self.env:
+            self.assertFalse(data['available'])
+            return
+        App = self.env['mobile.app'].sudo().with_context(active_test=False)
+        App.search([('code', 'in', ('scanner_facture', 'facture_scanner'))]).write({'active': False})
+        app = App.create({'name': 'Facture Scanner (test)', 'code': 'scanner_facture'})
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': 'facture.apk', 'datas': base64.b64encode(b'PK\x03\x04 fake apk')})
+        self.env['mobile.app.version'].sudo().create({
+            'app_id': app.id, 'version': '9.9.9', 'version_code': 999,
+            'apk_attachment_id': attachment.id,
+        })
+        response = self._make_request('/api/v1/invoice-scanner/app/update', method='GET', headers=headers)
+        data = json.loads(response.content)['data']
+        self.assertTrue(data['available'])
+        self.assertEqual(data['version_code'], 999)
+        self.assertIn('/m/scanner_facture/', data['download_url'])
 
     def test_otp_sender_falls_back_when_company_email_missing(self):
         """L'expéditeur est résolu même sans email de société ni paramètre.

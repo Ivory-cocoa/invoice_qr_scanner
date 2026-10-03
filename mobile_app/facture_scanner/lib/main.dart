@@ -25,6 +25,7 @@ import 'screens/my_ot_links_screen.dart';
 import 'screens/ot_manager_home_screen.dart';
 import 'screens/invoice_picker_screen.dart';
 import 'widgets/auth_guard.dart';
+import 'widgets/update_banner_host.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -103,7 +104,8 @@ class FactureScannerApp extends StatelessWidget {
         // TOUS les écrans, y compris ceux poussés hors table de routes.
         builder: (context, child) => AuthGuard(
           navigatorKey: navigatorKey,
-          child: child ?? const SizedBox.shrink(),
+          // Bandeau « nouvelle version » au-dessus de tous les écrans
+          child: UpdateBannerHost(child: child ?? const SizedBox.shrink()),
         ),
         initialRoute: '/',
         routes: {

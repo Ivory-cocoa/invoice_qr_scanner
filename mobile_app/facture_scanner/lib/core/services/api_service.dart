@@ -334,6 +334,18 @@ class ApiService {
     return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/stats', {});
   }
   
+  /// Dernière version publiée de l'application (bandeau de mise à jour) ;
+  /// null en cas d'erreur ou si aucune version n'est publiée (non bloquant).
+  Future<Map<String, dynamic>?> getAppUpdate() async {
+    try {
+      final res = await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/app/update', {});
+      final data = res.data;
+      return res.success && data != null && data['available'] == true ? data : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Sync offline scans
   Future<ApiResponse<Map<String, dynamic>>> syncOfflineScans(List<Map<String, dynamic>> scans) async {
     return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/sync', {
