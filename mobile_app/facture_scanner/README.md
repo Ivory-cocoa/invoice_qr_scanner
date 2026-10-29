@@ -11,6 +11,11 @@ scans hors réseau, rattachement des factures aux OT comme coûts opérationnels
 ./build_apk.sh --skip-tests # build rapide
 ```
 
+Le code est au format `dart format`, que `build_apk.sh` exige. Ouvert comme
+dossier racine dans VS Code (`code mobile_app/facture_scanner`), le projet
+se formate à l'enregistrement (`.vscode/settings.json`). Sinon :
+`dart format lib test` avant de commiter.
+
 L'APK horodaté sort dans `dist/`. Avant chaque version : incrémenter ensemble
 `version:` dans `pubspec.yaml` (après le `+`) et `appVersion` / `buildNumber`
 dans `lib/core/config/environment.dart`. Publier ensuite dans Odoo :

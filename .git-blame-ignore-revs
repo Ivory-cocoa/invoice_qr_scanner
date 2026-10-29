@@ -1,0 +1,7 @@
+# Commits de pure mise en forme, ignorés par `git blame` (et par GitHub) :
+# chaque ligne reste attribuée au commit qui l'a réellement écrite.
+# Activation locale, une fois par clone :
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Facture Scanner : reformatage `dart format` (2026-10-29)
+60d77edde6ab64181cbbd86dadbfbf8e9508d855

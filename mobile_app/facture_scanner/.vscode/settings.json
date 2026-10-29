@@ -1,0 +1,10 @@
+{
+    // Le code de ce projet est au format `dart format` (vérifié par
+    // build_apk.sh) : on peut formater à l'enregistrement sans produire de
+    // diffs parasites. Réglage propre à ce projet : les autres applications
+    // ICP ne sont pas encore formatées.
+    "[dart]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true
+    }
+}
