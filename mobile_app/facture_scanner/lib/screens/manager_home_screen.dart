@@ -43,16 +43,17 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
   Future<void> _switchMode(ManagerMode mode) async {
     if (mode == _mode) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kModeKey, mode == ManagerMode.traiteur ? 'traiteur' : 'verificateur');
+    await prefs.setString(
+      _kModeKey,
+      mode == ManagerMode.traiteur ? 'traiteur' : 'verificateur',
+    );
     setState(() => _mode = mode);
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Stack(
@@ -144,8 +145,9 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color:
-                      isActive ? Colors.white : AppTheme.getTextMuted(context),
+                  color: isActive
+                      ? Colors.white
+                      : AppTheme.getTextMuted(context),
                 ),
               ),
             ],

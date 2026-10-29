@@ -15,19 +15,24 @@ class ScanResultDialog extends StatelessWidget {
   final ScanState state;
   final String? message;
   final ScanRecord? scanRecord;
-  
+
+  /// Propose « Nouveau scan ». Faux quand le dialogue est rouvert depuis une
+  /// carte ou l'historique, hors de tout parcours de scan.
+  final bool showScanAgain;
+
   const ScanResultDialog({
     super.key,
     required this.state,
     this.message,
     this.scanRecord,
+    this.showScanAgain = true,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
     final isDark = AppTheme.isDark(context);
-    
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.fromLTRB(16, 24, 16, 24 + bottomPadding + 32),
@@ -49,19 +54,22 @@ class ScanResultDialog extends StatelessWidget {
           children: [
             // Header avec icône
             _buildHeader(context),
-            
+
             // Contenu
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
                 child: Column(
                   children: [
                     // Message d'erreur détaillé pour les erreurs
                     if (state == ScanState.error && message != null)
                       _buildErrorMessageBox(context, message!),
-                    
-                    // Message simple pour les autres états
-                    if (state != ScanState.error && message != null)
+
+                    // Message simple pour les autres états (sauf s'il ne fait
+                    // que répéter le sous-titre de l'en-tête)
+                    if (state != ScanState.error &&
+                        message != null &&
+                        message != _headerInfo(context).subtitle)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: Text(
@@ -75,39 +83,52 @@ class ScanResultDialog extends StatelessWidget {
                           ),
                         ),
                       ),
-                    
+
                     if (scanRecord != null && scanRecord!.isRefund)
                       _buildRefundBanner(context),
 
-                    if (scanRecord != null &&
-                        scanRecord!.needsTypeConfirmation)
+                    if (scanRecord != null && scanRecord!.needsTypeConfirmation)
                       _buildUnverifiedTypeBanner(context),
 
                     if (scanRecord != null) _buildRecordDetails(context),
 
                     if (scanRecord != null && scanRecord!.hasOtLinks)
                       _buildOtLinksSection(context),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Actions
-                    _buildActions(context),
                   ],
                 ),
               ),
+            ),
+
+            // Actions hors de la zone défilante : toujours visibles, même
+            // quand les détails dépassent la hauteur d'un petit écran.
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppTheme.getDivider(context)),
+                ),
+              ),
+              child: _buildActions(context),
             ),
           ],
         ),
       ),
     );
   }
-  
+
   Widget _buildHeader(BuildContext context) {
+    final (:color, :icon, :title, :subtitle) = _headerInfo(context);
+    return _buildHeaderContainer(color, icon, title, subtitle);
+  }
+
+  ({Color color, IconData icon, String title, String subtitle}) _headerInfo(
+    BuildContext context,
+  ) {
     Color color;
     IconData icon;
     String title;
     String subtitle;
-    
+
     final isRefund = scanRecord?.isRefund ?? false;
 
     switch (state) {
@@ -118,7 +139,7 @@ class ScanResultDialog extends StatelessWidget {
             ? AppTheme.getError(context)
             : AppTheme.getSuccess(context);
         icon = isRefund ? Icons.undo_rounded : Icons.check_circle_rounded;
-        title = isRefund ? 'Avoir enregistré' : 'Succès!';
+        title = isRefund ? 'Avoir enregistré' : 'Facture enregistrée';
         subtitle = isRefund
             ? 'Avoir fournisseur — créance, pas une dette'
             : 'Facture créée avec succès';
@@ -129,7 +150,9 @@ class ScanResultDialog extends StatelessWidget {
         title = isRefund ? 'Avoir déjà scanné' : 'Doublon détecté';
         subtitle = scanRecord != null && scanRecord!.duplicateCount > 0
             ? 'Tentative #${scanRecord!.duplicateCount + 1}'
-            : (isRefund ? 'Cet avoir existe déjà' : 'Cette facture existe déjà');
+            : (isRefund
+                  ? 'Cet avoir existe déjà'
+                  : 'Cette facture existe déjà');
         break;
       case ScanState.alreadyProcessed:
         color = AppTheme.getWarning(context);
@@ -145,16 +168,37 @@ class ScanResultDialog extends StatelessWidget {
         title = 'Erreur';
         subtitle = 'Une erreur s\'est produite';
         break;
+      case ScanState.manualEntry:
+        color = AppTheme.getWarning(context);
+        icon = Icons.edit_note_rounded;
+        title = 'Saisie manuelle requise';
+        subtitle = 'La DGI n\'a pas pu être interrogée';
+        break;
+      case ScanState.processing:
+        color = AppTheme.getPrimary(context);
+        icon = Icons.hourglass_top_rounded;
+        title = 'Traitement en cours';
+        subtitle = 'Le résultat arrivera en arrière-plan';
+        break;
       default:
         color = AppTheme.getPrimary(context);
         icon = Icons.info_rounded;
         title = 'Information';
         subtitle = 'Résultat du scan';
     }
-    
+
+    return (color: color, icon: icon, title: title, subtitle: subtitle);
+  }
+
+  Widget _buildHeaderContainer(
+    Color color,
+    IconData icon,
+    String title,
+    String subtitle,
+  ) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -167,26 +211,28 @@ class ScanResultDialog extends StatelessWidget {
         children: [
           // Icône animée
           Container(
-            width: 72,
-            height: 72,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Colors.white, size: 40),
+            child: Icon(icon, color: Colors.white, size: 34),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             title,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.9),
               fontSize: 14,
@@ -197,7 +243,7 @@ class ScanResultDialog extends StatelessWidget {
       ),
     );
   }
-  
+
   /// Bandeau « AVOIR » : la première chose que l'œil doit rencontrer.
   ///
   /// Sans lui, l'écran de succès d'un avoir est visuellement indiscernable de
@@ -212,7 +258,10 @@ class ScanResultDialog extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.getErrorLight(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: errorColor.withValues(alpha: 0.45), width: 1.5),
+        border: Border.all(
+          color: errorColor.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -222,7 +271,11 @@ class ScanResultDialog extends StatelessWidget {
               color: errorColor,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.undo_rounded, color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.undo_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -296,7 +349,7 @@ class ScanResultDialog extends StatelessWidget {
     final record = scanRecord!;
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
     final isDark = AppTheme.isDark(context);
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -313,7 +366,7 @@ class ScanResultDialog extends StatelessWidget {
               record.supplierName,
               Icons.business_rounded,
             ),
-          
+
           if (record.invoiceNumberDgi.isNotEmpty)
             _buildDetailRow(
               context,
@@ -321,7 +374,7 @@ class ScanResultDialog extends StatelessWidget {
               record.invoiceNumberDgi,
               Icons.receipt_long_rounded,
             ),
-          
+
           if (record.amountTtc > 0)
             _buildDetailRow(
               context,
@@ -331,7 +384,7 @@ class ScanResultDialog extends StatelessWidget {
               isHighlight: true,
               isNegative: record.isRefund,
             ),
-          
+
           if (record.invoiceName != null)
             _buildDetailRow(
               context,
@@ -349,16 +402,34 @@ class ScanResultDialog extends StatelessWidget {
                   : record.originInvoiceNumberDgi,
               Icons.call_split_rounded,
             ),
-          
+
+          // Pour un doublon, l'information utile est « qui l'a déjà scannée » :
+          // c'est la personne à qui s'adresser.
+          if (state == ScanState.duplicate && record.scannedBy.isNotEmpty)
+            _buildDetailRow(
+              context,
+              'Déjà scannée par',
+              record.scannedBy,
+              Icons.person_search_rounded,
+            ),
+
+          if (record.reference.isNotEmpty && state == ScanState.duplicate)
+            _buildDetailRow(
+              context,
+              'Référence du scan',
+              record.reference,
+              Icons.tag_rounded,
+            ),
+
           if (record.scanDate != null)
             _buildDetailRow(
               context,
-              'Date du scan',
+              state == ScanState.duplicate ? 'Scannée le' : 'Date du scan',
               dateFormat.format(record.scanDate!),
               Icons.schedule_rounded,
               isLast: !record.isProcessed && record.reprocessAttemptCount == 0,
             ),
-          
+
           // Infos de traitement (qui a déjà traité + date)
           if (record.isProcessed && record.processedBy != null)
             _buildDetailRow(
@@ -367,7 +438,7 @@ class ScanResultDialog extends StatelessWidget {
               record.processedBy!,
               Icons.person_rounded,
             ),
-          
+
           if (record.isProcessed && record.processedDate != null)
             _buildDetailRow(
               context,
@@ -375,7 +446,7 @@ class ScanResultDialog extends StatelessWidget {
               dateFormat.format(record.processedDate!),
               Icons.event_available_rounded,
             ),
-          
+
           // Compteur de tentatives de retraitement
           if (record.reprocessAttemptCount > 0)
             _buildDetailRow(
@@ -390,7 +461,7 @@ class ScanResultDialog extends StatelessWidget {
       ),
     );
   }
-  
+
   /// Section listant les Ordres de Transit (OT) auxquels le scan est rattaché.
   /// Un scan pouvant être lié à plusieurs OT, chaque lien est affiché sous
   /// forme de puce (référence OT + type de coût + montant).
@@ -402,7 +473,9 @@ class ScanResultDialog extends StatelessWidget {
       margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: primaryColor.withValues(alpha: AppTheme.isDark(context) ? 0.16 : 0.08),
+        color: primaryColor.withValues(
+          alpha: AppTheme.isDark(context) ? 0.16 : 0.08,
+        ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
       ),
@@ -504,16 +577,17 @@ class ScanResultDialog extends StatelessWidget {
     final primaryColor = AppTheme.getPrimary(context);
     // Un montant d'avoir se lit en rouge : la couleur porte l'information
     // aussi vite que le signe, et ne se perd pas au premier coup d'œil.
-    final successColor =
-        isNegative ? AppTheme.getError(context) : AppTheme.getSuccess(context);
-    
+    final successColor = isNegative
+        ? AppTheme.getError(context)
+        : AppTheme.getSuccess(context);
+
     return Container(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
       margin: EdgeInsets.only(bottom: isLast ? 0 : 12),
       decoration: BoxDecoration(
-        border: isLast ? null : Border(
-          bottom: BorderSide(color: AppTheme.getDivider(context)),
-        ),
+        border: isLast
+            ? null
+            : Border(bottom: BorderSide(color: AppTheme.getDivider(context))),
       ),
       child: Row(
         children: [
@@ -521,8 +595,9 @@ class ScanResultDialog extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: (isHighlight ? successColor : primaryColor)
-                  .withValues(alpha: isDark ? 0.2 : 0.1),
+              color: (isHighlight ? successColor : primaryColor).withValues(
+                alpha: isDark ? 0.2 : 0.1,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -548,7 +623,9 @@ class ScanResultDialog extends StatelessWidget {
                 Text(
                   value,
                   style: TextStyle(
-                    color: isHighlight ? successColor : AppTheme.getTextPrimary(context),
+                    color: isHighlight
+                        ? successColor
+                        : AppTheme.getTextPrimary(context),
                     fontWeight: FontWeight.w600,
                     fontSize: 15,
                   ),
@@ -560,7 +637,7 @@ class ScanResultDialog extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildActions(BuildContext context) {
     final isDark = AppTheme.isDark(context);
     final primaryColor = AppTheme.getPrimary(context);
@@ -569,7 +646,8 @@ class ScanResultDialog extends StatelessWidget {
     // réussi OU un doublon, dès que l'on a une référence de scan.
     final auth = context.read<AuthProvider>();
     final user = auth.user;
-    final canLinkToOt = user != null &&
+    final canLinkToOt =
+        user != null &&
         user.isOtManager &&
         scanRecord != null &&
         scanRecord!.id > 0 &&
@@ -577,9 +655,33 @@ class ScanResultDialog extends StatelessWidget {
             state == ScanState.duplicate ||
             state == ScanState.alreadyProcessed);
 
-    // Tous les états ont maintenant les deux boutons
+    final canManualEntry = state == ScanState.manualEntry;
+
     return Column(
       children: [
+        if (canManualEntry) ...[
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.of(context).pop('manual_entry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.getWarning(context),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+              ),
+              icon: const Icon(Icons.edit_note_rounded, size: 22),
+              label: const Text(
+                'Saisir manuellement',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (canLinkToOt) ...[
           SizedBox(
             width: double.infinity,
@@ -599,10 +701,7 @@ class ScanResultDialog extends StatelessWidget {
               icon: const Icon(Icons.link_rounded, size: 22),
               label: const Text(
                 'Lier cette facture à un ou plusieurs OTs',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ),
           ),
@@ -615,13 +714,15 @@ class ScanResultDialog extends StatelessWidget {
                 onPressed: () => Navigator.of(context).pop(),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey.shade300),
+                  side: BorderSide(
+                    color: isDark ? AppTheme.darkDivider : Colors.grey.shade300,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: Text(
-                  state == ScanState.success ? 'Fermer' : 'Compris',
+                  state == ScanState.manualEntry ? 'Plus tard' : 'Fermer',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: AppTheme.getTextSecondary(context),
@@ -629,48 +730,49 @@ class ScanResultDialog extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).pop('scan_again'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            if (showScanAgain) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).pop('scan_again'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: isDark
+                        ? const Color(0xFF1A1A1A)
+                        : Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                  label: const Text(
+                    'Nouveau scan',
+                    style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                icon: const Icon(Icons.qr_code_scanner_rounded, size: 20),
-                label: const Text(
-                  'Scanner une autre',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
               ),
-            ),
+            ],
           ],
         ),
       ],
     );
   }
-  
+
   Widget _buildErrorMessageBox(BuildContext context, String errorMessage) {
     final isDark = AppTheme.isDark(context);
     final errorColor = AppTheme.getError(context);
     final errorLight = AppTheme.getErrorLight(context);
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: errorLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: errorColor.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: errorColor.withValues(alpha: 0.3), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,13 +835,13 @@ Future<String?> showScanResultDialog(
   ScanRecord? scanRecord,
 }) async {
   final isDark = AppTheme.isDark(context);
-  
+
   return showGeneralDialog<String>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Scan Result',
-    barrierColor: isDark 
-        ? Colors.black.withValues(alpha: 0.7) 
+    barrierColor: isDark
+        ? Colors.black.withValues(alpha: 0.7)
         : Colors.white.withValues(alpha: 0.85),
     transitionDuration: const Duration(milliseconds: 300),
     pageBuilder: (context, animation, secondaryAnimation) {
@@ -754,13 +856,10 @@ Future<String?> showScanResultDialog(
         parent: animation,
         curve: Curves.easeOutBack,
       );
-      
+
       return ScaleTransition(
         scale: Tween<double>(begin: 0.8, end: 1.0).animate(curvedAnimation),
-        child: FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
+        child: FadeTransition(opacity: animation, child: child),
       );
     },
   );

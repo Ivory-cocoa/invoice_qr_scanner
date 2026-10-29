@@ -45,9 +45,10 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
       duration: Duration(milliseconds: 300 + (widget.index * 50).clamp(0, 300)),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0.1, 0),
@@ -86,10 +87,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
             decoration: BoxDecoration(
               color: AppTheme.getSurfaceElevated(context),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _getBorderColor(),
-                width: 1.5,
-              ),
+              border: Border.all(color: _getBorderColor(), width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: _getShadowColor(),
@@ -386,7 +384,9 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
               decoration: BoxDecoration(
                 color: AppTheme.getErrorLight(context),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.getError(context).withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppTheme.getError(context).withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -583,9 +583,5 @@ class _DetailItem {
   final String label;
   final String value;
 
-  _DetailItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  _DetailItem({required this.icon, required this.label, required this.value});
 }

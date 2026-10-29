@@ -1,18 +1,14 @@
 /// Configuration des environnements pour Facture Scanner
-/// 
+///
 /// Environnements disponibles:
 /// - development: http://192.168.5.159:8069 (icp_dev_db) - Réseau local développement
-/// - staging: http://192.168.5.85:8069 (icp_test_db) 
+/// - staging: http://192.168.5.85:8069 (icp_test_db)
 /// - production: https://odoo.ivorycocoa.ci (odoo.ivorycocoa.ci)
 library;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-enum Environment {
-  development,
-  staging,
-  production,
-}
+enum Environment { development, staging, production }
 
 class EnvironmentConfig {
   final String name;
@@ -79,23 +75,25 @@ class AppConfig {
   //
   // `--dart-define=BASE_URL=https://…` permet malgré tout de forcer une cible
   // (utile pour servir la PWA depuis un autre hôte que l'API).
-  static const String _webBaseUrlOverride =
-      String.fromEnvironment('BASE_URL', defaultValue: '');
+  static const String _webBaseUrlOverride = String.fromEnvironment(
+    'BASE_URL',
+    defaultValue: '',
+  );
   // ========================================
   // ENVIRONNEMENT ACTUEL: PRODUCTION
   // ========================================
   static const Environment currentEnvironment = Environment.production;
-  
-  static EnvironmentConfig get config => 
+
+  static EnvironmentConfig get config =>
       EnvironmentConfig.fromEnvironment(currentEnvironment);
-  
+
   static String get apiBaseUrl =>
       kIsWeb ? _webBaseUrlOverride : config.apiBaseUrl;
   static String get databaseName => config.databaseName;
   static String get environmentName => config.name;
   static bool get enableLogging => config.enableLogging;
   static bool get enableCrashlytics => config.enableCrashlytics;
-  
+
   // Version de l'application — SOURCE UNIQUE pour l'affichage.
   //
   // ⚠️ Garder synchronisé avec `version:` dans pubspec.yaml. Ces valeurs ont
@@ -120,9 +118,12 @@ class AppConfig {
   // 3.5.0 : bandeau de mise à jour (téléchargement dans l'application,
   // empreinte vérifiée, installeur Android). Version alignée sur le pubspec
   // (elle affichait encore 3.2.0) : comparée à la version publiée dans Odoo.
-  static const String appVersion = '3.5.1';
-  static const int buildNumber = 10;
-  
+  //
+  // 3.5.2 : le résultat d'un scan (doublon, facture créée, erreur) est
+  // affiché AVANT de proposer un nouveau scan ; corrections d'ergonomie.
+  static const String appVersion = '3.5.2';
+  static const int buildNumber = 11;
+
   // Nom de l'application
   static const String appName = 'Facture Scanner';
   static const String appNameFull = 'Scanner QR Factures DGI';

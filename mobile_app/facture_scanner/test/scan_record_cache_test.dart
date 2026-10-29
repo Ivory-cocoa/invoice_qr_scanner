@@ -6,10 +6,7 @@ import 'package:facture_scanner/core/models/scan_record.dart';
 /// booléens qu'ils soient fournis en `int` (SQLite) ou en `bool`.
 void main() {
   group('ScanRecord.fromMap - booléens depuis SQLite (int 0/1)', () {
-    Map<String, dynamic> baseRow({
-      dynamic isProcessed,
-      dynamic isManualEntry,
-    }) {
+    Map<String, dynamic> baseRow({dynamic isProcessed, dynamic isManualEntry}) {
       return {
         'id': 1,
         'reference': 'SCAN/2026/00001',
@@ -40,14 +37,17 @@ void main() {
     });
 
     test('is_processed = true (bool) -> true', () {
-      final r =
-          ScanRecord.fromMap(baseRow(isProcessed: true, isManualEntry: false));
+      final r = ScanRecord.fromMap(
+        baseRow(isProcessed: true, isManualEntry: false),
+      );
       expect(r.isProcessed, isTrue);
       expect(r.isManualEntry, isFalse);
     });
 
     test('is_processed null -> déduit de state == processed', () {
-      final r = ScanRecord.fromMap(baseRow(isProcessed: null, isManualEntry: null));
+      final r = ScanRecord.fromMap(
+        baseRow(isProcessed: null, isManualEntry: null),
+      );
       expect(r.isProcessed, isTrue); // state == 'processed'
       expect(r.isManualEntry, isFalse);
     });
@@ -95,7 +95,7 @@ void main() {
             'currency': 'XOF',
             'state': 'confirmed',
             'state_label': 'Confirmé',
-          }
+          },
         ],
       });
       expect(r.hasOtLinks, isTrue);
@@ -111,4 +111,3 @@ void main() {
     });
   });
 }
-

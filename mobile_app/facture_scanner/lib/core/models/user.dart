@@ -6,7 +6,8 @@ class User {
   final String name;
   final String email;
   final String login;
-  final String role; // 'verificateur', 'traiteur', 'manager', 'ot_manager', 'user'
+  final String
+  role; // 'verificateur', 'traiteur', 'manager', 'ot_manager', 'user'
   final bool isOtManager;
 
   User({
@@ -50,11 +51,16 @@ class User {
 
   String get roleLabel {
     switch (role) {
-      case 'verificateur': return 'Vérificateur';
-      case 'traiteur': return 'Traiteur';
-      case 'manager': return 'Responsable';
-      case 'ot_manager': return 'Gestionnaire OT';
-      default: return 'Utilisateur';
+      case 'verificateur':
+        return 'Vérificateur';
+      case 'traiteur':
+        return 'Traiteur';
+      case 'manager':
+        return 'Responsable';
+      case 'ot_manager':
+        return 'Gestionnaire OT';
+      default:
+        return 'Utilisateur';
     }
   }
 

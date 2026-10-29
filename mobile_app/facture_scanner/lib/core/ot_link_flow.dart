@@ -28,10 +28,10 @@ Future<bool> startOtLinkFlow(BuildContext context, ScanRecord record) async {
   final kindLabel = record.isRefund ? 'Avoir' : 'Facture';
   final invoiceLabel = record.invoiceNumberDgi.isNotEmpty
       ? '$kindLabel ${record.invoiceNumberDgi}'
-          '${record.supplierName.isNotEmpty ? ' • ${record.supplierName}' : ''}'
+            '${record.supplierName.isNotEmpty ? ' • ${record.supplierName}' : ''}'
       : (record.supplierName.isNotEmpty
-          ? record.supplierName
-          : '$kindLabel scanné(e)');
+            ? record.supplierName
+            : '$kindLabel scanné(e)');
 
   // 1. Statut OT (existence + liaisons + montant restant) pour décider du
   //    parcours (Cas A : non liée / B : totalement liée / C : partielle).

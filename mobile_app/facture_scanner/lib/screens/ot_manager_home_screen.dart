@@ -76,9 +76,9 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
     final connectivity = context.read<ConnectivityProvider>();
     final scan = context.read<ScanProvider>();
 
-    final qrContent = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const ScannerScreen()),
-    );
+    final qrContent = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const ScannerScreen()));
     if (qrContent == null || !mounted) return;
 
     // Process QR (extraction DGI côté client) avec un loader bloquant.
@@ -188,16 +188,16 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
       _toast('Connexion requise pour parcourir les factures', isError: true);
       return;
     }
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const InvoicePickerScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const InvoicePickerScreen()));
     if (mounted) _loadStats();
   }
 
   Future<void> _openMyLinks() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MyOtLinksScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const MyOtLinksScreen()));
     if (mounted) _loadStats();
   }
 
@@ -236,8 +236,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor:
-            isError ? AppTheme.errorColor : AppTheme.successColor,
+        backgroundColor: isError ? AppTheme.errorColor : AppTheme.successColor,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -306,27 +305,33 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'my_links',
-                  child: Row(children: [
-                    Icon(Icons.link_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text('Mes liaisons OT'),
-                  ]),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Mes liaisons OT'),
+                    ],
+                  ),
                 ),
                 const PopupMenuItem(
                   value: 'settings',
-                  child: Row(children: [
-                    Icon(Icons.settings_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text('Paramètres'),
-                  ]),
+                  child: Row(
+                    children: [
+                      Icon(Icons.settings_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Paramètres'),
+                    ],
+                  ),
                 ),
                 const PopupMenuItem(
                   value: 'logout',
-                  child: Row(children: [
-                    Icon(Icons.logout_rounded, size: 20),
-                    SizedBox(width: 12),
-                    Text('Déconnexion'),
-                  ]),
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout_rounded, size: 20),
+                      SizedBox(width: 12),
+                      Text('Déconnexion'),
+                    ],
+                  ),
                 ),
               ];
             },
@@ -414,8 +419,11 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                   color: Colors.white.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.link_rounded,
-                    color: Colors.white, size: 28),
+                child: const Icon(
+                  Icons.link_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -515,8 +523,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.arrow_forward_ios_rounded,
-                  color: color, size: 18),
+              Icon(Icons.arrow_forward_ios_rounded, color: color, size: 18),
             ],
           ),
         ),
@@ -653,7 +660,8 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
       elevation: 1.5,
       child: ListTile(
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
+          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        ),
         leading: Container(
           width: 40,
           height: 40,
@@ -661,15 +669,21 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
             color: AppTheme.primaryColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.list_alt_rounded,
-              color: AppTheme.primaryColor),
+          child: const Icon(
+            Icons.list_alt_rounded,
+            color: AppTheme.primaryColor,
+          ),
         ),
-        title: const Text('Voir toutes mes liaisons OT',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Voir toutes mes liaisons OT',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text(
           'Détail de chaque ligne de coût liée à un scan',
-          style:
-              TextStyle(color: AppTheme.getTextSecondary(context), fontSize: 12),
+          style: TextStyle(
+            color: AppTheme.getTextSecondary(context),
+            fontSize: 12,
+          ),
         ),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: _openMyLinks,
@@ -701,20 +715,18 @@ class _ProcessingDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         child: Consumer<ScanProvider>(
           builder: (context, scan, _) {
-            final progress = scan.extractionProgress ??
+            final progress =
+                scan.extractionProgress ??
                 'Vérification de la facture en cours...';
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(
-                  color: AppTheme.getPrimary(context),
-                ),
+                CircularProgressIndicator(color: AppTheme.getPrimary(context)),
                 const SizedBox(height: 16),
                 Text(
                   progress,

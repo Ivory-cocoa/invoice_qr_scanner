@@ -29,7 +29,10 @@ void main() {
     });
 
     test('retourne null quand aucun UUID n\'est présent', () {
-      expect(parser.extractUuidFromUrl('https://exemple.com/pas-d-uuid'), isNull);
+      expect(
+        parser.extractUuidFromUrl('https://exemple.com/pas-d-uuid'),
+        isNull,
+      );
     });
 
     test('retourne null pour une chaîne vide', () {

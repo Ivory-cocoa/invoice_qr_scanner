@@ -134,8 +134,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Expanded(child: Text(result.message)),
             ],
           ),
-          backgroundColor:
-              result.success ? AppTheme.successColor : AppTheme.errorColor,
+          backgroundColor: result.success
+              ? AppTheme.successColor
+              : AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
@@ -173,298 +174,296 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Paramètres'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Paramètres'), centerTitle: true),
       body: SafeArea(
         child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Application web (PWA) : ni base locale, ni tâche de fond, ni
-                // extraction dans le navigateur. Afficher des réglages sans
-                // effet serait pire que de ne rien afficher.
-                if (kIsWeb) ...[
-                  _buildSectionHeader(
-                    icon: Icons.cloud_done_outlined,
-                    title: 'Application web',
-                  ),
-                  const SizedBox(height: 12),
-                  _buildCard(
-                    children: const [
-                      ListTile(
-                        leading: Icon(Icons.info_outline, color: Colors.blue),
-                        title: Text(
-                          'Vérification par le serveur',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          "Dans le navigateur, la vérification des factures "
-                          "auprès de la DGI est faite par le serveur : il n'y a "
-                          "ni synchronisation différée ni réglage d'extraction. "
-                          "Une connexion est nécessaire pour scanner.",
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                if (!kIsWeb) ...[
-                // Section: Synchronisation programmée
-                _buildSectionHeader(
-                  icon: Icons.schedule,
-                  title: 'Synchronisation programmée',
-                ),
-                const SizedBox(height: 12),
-                _buildCard(
-                  children: [
-                    SwitchListTile.adaptive(
-                      title: const Text(
-                        'Synchronisation automatique',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        _autoSyncEnabled
-                            ? 'Les scans seront envoyés au serveur à l\'heure programmée'
-                            : 'Synchronisation manuelle uniquement',
-                      ),
-                      value: _autoSyncEnabled,
-                      activeThumbColor: AppTheme.primaryColor,
-                      onChanged: (value) {
-                        setState(() => _autoSyncEnabled = value);
-                      },
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Application web (PWA) : ni base locale, ni tâche de fond, ni
+                  // extraction dans le navigateur. Afficher des réglages sans
+                  // effet serait pire que de ne rien afficher.
+                  if (kIsWeb) ...[
+                    _buildSectionHeader(
+                      icon: Icons.cloud_done_outlined,
+                      title: 'Application web',
                     ),
-                    if (_autoSyncEnabled) ...[
-                      const Divider(),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 12),
+                    _buildCard(
+                      children: const [
+                        ListTile(
+                          leading: Icon(Icons.info_outline, color: Colors.blue),
+                          title: Text(
+                            'Vérification par le serveur',
+                            style: TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          child: Icon(
-                            Icons.access_time,
-                            color: AppTheme.primaryColor,
+                          subtitle: Text(
+                            "Dans le navigateur, la vérification des factures "
+                            "auprès de la DGI est faite par le serveur : il n'y a "
+                            "ni synchronisation différée ni réglage d'extraction. "
+                            "Une connexion est nécessaire pour scanner.",
                           ),
                         ),
-                        title: const Text('Heure de synchronisation'),
-                        subtitle: const Text(
-                          'Les scans en attente seront envoyés à cette heure',
+                      ],
+                    ),
+                  ],
+
+                  if (!kIsWeb) ...[
+                    // Section: Synchronisation programmée
+                    _buildSectionHeader(
+                      icon: Icons.schedule,
+                      title: 'Synchronisation programmée',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildCard(
+                      children: [
+                        SwitchListTile.adaptive(
+                          title: const Text(
+                            'Synchronisation automatique',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            _autoSyncEnabled
+                                ? 'Les scans seront envoyés au serveur à l\'heure programmée'
+                                : 'Synchronisation manuelle uniquement',
+                          ),
+                          value: _autoSyncEnabled,
+                          activeThumbColor: AppTheme.primaryColor,
+                          onChanged: (value) {
+                            setState(() => _autoSyncEnabled = value);
+                          },
                         ),
-                        trailing: InkWell(
-                          onTap: _selectTime,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
+                        if (_autoSyncEnabled) ...[
+                          const Divider(),
+                          ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withValues(
+                                  alpha: 0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.access_time,
+                                color: AppTheme.primaryColor,
+                              ),
                             ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryColor,
+                            title: const Text('Heure de synchronisation'),
+                            subtitle: const Text(
+                              'Les scans en attente seront envoyés à cette heure',
+                            ),
+                            trailing: InkWell(
+                              onTap: _selectTime,
                               borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              _formatTime(_syncHour, _syncMinute),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _formatTime(_syncHour, _syncMinute),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                    const Divider(),
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.history,
-                          color: Colors.orange,
-                        ),
-                      ),
-                      title: const Text('Dernière synchronisation'),
-                      trailing: Text(
-                        _formatLastSync(_lastSync),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Section: Extraction locale
-                _buildSectionHeader(
-                  icon: Icons.phone_android,
-                  title: 'Extraction locale',
-                ),
-                const SizedBox(height: 12),
-                _buildCard(
-                  children: [
-                    const ListTile(
-                      leading: Icon(Icons.info_outline, color: Colors.blue),
-                      title: Text(
-                        'Traitement côté client',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        'Quand vous scannez en mode hors-ligne, l\'application '
-                        'charge la page DGI dans un navigateur intégré, extrait '
-                        'les données (fournisseur, montant, numéro de facture) '
-                        'et les stocke localement. Le serveur n\'a plus besoin de '
-                        'refaire l\'extraction lors de la synchronisation.',
-                      ),
-                    ),
-                    const Divider(),
-                    Consumer<ScanProvider>(
-                      builder: (context, scan, _) {
-                        return ListTile(
+                        ],
+                        const Divider(),
+                        ListTile(
                           leading: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                              color: Colors.orange.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(
-                              Icons.timer_rounded,
-                              color: AppTheme.primaryColor,
+                            child: const Icon(
+                              Icons.history,
+                              color: Colors.orange,
                             ),
                           ),
-                          title: const Text(
-                            'Délai de vérification DGI',
+                          title: const Text('Dernière synchronisation'),
+                          trailing: Text(
+                            _formatLastSync(_lastSync),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Section: Extraction locale
+                    _buildSectionHeader(
+                      icon: Icons.phone_android,
+                      title: 'Extraction locale',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildCard(
+                      children: [
+                        const ListTile(
+                          leading: Icon(Icons.info_outline, color: Colors.blue),
+                          title: Text(
+                            'Traitement côté client',
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text(
-                                'Si la vérification prend plus de ${scan.verificationTimeout}s, '
-                                'un formulaire de saisie manuelle s\'affichera.',
+                          subtitle: Text(
+                            'Quand vous scannez en mode hors-ligne, l\'application '
+                            'charge la page DGI dans un navigateur intégré, extrait '
+                            'les données (fournisseur, montant, numéro de facture) '
+                            'et les stocke localement. Le serveur n\'a plus besoin de '
+                            'refaire l\'extraction lors de la synchronisation.',
+                          ),
+                        ),
+                        const Divider(),
+                        Consumer<ScanProvider>(
+                          builder: (context, scan, _) {
+                            return ListTile(
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.timer_rounded,
+                                  color: AppTheme.primaryColor,
+                                ),
                               ),
-                              const SizedBox(height: 8),
-                              Row(
+                              title: const Text(
+                                'Délai de vérification DGI',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('1s'),
-                                  Expanded(
-                                    child: Slider(
-                                      value: scan.verificationTimeout.toDouble(),
-                                      min: 1,
-                                      max: 30,
-                                      divisions: 29,
-                                      label: '${scan.verificationTimeout}s',
-                                      activeColor: AppTheme.primaryColor,
-                                      onChanged: (value) {
-                                        scan.setVerificationTimeout(value.round());
-                                      },
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Si la vérification prend plus de ${scan.verificationTimeout}s, '
+                                    'un formulaire de saisie manuelle s\'affichera.',
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      const Text('1s'),
+                                      Expanded(
+                                        child: Slider(
+                                          value: scan.verificationTimeout
+                                              .toDouble(),
+                                          min: 1,
+                                          max: 30,
+                                          divisions: 29,
+                                          label: '${scan.verificationTimeout}s',
+                                          activeColor: AppTheme.primaryColor,
+                                          onChanged: (value) {
+                                            scan.setVerificationTimeout(
+                                              value.round(),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const Text('30s'),
+                                    ],
+                                  ),
+                                  Center(
+                                    child: Text(
+                                      '${scan.verificationTimeout} secondes',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.primaryColor,
+                                        fontSize: 16,
+                                      ),
                                     ),
                                   ),
-                                  const Text('30s'),
                                 ],
                               ),
-                              Center(
-                                child: Text(
-                                  '${scan.verificationTimeout} secondes',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryColor,
-                                    fontSize: 16,
-                                  ),
-                                ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 32),
+
+                  // Boutons d'action
+                  if (!kIsWeb)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _isSaving ? null : _syncNow,
+                            icon: _isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.sync),
+                            label: const Text('Synchroniser maintenant'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            ],
+                            ),
                           ),
-                        );
-                      },
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _isSaving ? null : _saveSettings,
+                            icon: _isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.save),
+                            label: const Text('Sauvegarder'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
                 ],
-
-                const SizedBox(height: 32),
-
-                // Boutons d'action
-                if (!kIsWeb)
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _isSaving ? null : _syncNow,
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.sync),
-                        label: const Text('Synchroniser maintenant'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _isSaving ? null : _saveSettings,
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.save),
-                        label: const Text('Sauvegarder'),
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
       ),
     );
   }
 
-  Widget _buildSectionHeader({
-    required IconData icon,
-    required String title,
-  }) {
+  Widget _buildSectionHeader({required IconData icon, required String title}) {
     return Row(
       children: [
         Icon(icon, size: 20, color: AppTheme.primaryColor),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -475,9 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: Colors.grey.withValues(alpha: 0.2),
-        ),
+        side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: Column(children: children),
     );

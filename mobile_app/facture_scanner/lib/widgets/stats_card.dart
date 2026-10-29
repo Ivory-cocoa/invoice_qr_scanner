@@ -14,12 +14,12 @@ class StatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = AppTheme.isDark(context);
-    
+
     return Consumer<ScanProvider>(
       builder: (context, scan, _) {
         // Utiliser combinedStats pour inclure les compteurs locaux
         final stats = scan.combinedStats;
-        
+
         return Container(
           decoration: AppTheme.getCardDecoration(context),
           child: Column(
@@ -29,8 +29,12 @@ class StatsCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: isDark ? AppTheme.darkGradient : AppTheme.primaryGradient,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  gradient: isDark
+                      ? AppTheme.darkGradient
+                      : AppTheme.primaryGradient,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -60,17 +64,14 @@ class StatsCard extends StatelessWidget {
                         ),
                         Text(
                           'Aperçu de vos scans',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              
+
               // Grille de statistiques
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -130,7 +131,8 @@ class StatsCard extends StatelessWidget {
                           child: _buildStatItem(
                             context: context,
                             label: 'Doublons',
-                            value: '${stats['duplicate_attempts'] ?? stats['duplicate_scans'] ?? 0}',
+                            value:
+                                '${stats['duplicate_attempts'] ?? stats['duplicate_scans'] ?? 0}',
                             icon: Icons.content_copy_rounded,
                             color: AppTheme.getWarning(context),
                           ),
@@ -150,10 +152,10 @@ class StatsCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Séparateur
               Divider(height: 1, color: AppTheme.getDivider(context)),
-              
+
               // Montant total
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -162,7 +164,9 @@ class StatsCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: AppTheme.getSuccess(context).withValues(alpha: isDark ? 0.2 : 0.1),
+                        color: AppTheme.getSuccess(
+                          context,
+                        ).withValues(alpha: isDark ? 0.2 : 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -197,7 +201,8 @@ class StatsCard extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          if (((stats['refund_count'] as num?)?.toInt() ?? 0) > 0)
+                          if (((stats['refund_count'] as num?)?.toInt() ?? 0) >
+                              0)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
@@ -216,7 +221,7 @@ class StatsCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
+
               // Durée moyenne de vérification
               if ((stats['avg_verification_duration'] ?? 0) > 0) ...[
                 Divider(height: 1, color: AppTheme.getDivider(context)),
@@ -227,7 +232,9 @@ class StatsCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF5C6BC0).withValues(alpha: isDark ? 0.2 : 0.1),
+                          color: const Color(
+                            0xFF5C6BC0,
+                          ).withValues(alpha: isDark ? 0.2 : 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -251,7 +258,9 @@ class StatsCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              _formatDuration(stats['avg_verification_duration']),
+                              _formatDuration(
+                                stats['avg_verification_duration'],
+                              ),
                               style: const TextStyle(
                                 color: Color(0xFF5C6BC0),
                                 fontSize: 22,
@@ -263,9 +272,14 @@ class StatsCard extends StatelessWidget {
                       ),
                       if ((stats['manual_entry_count'] ?? 0) > 0)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: AppTheme.getWarning(context).withValues(alpha: isDark ? 0.2 : 0.1),
+                            color: AppTheme.getWarning(
+                              context,
+                            ).withValues(alpha: isDark ? 0.2 : 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -296,7 +310,7 @@ class StatsCard extends StatelessWidget {
     required Color color,
   }) {
     final isDark = AppTheme.isDark(context);
-    
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

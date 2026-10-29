@@ -25,8 +25,8 @@ class _OtLinkConfig {
     this.costType,
     String initialAmount = '',
     String initialDesc = '',
-  })  : amountCtrl = TextEditingController(text: initialAmount),
-        descCtrl = TextEditingController(text: initialDesc);
+  }) : amountCtrl = TextEditingController(text: initialAmount),
+       descCtrl = TextEditingController(text: initialDesc);
 
   void dispose() {
     amountCtrl.dispose();
@@ -52,6 +52,7 @@ class _OtLinkConfig {
 class LinkToOtScreen extends StatefulWidget {
   final int scanId;
   final String? invoiceLabel;
+
   /// Montant à répartir, en VALEUR ABSOLUE (y compris pour un avoir).
   final double? invoiceAmount;
 
@@ -127,10 +128,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
       _loadingOts = true;
       _costTypesError = null;
     });
-    final results = await Future.wait([
-      _api.listOts(),
-      _api.getOtCostTypes(),
-    ]);
+    final results = await Future.wait([_api.listOts(), _api.getOtCostTypes()]);
     if (!mounted) return;
     final otsResp = results[0];
     final ctResp = results[1];
@@ -140,14 +138,15 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
         _ots = List<Map<String, dynamic>>.from(otsResp.data!['ots'] ?? []);
       }
       if (ctResp.success && ctResp.data != null) {
-        _costTypes =
-            List<Map<String, dynamic>>.from(ctResp.data!['cost_types'] ?? []);
+        _costTypes = List<Map<String, dynamic>>.from(
+          ctResp.data!['cost_types'] ?? [],
+        );
         if (_costTypes.isEmpty) {
           _costTypesError = 'Aucun type de coût disponible';
         }
       } else {
-        _costTypesError = ctResp.errorMessage ??
-            'Impossible de charger les types de coût';
+        _costTypesError =
+            ctResp.errorMessage ?? 'Impossible de charger les types de coût';
       }
     });
   }
@@ -180,8 +179,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
   bool _isAutoFilledDesc(String text) {
     final t = text.trim();
     if (t.isEmpty) return true;
-    return _costTypes
-        .any((ct) => (ct['label']?.toString() ?? '').trim() == t);
+    return _costTypes.any((ct) => (ct['label']?.toString() ?? '').trim() == t);
   }
 
   void _toggleOt(Map<String, dynamic> ot, bool selected) {
@@ -257,7 +255,9 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
 
   /// Affecte le solde restant (facture - déjà alloué) à une seule ligne.
   void _fillRemainingOn(int otId) {
-    if (widget.invoiceAmount == null || widget.invoiceAmount!.abs() <= 0) return;
+    if (widget.invoiceAmount == null || widget.invoiceAmount!.abs() <= 0) {
+      return;
+    }
     final cfg = _selected[otId];
     if (cfg == null) return;
     // Total alloué hors cette ligne
@@ -265,7 +265,8 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
     for (final e in _selected.entries) {
       if (e.key == otId) continue;
       final v = double.tryParse(
-          e.value.amountCtrl.text.trim().replaceAll(',', '.'));
+        e.value.amountCtrl.text.trim().replaceAll(',', '.'),
+      );
       if (v != null) other += v;
     }
     final remaining = widget.invoiceAmount! - other;
@@ -307,8 +308,9 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
     setState(() {
       cfg.loadingExisting = false;
       if (resp.success && resp.data != null) {
-        cfg.existingLines =
-            List<Map<String, dynamic>>.from(resp.data!['lines'] ?? []);
+        cfg.existingLines = List<Map<String, dynamic>>.from(
+          resp.data!['lines'] ?? [],
+        );
       }
     });
   }
@@ -316,7 +318,9 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
   double get _totalAmount {
     double total = 0;
     for (final cfg in _selected.values) {
-      final v = double.tryParse(cfg.amountCtrl.text.trim().replaceAll(',', '.'));
+      final v = double.tryParse(
+        cfg.amountCtrl.text.trim().replaceAll(',', '.'),
+      );
       if (v != null) total += v;
     }
     return total;
@@ -358,7 +362,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
     final error = _validateBeforeSubmit();
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppTheme.getError(context)),
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppTheme.getError(context),
+        ),
       );
       return;
     }
@@ -401,7 +408,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
   }
 
   Future<void> _showResultsDialog(
-      int linked, int errors, List<Map<String, dynamic>> results) async {
+    int linked,
+    int errors,
+    List<Map<String, dynamic>> results,
+  ) async {
     return showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -433,8 +443,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
               }
               return ListTile(
                 leading: Icon(icon, color: color),
-                title: Text(_selectedOtData[r['ot_id']]?['reference'] ??
-                    'OT #${r['ot_id']}'),
+                title: Text(
+                  _selectedOtData[r['ot_id']]?['reference'] ??
+                      'OT #${r['ot_id']}',
+                ),
                 subtitle: Text(_statusLabel(status, r['error_message'])),
               );
             }).toList(),
@@ -603,20 +615,19 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
       color: AppTheme.getError(context).withValues(alpha: 0.10),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded,
-              color: AppTheme.getError(context), size: 18),
+          Icon(
+            Icons.warning_amber_rounded,
+            color: AppTheme.getError(context),
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _costTypesError ?? '',
-              style: TextStyle(
-                  color: AppTheme.getError(context), fontSize: 12),
+              style: TextStyle(color: AppTheme.getError(context), fontSize: 12),
             ),
           ),
-          TextButton(
-            onPressed: _loadInitial,
-            child: const Text('Réessayer'),
-          ),
+          TextButton(onPressed: _loadInitial, child: const Text('Réessayer')),
         ],
       ),
     );
@@ -628,8 +639,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
       children: [
         Row(
           children: [
-            const Text('1. Sélection des OTs',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              '1. Sélection des OTs',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const Spacer(),
             if (_selected.isNotEmpty)
               Container(
@@ -710,12 +723,13 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                   ),
                   subtitle: Text(
                     [
-                      if ((ot['vessel_name'] ?? '').toString().isNotEmpty)
-                        ot['vessel_name'],
-                      if ((ot['campaign'] ?? '').toString().isNotEmpty)
-                        ot['campaign'],
-                      ot['state_label'],
-                    ].where((e) => e != null && e.toString().isNotEmpty)
+                          if ((ot['vessel_name'] ?? '').toString().isNotEmpty)
+                            ot['vessel_name'],
+                          if ((ot['campaign'] ?? '').toString().isNotEmpty)
+                            ot['campaign'],
+                          ot['state_label'],
+                        ]
+                        .where((e) => e != null && e.toString().isNotEmpty)
                         .join(' • '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -735,8 +749,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
       children: [
         Row(
           children: [
-            const Text('2. Configuration des liens',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              '2. Configuration des liens',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -754,8 +770,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
         const SizedBox(height: 4),
         Text(
           'Choisissez le type de coût et le montant pour chaque OT.',
-          style: TextStyle(
-              fontSize: 12, color: AppTheme.getTextMuted(context)),
+          style: TextStyle(fontSize: 12, color: AppTheme.getTextMuted(context)),
         ),
         // Actions rapides de répartition (uniquement si le montant facture est connu)
         if (widget.invoiceAmount != null && widget.invoiceAmount! > 0) ...[
@@ -776,9 +791,11 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
               OutlinedButton.icon(
                 onPressed: _fillAllWithInvoiceAmount,
                 icon: const Icon(Icons.content_copy, size: 16),
-                label: Text(_selected.length >= 2
-                    ? 'Même montant partout'
-                    : 'Utiliser montant facture'),
+                label: Text(
+                  _selected.length >= 2
+                      ? 'Même montant partout'
+                      : 'Utiliser montant facture',
+                ),
                 style: OutlinedButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                 ),
@@ -815,7 +832,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
   }
 
   Widget _buildOtConfigCard(
-      int otId, _OtLinkConfig cfg, Map<String, dynamic> ot) {
+    int otId,
+    _OtLinkConfig cfg,
+    Map<String, dynamic> ot,
+  ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -830,7 +850,9 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                   child: Text(
                     ot['reference']?.toString() ?? 'OT #$otId',
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 15),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -891,13 +913,13 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                 onChanged: _costTypes.isEmpty
                     ? null
                     : (v) => setState(() {
-                          // Préremplit la description avec le libellé du type
-                          // de coût, sans écraser une saisie manuelle.
-                          if (_isAutoFilledDesc(cfg.descCtrl.text)) {
-                            cfg.descCtrl.text = _labelForCostType(v);
-                          }
-                          cfg.costType = v;
-                        }),
+                        // Préremplit la description avec le libellé du type
+                        // de coût, sans écraser une saisie manuelle.
+                        if (_isAutoFilledDesc(cfg.descCtrl.text)) {
+                          cfg.descCtrl.text = _labelForCostType(v);
+                        }
+                        cfg.costType = v;
+                      }),
               ),
             ] else ...[
               if (cfg.loadingExisting)
@@ -932,8 +954,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                     setState(() {
                       cfg.existingCostLineId = v;
                       // Pré-remplir le montant avec celui de la ligne sélectionnée
-                      final match = cfg.existingLines
-                          .firstWhere((l) => l['id'] == v, orElse: () => {});
+                      final match = cfg.existingLines.firstWhere(
+                        (l) => l['id'] == v,
+                        orElse: () => {},
+                      );
                       final amt = match['amount'];
                       if (amt != null) {
                         cfg.amountCtrl.text = amt.toString();
@@ -945,7 +969,9 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: cfg.amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
               ],
@@ -953,7 +979,8 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                 labelText: 'Montant',
                 border: const OutlineInputBorder(),
                 isDense: true,
-                suffixIcon: (widget.invoiceAmount != null &&
+                suffixIcon:
+                    (widget.invoiceAmount != null &&
                         widget.invoiceAmount!.abs() > 0)
                     ? IconButton(
                         icon: const Icon(Icons.swap_horiz, size: 18),
@@ -975,37 +1002,55 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
               maxLines: 2,
             ),
             // Badge de validation inline
-            Builder(builder: (_) {
-              final issue = _cardIssue(otId, cfg);
-              if (issue == null) {
+            Builder(
+              builder: (_) {
+                final issue = _cardIssue(otId, cfg);
+                if (issue == null) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          size: 14,
+                          color: AppTheme.getSuccess(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Prêt',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.getSuccess(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
                 return Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Row(children: [
-                    Icon(Icons.check_circle,
-                        size: 14, color: AppTheme.getSuccess(context)),
-                    const SizedBox(width: 4),
-                    Text('Prêt',
-                        style: TextStyle(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 14,
+                        color: AppTheme.getError(context),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          issue,
+                          style: TextStyle(
                             fontSize: 11,
-                            color: AppTheme.getSuccess(context))),
-                  ]),
-                );
-              }
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(children: [
-                  Icon(Icons.error_outline,
-                      size: 14, color: AppTheme.getError(context)),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(issue,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.getError(context))),
+                            color: AppTheme.getError(context),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
-              );
-            }),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -1044,9 +1089,7 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
-          border: Border(
-            top: BorderSide(color: AppTheme.getDivider(context)),
-          ),
+          border: Border(top: BorderSide(color: AppTheme.getDivider(context))),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -1056,106 +1099,110 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
           ],
         ),
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hasInvoice) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progressValue,
-                minHeight: 6,
-                backgroundColor: AppTheme.getDivider(context),
-                valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Total ${_selected.length} OT(s)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.getTextMuted(context),
-                          ),
-                        ),
-                        if (hasInvoice) ...[
-                          const SizedBox(width: 6),
-                          Icon(
-                            matches ? Icons.check_circle : Icons.info_outline,
-                            size: 14,
-                            color: progressColor,
-                          ),
-                        ],
-                      ],
-                    ),
-                    Text(
-                      _formatXof(_totalAmount),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: progressColor,
-                      ),
-                    ),
-                    if (hasInvoice && !matches)
-                      Text(
-                        delta > 0
-                            ? '⚠ +${_formatXof(delta)} au-delà du facturé'
-                            : '${_formatXof(delta.abs())} restant à allouer',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: progressColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    if (globalIssue != null && _selected.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          globalIssue,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppTheme.getError(context),
-                            fontStyle: FontStyle.italic,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasInvoice) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progressValue,
+                  minHeight: 6,
+                  backgroundColor: AppTheme.getDivider(context),
+                  valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: canSubmit ? _submit : null,
-                icon: _submitting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.link),
-                label: Text(_submitting
-                    ? 'Envoi...'
-                    : 'Lier ${_selected.length} OT(s)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.getPrimary(context),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade400,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 14),
-                ),
-              ),
+              const SizedBox(height: 8),
             ],
-          ),
-        ],
-      ),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Total ${_selected.length} OT(s)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.getTextMuted(context),
+                            ),
+                          ),
+                          if (hasInvoice) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              matches ? Icons.check_circle : Icons.info_outline,
+                              size: 14,
+                              color: progressColor,
+                            ),
+                          ],
+                        ],
+                      ),
+                      Text(
+                        _formatXof(_totalAmount),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: progressColor,
+                        ),
+                      ),
+                      if (hasInvoice && !matches)
+                        Text(
+                          delta > 0
+                              ? '⚠ +${_formatXof(delta)} au-delà du facturé'
+                              : '${_formatXof(delta.abs())} restant à allouer',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: progressColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      if (globalIssue != null && _selected.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            globalIssue,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppTheme.getError(context),
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: canSubmit ? _submit : null,
+                  icon: _submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.link),
+                  label: Text(
+                    _submitting ? 'Envoi...' : 'Lier ${_selected.length} OT(s)',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.getPrimary(context),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade400,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

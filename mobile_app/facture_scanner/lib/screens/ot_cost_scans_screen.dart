@@ -32,7 +32,9 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   final ApiService _api = ApiService();
   final TextEditingController _searchCtrl = TextEditingController();
   final NumberFormat _money = NumberFormat.currency(
-    locale: 'fr_FR', symbol: '', decimalDigits: 0,
+    locale: 'fr_FR',
+    symbol: '',
+    decimalDigits: 0,
   );
 
   Timer? _debounce;
@@ -46,9 +48,13 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   void initState() {
     super.initState();
     if (widget.qrPayload != null && widget.qrPayload!.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadByQr(widget.qrPayload!));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _loadByQr(widget.qrPayload!),
+      );
     } else if (widget.initialOtId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadById(widget.initialOtId!));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _loadById(widget.initialOtId!),
+      );
     }
   }
 
@@ -64,7 +70,10 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _loadById(int otId) async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final resp = await _api.getOtCostScans(otId);
     if (!mounted) return;
     setState(() {
@@ -80,7 +89,10 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   }
 
   Future<void> _loadByQr(String payload) async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final resp = await _api.getOtByQr(payload);
     if (!mounted) return;
     setState(() {
@@ -101,7 +113,10 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
       setState(() => _suggestions = []);
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 300), () => _runSearch(q.trim()));
+    _debounce = Timer(
+      const Duration(milliseconds: 300),
+      () => _runSearch(q.trim()),
+    );
   }
 
   Future<void> _runSearch(String q) async {
@@ -123,9 +138,9 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _openQrScanner() async {
-    final scanned = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const _OtQrScannerPage()),
-    );
+    final scanned = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const _OtQrScannerPage()));
     if (scanned != null && scanned.isNotEmpty) {
       _loadByQr(scanned);
     }
@@ -138,7 +153,9 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.isDark(context) ? AppTheme.darkSurface : AppTheme.primarySurface,
+      backgroundColor: AppTheme.isDark(context)
+          ? AppTheme.darkSurface
+          : AppTheme.primarySurface,
       appBar: AppBar(
         title: const Text('Consulter un OT'),
         backgroundColor: AppTheme.primaryColor,
@@ -179,19 +196,20 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
               ? const Padding(
                   padding: EdgeInsets.all(12),
                   child: SizedBox(
-                    width: 20, height: 20,
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 )
               : (_searchCtrl.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _suggestions = []);
-                      },
-                    )
-                  : null),
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _suggestions = []);
+                        },
+                      )
+                    : null),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: AppTheme.primarySurface,
@@ -213,21 +231,29 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
           final cnt = ot['cost_count'] ?? 0;
           return ListTile(
             dense: true,
-            leading: const Icon(Icons.local_shipping, color: AppTheme.primaryColor),
+            leading: const Icon(
+              Icons.local_shipping,
+              color: AppTheme.primaryColor,
+            ),
             title: Text(
               ot['ot_reference'] ?? ot['name'] ?? '—',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: Text(
               [
-                if ((ot['vessel_name'] ?? '').toString().isNotEmpty) 'Navire: ${ot['vessel_name']}',
-                if ((ot['state_label'] ?? '').toString().isNotEmpty) ot['state_label'],
+                if ((ot['vessel_name'] ?? '').toString().isNotEmpty)
+                  'Navire: ${ot['vessel_name']}',
+                if ((ot['state_label'] ?? '').toString().isNotEmpty)
+                  ot['state_label'],
               ].join(' • '),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             trailing: Chip(
-              label: Text('$cnt coût${cnt == 1 ? '' : 's'}',
-                  style: const TextStyle(fontSize: 11)),
+              label: Text(
+                '$cnt coût${cnt == 1 ? '' : 's'}',
+                style: const TextStyle(fontSize: 11),
+              ),
               backgroundColor: AppTheme.primarySurface,
               visualDensity: VisualDensity.compact,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -284,8 +310,11 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
           children: [
             Icon(Icons.error_outline, size: 64, color: AppTheme.errorColor),
             const SizedBox(height: 12),
-            Text(msg, textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16)),
+            Text(
+              msg,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               icon: const Icon(Icons.qr_code_scanner),
@@ -305,7 +334,11 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.qr_code_2, size: 96, color: AppTheme.primaryColor.withValues(alpha: 0.4)),
+            Icon(
+              Icons.qr_code_2,
+              size: 96,
+              color: AppTheme.primaryColor.withValues(alpha: 0.4),
+            ),
             const SizedBox(height: 16),
             const Text(
               'Scannez le QR-code d\'un OT ou recherchez-le par référence pour afficher ses coûts opérationnels.',
@@ -319,7 +352,10 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
               ),
               onPressed: _openQrScanner,
             ),
@@ -370,25 +406,38 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
                     color: AppTheme.primarySurface,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.local_shipping, color: AppTheme.primaryColor),
+                  child: Icon(
+                    Icons.local_shipping,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(ot['ot_reference'] ?? '—',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(
+                        ot['ot_reference'] ?? '—',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       if ((ot['name'] ?? '').toString().isNotEmpty &&
                           ot['name'] != ot['ot_reference'])
-                        Text(ot['name'], style: const TextStyle(color: Colors.black54)),
+                        Text(
+                          ot['name'],
+                          style: const TextStyle(color: Colors.black54),
+                        ),
                     ],
                   ),
                 ),
                 if ((ot['state_label'] ?? '').toString().isNotEmpty)
                   Chip(
-                    label: Text(ot['state_label'],
-                        style: const TextStyle(fontSize: 11, color: Colors.white)),
+                    label: Text(
+                      ot['state_label'],
+                      style: const TextStyle(fontSize: 11, color: Colors.white),
+                    ),
                     backgroundColor: AppTheme.primaryColor,
                   ),
               ],
@@ -411,10 +460,15 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
         children: [
           Icon(icon, size: 16, color: Colors.black54),
           const SizedBox(width: 6),
-          Text('$label: ', style: const TextStyle(color: Colors.black54, fontSize: 13)),
+          Text(
+            '$label: ',
+            style: const TextStyle(color: Colors.black54, fontSize: 13),
+          ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -435,8 +489,22 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
           children: [
             Row(
               children: [
-                Expanded(child: _miniStat('Coûts', '$count', Icons.list_alt, AppTheme.primaryColor)),
-                Expanded(child: _miniStat('Scans', '$scans', Icons.qr_code, AppTheme.infoColor)),
+                Expanded(
+                  child: _miniStat(
+                    'Coûts',
+                    '$count',
+                    Icons.list_alt,
+                    AppTheme.primaryColor,
+                  ),
+                ),
+                Expanded(
+                  child: _miniStat(
+                    'Scans',
+                    '$scans',
+                    Icons.qr_code,
+                    AppTheme.infoColor,
+                  ),
+                ),
               ],
             ),
             const Divider(height: 16),
@@ -454,21 +522,48 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
       children: [
         Icon(icon, color: color),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: Colors.black54),
+        ),
       ],
     );
   }
 
-  Widget _amountRow(String label, double value, String cur, Color color, {bool bold = false}) {
+  Widget _amountRow(
+    String label,
+    double value,
+    String cur,
+    Color color, {
+    bool bold = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: color, fontWeight: bold ? FontWeight.bold : FontWeight.w500)),
-          Text('${_money.format(value)} $cur',
-              style: TextStyle(color: color, fontWeight: bold ? FontWeight.bold : FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
+          Text(
+            '${_money.format(value)} $cur',
+            style: TextStyle(
+              color: color,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -481,12 +576,16 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
         child: Text(
           'COÛTS OPÉRATIONNELS (${lines.length})',
           style: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold,
-            color: Colors.black54, letterSpacing: 1.2,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.black54,
+            letterSpacing: 1.2,
           ),
         ),
       ),
-      ...lines.map((l) => _CostLineCard(line: l as Map<String, dynamic>, money: _money)),
+      ...lines.map(
+        (l) => _CostLineCard(line: l as Map<String, dynamic>, money: _money),
+      ),
     ];
   }
 }
@@ -502,21 +601,31 @@ class _CostLineCard extends StatelessWidget {
 
   Color _stateColor(String state) {
     switch (state) {
-      case 'paid': return AppTheme.successColor;
-      case 'pending': return AppTheme.warningColor;
-      case 'confirmed': return AppTheme.infoColor;
-      case 'estimated': return Colors.grey;
-      default: return Colors.black54;
+      case 'paid':
+        return AppTheme.successColor;
+      case 'pending':
+        return AppTheme.warningColor;
+      case 'confirmed':
+        return AppTheme.infoColor;
+      case 'estimated':
+        return Colors.grey;
+      default:
+        return Colors.black54;
     }
   }
 
   IconData _stateIcon(String state) {
     switch (state) {
-      case 'paid': return Icons.check_circle;
-      case 'pending': return Icons.hourglass_top;
-      case 'confirmed': return Icons.fact_check;
-      case 'estimated': return Icons.edit_note;
-      default: return Icons.help_outline;
+      case 'paid':
+        return Icons.check_circle;
+      case 'pending':
+        return Icons.hourglass_top;
+      case 'confirmed':
+        return Icons.fact_check;
+      case 'estimated':
+        return Icons.edit_note;
+      default:
+        return Icons.help_outline;
     }
   }
 
@@ -549,24 +658,37 @@ class _CostLineCard extends StatelessWidget {
                         line['name']?.toString().isNotEmpty == true
                             ? line['name']
                             : (line['cost_type_label'] ?? '—'),
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
                       Text(
                         '${line['reference'] ?? ''} • ${line['cost_type_label'] ?? ''}',
-                        style: const TextStyle(fontSize: 11, color: Colors.black54),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black54,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     line['state_label'] ?? state,
-                    style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ],
@@ -595,7 +717,9 @@ class _CostLineCard extends StatelessWidget {
                       Container(
                         margin: const EdgeInsets.only(right: 6),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppTheme.errorColor,
                           borderRadius: BorderRadius.circular(5),
@@ -623,15 +747,13 @@ class _CostLineCard extends StatelessWidget {
               ],
             ),
             // Bloc paiement
-            if (payment != null && (payment['method'] ?? '').toString().isNotEmpty) ...[
+            if (payment != null &&
+                (payment['method'] ?? '').toString().isNotEmpty) ...[
               const SizedBox(height: 8),
               _paymentBlock(payment, color),
             ],
             // Bloc scan
-            if (scan != null) ...[
-              const SizedBox(height: 8),
-              _scanBlock(scan),
-            ],
+            if (scan != null) ...[const SizedBox(height: 8), _scanBlock(scan)],
           ],
         ),
       ),
@@ -640,9 +762,15 @@ class _CostLineCard extends StatelessWidget {
 
   Widget _paymentBlock(Map<String, dynamic> p, Color color) {
     final parts = <String>[];
-    if ((p['method_label'] ?? '').toString().isNotEmpty) parts.add(p['method_label']);
-    if ((p['check_number'] ?? '').toString().isNotEmpty) parts.add('N° ${p['check_number']}');
-    if ((p['payment_reference'] ?? '').toString().isNotEmpty) parts.add(p['payment_reference']);
+    if ((p['method_label'] ?? '').toString().isNotEmpty) {
+      parts.add(p['method_label']);
+    }
+    if ((p['check_number'] ?? '').toString().isNotEmpty) {
+      parts.add('N° ${p['check_number']}');
+    }
+    if ((p['payment_reference'] ?? '').toString().isNotEmpty) {
+      parts.add(p['payment_reference']);
+    }
     if ((p['payment_date'] ?? '').toString().isNotEmpty) {
       try {
         final d = DateTime.parse(p['payment_date']);
@@ -662,12 +790,22 @@ class _CostLineCard extends StatelessWidget {
           Expanded(
             child: Text(
               parts.isEmpty ? 'Paiement enregistré' : parts.join(' • '),
-              style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           if ((p['payment_request_ref'] ?? '').toString().isNotEmpty)
-            Text(p['payment_request_ref'],
-                style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold)),
+            Text(
+              p['payment_request_ref'],
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
         ],
       ),
     );
@@ -694,22 +832,31 @@ class _CostLineCard extends StatelessWidget {
                   '📷 Scan DGI ${scan['reference'] ?? ''}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 12, color: AppTheme.infoColor),
+                    fontSize: 12,
+                    color: AppTheme.infoColor,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 4),
           if ((scan['supplier_name'] ?? '').toString().isNotEmpty)
-            Text('Fournisseur: ${scan['supplier_name']}',
-                style: const TextStyle(fontSize: 12)),
+            Text(
+              'Fournisseur: ${scan['supplier_name']}',
+              style: const TextStyle(fontSize: 12),
+            ),
           if ((scan['invoice_number_dgi'] ?? '').toString().isNotEmpty)
-            Text('Facture DGI: ${scan['invoice_number_dgi']}',
-                style: const TextStyle(fontSize: 12)),
+            Text(
+              'Facture DGI: ${scan['invoice_number_dgi']}',
+              style: const TextStyle(fontSize: 12),
+            ),
           if (qrUrl.isNotEmpty)
-            Text(qrUrl,
-                style: const TextStyle(fontSize: 10, color: Colors.black54),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              qrUrl,
+              style: const TextStyle(fontSize: 10, color: Colors.black54),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );
@@ -774,7 +921,9 @@ class _OtQrScannerPageState extends State<_OtQrScannerPage> {
         children: [
           MobileScanner(controller: _controller, onDetect: _onDetect),
           Positioned(
-            left: 0, right: 0, bottom: 32,
+            left: 0,
+            right: 0,
+            bottom: 32,
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 32),
               padding: const EdgeInsets.all(12),

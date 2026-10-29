@@ -6,7 +6,7 @@
 #   1. Vérifie que la configuration pointe bien vers la PRODUCTION
 #      (https://odoo.ivorycocoa.ci).
 #   2. Récupère les dépendances (flutter pub get).
-#   3. Analyse statique (flutter analyze) — bloque sur erreur.
+#   3. Format (dart format) puis analyse statique (flutter analyze) — bloquent.
 #   4. Tests unitaires (flutter test) — bloque sur échec.
 #   5. Construit l'APK release (flutter build apk --release).
 #   6. Copie l'APK horodaté dans ./dist/ et affiche le chemin + la taille.
@@ -52,6 +52,16 @@ ok "Dépendances à jour."
 
 # --- 3. Analyse statique -------------------------------------------------------
 if [[ "$SKIP_TESTS" -eq 0 ]]; then
+  # Le code est au format `dart format` (formatage à l'enregistrement dans
+  # .vscode/settings.json) : un écart signale un fichier modifié hors éditeur.
+  log "Vérification du format (dart format)…"
+  if dart format --output=none --set-exit-if-changed lib test >/dev/null; then
+    ok "Code au format."
+  else
+    dart format --output=none lib test | grep -E "^Changed" || true
+    fail "Fichiers non formatés (voir ci-dessus). Corriger avec : dart format lib test"
+  fi
+
   log "Analyse statique (flutter analyze)…"
   # On échoue uniquement sur les ERREURS, pas sur les infos/warnings de lint.
   if ! flutter analyze 2>&1 | tee /tmp/facture_scanner_analyze.log | grep -qE "error •"; then

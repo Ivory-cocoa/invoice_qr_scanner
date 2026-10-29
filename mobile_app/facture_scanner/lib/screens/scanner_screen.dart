@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/theme/app_theme.dart';
 
@@ -17,9 +18,9 @@ class ScannerScreen extends StatefulWidget {
   State<ScannerScreen> createState() => _ScannerScreenState();
 }
 
-class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProviderStateMixin {
+class _ScannerScreenState extends State<ScannerScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   MobileScannerController? _controller;
-  bool _isFlashOn = false;
   bool _hasScanned = false;
   String? _errorFlash;
   Timer? _resetTimer;
@@ -31,6 +32,27 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     super.initState();
     _initScanner();
     _setupAnimation();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Avec un contrôleur fourni, `MobileScanner` ne gère PAS le cycle de vie de
+  /// l'application : sans ceci, l'aperçu restait figé au retour d'une autre
+  /// application (et la caméra restait réservée en arrière-plan).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (!_hasScanned) unawaited(controller.start());
+      case AppLifecycleState.inactive:
+        unawaited(controller.stop());
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        return;
+    }
   }
 
   void _initScanner() {
@@ -46,7 +68,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    
+
     _scanLineAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
@@ -54,6 +76,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _resetTimer?.cancel();
     _animationController.dispose();
     // Arrêter le flux caméra AVANT de disposer le contrôleur pour éviter
@@ -80,7 +103,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       _hasScanned = true;
       HapticFeedback.vibrate();
       if (mounted) {
-        setState(() => _errorFlash = 'QR-code non reconnu. Scannez une facture DGI.');
+        setState(
+          () => _errorFlash = 'QR-code non reconnu. Scannez une facture DGI.',
+        );
       }
       _resetTimer?.cancel();
       _resetTimer = Timer(const Duration(milliseconds: 1800), () {
@@ -111,50 +136,154 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
 
   void _toggleFlash() async {
     try {
+      // L'état affiché vient du contrôleur (torchState), pas d'un booléen
+      // local qui se désynchronisait si la bascule échouait.
       await _controller?.toggleTorch();
-      if (mounted) setState(() => _isFlashOn = !_isFlashOn);
     } catch (_) {
       // Certains appareils n'ont pas de flash : ignorer silencieusement.
     }
+  }
+
+  Future<void> _retryCamera() async {
+    final controller = _controller;
+    if (controller == null) return;
+    // Après un refus, `start()` ne redemande rien tant que le contrôleur n'a
+    // pas été arrêté : `stop()` efface l'erreur.
+    await controller.stop();
+    await controller.start();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final scanAreaSize = size.width * 0.75;
-    
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Scanner camera
+          // Scanner camera (l'erreur éventuelle est affichée plus bas, au
+          // premier plan, en français)
           MobileScanner(
             controller: _controller,
             onDetect: _onDetect,
+            errorBuilder: (context, error, child) => const SizedBox.expand(),
           ),
-          
-          // Overlay sombre avec découpe
-          _buildScanOverlay(size, scanAreaSize),
-          
-          // AppBar personnalisée
-          _buildCustomAppBar(),
-          
-          // Zone de scan avec animation
-          _buildScanArea(size, scanAreaSize),
-          
-          // Instructions en bas
-          _buildInstructions(size),
 
-          // Retour visuel transitoire pour un QR non reconnu
-          if (_errorFlash != null) _buildErrorFlash(size),
+          ValueListenableBuilder<MobileScannerState>(
+            valueListenable: _controller!,
+            builder: (context, cameraState, _) {
+              final error = cameraState.error;
+              if (error != null) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _buildCameraError(error),
+                    _buildCustomAppBar(cameraState),
+                  ],
+                );
+              }
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Overlay sombre avec découpe
+                  _buildScanOverlay(size, scanAreaSize),
+
+                  // Zone de scan avec animation
+                  _buildScanArea(size, scanAreaSize),
+
+                  // Instructions en bas
+                  _buildInstructions(size),
+
+                  // AppBar personnalisée (au-dessus du dégradé)
+                  _buildCustomAppBar(cameraState),
+
+                  // Retour visuel transitoire pour un QR non reconnu
+                  if (_errorFlash != null) _buildErrorFlash(size, scanAreaSize),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildErrorFlash(Size size) {
+  /// Panneau affiché quand la caméra est inaccessible (permission refusée,
+  /// appareil non pris en charge…), à la place d'un écran noir muet.
+  Widget _buildCameraError(MobileScannerException error) {
+    final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
+    return Positioned.fill(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                denied
+                    ? Icons.no_photography_rounded
+                    : Icons.videocam_off_rounded,
+                color: Colors.white70,
+                size: 64,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                denied ? 'Accès à la caméra refusé' : 'Caméra indisponible',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                denied
+                    ? 'Autorisez l\'accès à la caméra dans les réglages du '
+                          'téléphone pour scanner les QR-codes des factures.'
+                    : 'La caméra n\'a pas pu démarrer. Fermez les autres '
+                          'applications qui l\'utilisent, puis réessayez.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 28),
+              if (denied)
+                ElevatedButton.icon(
+                  onPressed: openAppSettings,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                  ),
+                  icon: const Icon(Icons.settings_rounded),
+                  label: const Text('Ouvrir les réglages'),
+                ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _retryCamera,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Réessayer'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorFlash(Size size, double scanAreaSize) {
+    // Juste sous le cadre de scan (centré 30 px au-dessus du milieu).
     return Positioned(
-      top: size.height * 0.5 + size.width * 0.4,
+      top: size.height / 2 - 30 + scanAreaSize / 2 + 16,
       left: 24,
       right: 24,
       child: AnimatedOpacity(
@@ -176,7 +305,11 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 22),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
@@ -195,7 +328,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildCustomAppBar() {
+  Widget _buildCustomAppBar(MobileScannerState cameraState) {
+    final torch = cameraState.torchState;
+    final isFlashOn = torch == TorchState.on;
     return Positioned(
       top: 0,
       left: 0,
@@ -212,7 +347,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 onTap: () => Navigator.of(context).pop(),
                 semanticLabel: 'Retour',
               ),
-              
+
               // Titre
               const Text(
                 'Scanner QR',
@@ -222,15 +357,22 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              
-              // Bouton flash
-              _buildCircleButton(
-                icon: _isFlashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-                onTap: _toggleFlash,
-                isActive: _isFlashOn,
-                semanticLabel:
-                    _isFlashOn ? 'Désactiver le flash' : 'Activer le flash',
-              ),
+
+              // Bouton flash (masqué si l'appareil n'en a pas ; un espace de
+              // même largeur garde le titre centré)
+              if (torch == TorchState.unavailable)
+                const SizedBox(width: 50)
+              else
+                _buildCircleButton(
+                  icon: isFlashOn
+                      ? Icons.flash_on_rounded
+                      : Icons.flash_off_rounded,
+                  onTap: _toggleFlash,
+                  isActive: isFlashOn,
+                  semanticLabel: isFlashOn
+                      ? 'Désactiver le flash'
+                      : 'Activer le flash',
+                ),
             ],
           ),
         ),
@@ -248,7 +390,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
       label: semanticLabel,
       button: true,
       child: Material(
-        color: isActive ? AppTheme.primaryColor : Colors.black.withValues(alpha: 0.5),
+        color: isActive
+            ? AppTheme.primaryColor
+            : Colors.black.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(25),
         child: InkWell(
           onTap: onTap,
@@ -257,11 +401,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             width: 50,
             height: 50,
             alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 24,
-            ),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
         ),
       ),
@@ -281,7 +421,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   Widget _buildScanArea(Size size, double scanAreaSize) {
     final top = (size.height - scanAreaSize) / 2 - 30;
     final left = (size.width - scanAreaSize) / 2;
-    
+
     return Positioned(
       top: top,
       left: left,
@@ -295,7 +435,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
             _buildCorner(Alignment.topRight),
             _buildCorner(Alignment.bottomLeft),
             _buildCorner(Alignment.bottomRight),
-            
+
             // Ligne de scan animée
             AnimatedBuilder(
               animation: _scanLineAnimation,
@@ -338,7 +478,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
   Widget _buildCorner(Alignment alignment) {
     const size = 30.0;
     const thickness = 4.0;
-    
+
     BorderRadius borderRadius;
     if (alignment == Alignment.topLeft) {
       borderRadius = const BorderRadius.only(topLeft: Radius.circular(12));
@@ -349,27 +489,46 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
     } else {
       borderRadius = const BorderRadius.only(bottomRight: Radius.circular(12));
     }
-    
+
     return Positioned(
-      top: alignment == Alignment.topLeft || alignment == Alignment.topRight ? 0 : null,
-      bottom: alignment == Alignment.bottomLeft || alignment == Alignment.bottomRight ? 0 : null,
-      left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft ? 0 : null,
-      right: alignment == Alignment.topRight || alignment == Alignment.bottomRight ? 0 : null,
+      top: alignment == Alignment.topLeft || alignment == Alignment.topRight
+          ? 0
+          : null,
+      bottom:
+          alignment == Alignment.bottomLeft ||
+              alignment == Alignment.bottomRight
+          ? 0
+          : null,
+      left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
+          ? 0
+          : null,
+      right:
+          alignment == Alignment.topRight || alignment == Alignment.bottomRight
+          ? 0
+          : null,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
           border: Border(
-            top: alignment == Alignment.topLeft || alignment == Alignment.topRight
+            top:
+                alignment == Alignment.topLeft ||
+                    alignment == Alignment.topRight
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
-            bottom: alignment == Alignment.bottomLeft || alignment == Alignment.bottomRight
+            bottom:
+                alignment == Alignment.bottomLeft ||
+                    alignment == Alignment.bottomRight
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
-            left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
+            left:
+                alignment == Alignment.topLeft ||
+                    alignment == Alignment.bottomLeft
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
-            right: alignment == Alignment.topRight || alignment == Alignment.bottomRight
+            right:
+                alignment == Alignment.topRight ||
+                    alignment == Alignment.bottomRight
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
           ),
@@ -390,10 +549,7 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.8),
-            ],
+            colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
           ),
         ),
         child: Column(
@@ -411,9 +567,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
                 size: 32,
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Titre instruction
             const Text(
               'Placez le QR code dans le cadre',
@@ -424,9 +580,9 @@ class _ScannerScreenState extends State<ScannerScreen> with SingleTickerProvider
               ),
               textAlign: TextAlign.center,
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // Sous-titre
             Text(
               'Le scan sera effectué automatiquement',
@@ -449,15 +605,12 @@ class ScanOverlayPainter extends CustomPainter {
   final double scanAreaSize;
   final Color overlayColor;
 
-  ScanOverlayPainter({
-    required this.scanAreaSize,
-    required this.overlayColor,
-  });
+  ScanOverlayPainter({required this.scanAreaSize, required this.overlayColor});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = overlayColor;
-    
+
     // Zone de découpe au centre (légèrement au-dessus du centre)
     final scanRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
@@ -467,13 +620,13 @@ class ScanOverlayPainter extends CustomPainter {
       ),
       const Radius.circular(16),
     );
-    
+
     // Dessiner l'overlay avec la découpe
     final path = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
       ..addRRect(scanRect)
       ..fillType = PathFillType.evenOdd;
-    
+
     canvas.drawPath(path, paint);
   }
 

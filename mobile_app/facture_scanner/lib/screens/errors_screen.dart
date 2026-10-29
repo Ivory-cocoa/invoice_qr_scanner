@@ -19,7 +19,7 @@ class ErrorsScreen extends StatefulWidget {
 
 class _ErrorsScreenState extends State<ErrorsScreen> {
   final ApiService _api = ApiService();
-  
+
   List<ErrorRecord> _errors = [];
   bool _isLoading = true;
   bool _isRetrying = false;
@@ -29,40 +29,45 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
   bool _hasMore = false;
   Set<int> _selectedIds = {};
   bool _onlyRetryPossible = false;
-  
+
   @override
   void initState() {
     super.initState();
     _loadErrors();
   }
-  
+
   Future<void> _loadErrors({bool refresh = false}) async {
     if (refresh) {
       _page = 1;
       _selectedIds.clear();
     }
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    
+
     try {
       final response = await _api.getErrors(
         page: _page,
         limit: 20,
         retryPossible: _onlyRetryPossible ? true : null,
       );
-      
+
       if (response.success && response.data != null) {
         final List<dynamic> recordsJson = response.data!['errors'] ?? [];
-        final pagination = response.data!['pagination'] as Map<String, dynamic>?;
-        
+        final pagination =
+            response.data!['pagination'] as Map<String, dynamic>?;
+
         setState(() {
           if (refresh || _page == 1) {
-            _errors = recordsJson.map((json) => ErrorRecord.fromJson(json)).toList();
+            _errors = recordsJson
+                .map((json) => ErrorRecord.fromJson(json))
+                .toList();
           } else {
-            _errors.addAll(recordsJson.map((json) => ErrorRecord.fromJson(json)));
+            _errors.addAll(
+              recordsJson.map((json) => ErrorRecord.fromJson(json)),
+            );
           }
           _totalPages = pagination?['total_pages'] ?? 1;
           _hasMore = _page < _totalPages;
@@ -82,13 +87,13 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       });
     }
   }
-  
+
   Future<void> _retryError(ErrorRecord error) async {
     setState(() => _isRetrying = true);
-    
+
     try {
       final response = await _api.retryError(error.id);
-      
+
       if (mounted) {
         if (response.success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -112,7 +117,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                 children: [
                   const Icon(Icons.error, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(response.errorMessage ?? 'Échec du retry')),
+                  Expanded(
+                    child: Text(response.errorMessage ?? 'Échec du retry'),
+                  ),
                 ],
               ),
               backgroundColor: AppTheme.errorColor,
@@ -136,7 +143,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       }
     }
   }
-  
+
   Future<void> _bulkRetry() async {
     if (_selectedIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -147,7 +154,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       );
       return;
     }
-    
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -168,32 +175,32 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         ],
       ),
     );
-    
+
     if (confirm != true) return;
-    
+
     setState(() => _isRetrying = true);
-    
+
     try {
       final response = await _api.bulkRetryErrors(
         recordIds: _selectedIds.toList(),
       );
-      
+
       if (mounted) {
         if (response.success && response.data != null) {
           final result = BulkRetryResult.fromJson(response.data!);
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 '${result.successful}/${result.processed} scan(s) traité(s) avec succès',
               ),
-              backgroundColor: result.hasFailures 
-                  ? AppTheme.warningColor 
+              backgroundColor: result.hasFailures
+                  ? AppTheme.warningColor
                   : AppTheme.successColor,
               behavior: SnackBarBehavior.floating,
             ),
           );
-          
+
           _selectedIds.clear();
           _loadErrors(refresh: true);
         } else {
@@ -220,7 +227,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       }
     }
   }
-  
+
   void _toggleSelection(int id) {
     setState(() {
       if (_selectedIds.contains(id)) {
@@ -230,33 +237,39 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       }
     });
   }
-  
+
   void _selectAll() {
     setState(() {
       if (_selectedIds.length == _errors.where((e) => e.retryPossible).length) {
         _selectedIds.clear();
       } else {
-        _selectedIds = _errors.where((e) => e.retryPossible).map((e) => e.id).toSet();
+        _selectedIds = _errors
+            .where((e) => e.retryPossible)
+            .map((e) => e.id)
+            .toSet();
       }
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final isDark = AppTheme.isDark(context);
-    
+
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.surfaceLight,
       appBar: AppBar(
         title: const Text('Gestion des erreurs'),
-        backgroundColor: isDark ? AppTheme.darkSurfaceElevated : AppTheme.primaryColor,
+        backgroundColor: isDark
+            ? AppTheme.darkSurfaceElevated
+            : AppTheme.primaryColor,
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
           if (_errors.isNotEmpty) ...[
             IconButton(
               icon: Icon(
-                _selectedIds.length == _errors.where((e) => e.retryPossible).length
+                _selectedIds.length ==
+                        _errors.where((e) => e.retryPossible).length
                     ? Icons.deselect
                     : Icons.select_all,
               ),
@@ -279,7 +292,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             // Filtre
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: isDark ? AppTheme.darkSurfaceElevated : AppTheme.surfaceLight,
+              color: isDark
+                  ? AppTheme.darkSurfaceElevated
+                  : AppTheme.surfaceLight,
               child: Row(
                 children: [
                   FilterChip(
@@ -289,7 +304,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       setState(() => _onlyRetryPossible = selected);
                       _loadErrors(refresh: true);
                     },
-                    selectedColor: AppTheme.primaryLight.withValues(alpha: isDark ? 0.4 : 0.3),
+                    selectedColor: AppTheme.primaryLight.withValues(
+                      alpha: isDark ? 0.4 : 0.3,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   if (_selectedIds.isNotEmpty)
@@ -303,9 +320,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             ),
 
             // Liste des erreurs
-            Expanded(
-              child: _buildContent(),
-            ),
+            Expanded(child: _buildContent()),
           ],
         ),
       ),
@@ -328,22 +343,29 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
           : null,
     );
   }
-  
+
   Widget _buildContent() {
     if (_isLoading && _errors.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
-    
+
     if (_errorMessage != null && _errors.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.getTextMuted(context)),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.getTextMuted(context),
+            ),
             const SizedBox(height: 16),
-            Text(_errorMessage!, style: AppTheme.bodyLarge.copyWith(color: AppTheme.getTextPrimary(context))),
+            Text(
+              _errorMessage!,
+              style: AppTheme.bodyLarge.copyWith(
+                color: AppTheme.getTextPrimary(context),
+              ),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: () => _loadErrors(refresh: true),
@@ -354,27 +376,38 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         ),
       );
     }
-    
+
     if (_errors.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.check_circle_outline, size: 64, color: AppTheme.successColor),
+            const Icon(
+              Icons.check_circle_outline,
+              size: 64,
+              color: AppTheme.successColor,
+            ),
             const SizedBox(height: 16),
-            Text('Aucune erreur', style: AppTheme.headingSmall.copyWith(color: AppTheme.getTextPrimary(context))),
+            Text(
+              'Aucune erreur',
+              style: AppTheme.headingSmall.copyWith(
+                color: AppTheme.getTextPrimary(context),
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
-              _onlyRetryPossible 
+              _onlyRetryPossible
                   ? 'Aucune erreur avec retry possible'
                   : 'Tous les scans ont réussi',
-              style: AppTheme.bodyLarge.copyWith(color: AppTheme.getTextMuted(context)),
+              style: AppTheme.bodyLarge.copyWith(
+                color: AppTheme.getTextMuted(context),
+              ),
             ),
           ],
         ),
       );
     }
-    
+
     return RefreshIndicator(
       onRefresh: () => _loadErrors(refresh: true),
       child: ListView.builder(
@@ -404,17 +437,17 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
               ),
             );
           }
-          
+
           return _buildErrorCard(_errors[index]);
         },
       ),
     );
   }
-  
+
   Widget _buildErrorCard(ErrorRecord error) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final isSelected = _selectedIds.contains(error.id);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
@@ -428,7 +461,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => _showErrorDetails(error),
-        onLongPress: error.retryPossible ? () => _toggleSelection(error.id) : null,
+        onLongPress: error.retryPossible
+            ? () => _toggleSelection(error.id)
+            : null,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -452,7 +487,10 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       children: [
                         Text(
                           error.reference,
-                          style: AppTheme.headingSmall.copyWith(fontSize: 16, color: AppTheme.getTextPrimary(context)),
+                          style: AppTheme.headingSmall.copyWith(
+                            fontSize: 16,
+                            color: AppTheme.getTextPrimary(context),
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Row(
@@ -460,7 +498,11 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                             _buildCategoryChip(error.errorCategory),
                             if (error.duplicateCount > 0) ...[
                               const SizedBox(width: 8),
-                              _buildCountChip(error.duplicateCount, Icons.replay, Colors.blue),
+                              _buildCountChip(
+                                error.duplicateCount,
+                                Icons.replay,
+                                Colors.blue,
+                              ),
                             ],
                           ],
                         ),
@@ -475,28 +517,43 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                               height: 24,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.replay, color: AppTheme.primaryColor),
+                          : const Icon(
+                              Icons.replay,
+                              color: AppTheme.primaryColor,
+                            ),
                       tooltip: 'Relancer',
                       onPressed: _isRetrying ? null : () => _retryError(error),
                     ),
                 ],
               ),
-              
+
               const Divider(height: 24),
-              
+
               // Informations de la facture
               _buildInfoRow(Icons.business, 'Fournisseur', error.supplierName),
-              _buildInfoRow(Icons.receipt, 'N° Facture', error.invoiceNumberDgi),
-              _buildInfoRow(Icons.attach_money, 'Montant', error.formattedAmount),
+              _buildInfoRow(
+                Icons.receipt,
+                'N° Facture',
+                error.invoiceNumberDgi,
+              ),
+              _buildInfoRow(
+                Icons.attach_money,
+                'Montant',
+                error.formattedAmount,
+              ),
               if (error.scanDate != null)
-                _buildInfoRow(Icons.access_time, 'Date scan', dateFormat.format(error.scanDate!)),
+                _buildInfoRow(
+                  Icons.access_time,
+                  'Date scan',
+                  dateFormat.format(error.scanDate!),
+                ),
               _buildInfoRow(Icons.person, 'Par', error.scannedBy),
-              
+
               const SizedBox(height: 16),
-              
+
               // Message d'erreur en vedette
               _buildErrorMessageCard(error.errorMessage ?? 'Erreur inconnue'),
-              
+
               // Bouton voir détails
               const SizedBox(height: 12),
               Center(
@@ -515,7 +572,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       ),
     );
   }
-  
+
   Widget _buildCountChip(int count, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -541,7 +598,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       ),
     );
   }
-  
+
   Widget _buildErrorMessageCard(String errorMessage) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -595,10 +652,10 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       ),
     );
   }
-  
+
   void _showErrorDetails(ErrorRecord error) {
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -624,13 +681,16 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              
+
               // En-tête
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppTheme.errorColor, AppTheme.errorColor.withValues(alpha: 0.8)],
+                    colors: [
+                      AppTheme.errorColor,
+                      AppTheme.errorColor.withValues(alpha: 0.8),
+                    ],
                   ),
                 ),
                 child: Row(
@@ -641,7 +701,11 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                         color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.error_outline, color: Colors.white, size: 28),
+                      child: const Icon(
+                        Icons.error_outline,
+                        color: Colors.white,
+                        size: 28,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -678,7 +742,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                   ],
                 ),
               ),
-              
+
               // Contenu défilable
               Expanded(
                 child: SingleChildScrollView(
@@ -695,9 +759,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                         error.errorMessage ?? 'Erreur inconnue',
                         isError: true,
                       ),
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // Informations fournisseur
                       _buildDetailSection(
                         'Informations fournisseur',
@@ -707,13 +771,16 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                         children: [
                           _buildDetailItem('Nom', error.supplierName),
                           _buildDetailItem('Code DGI', error.supplierCodeDgi),
-                          _buildDetailItem('N° Facture', error.invoiceNumberDgi),
+                          _buildDetailItem(
+                            'N° Facture',
+                            error.invoiceNumberDgi,
+                          ),
                           _buildDetailItem('Montant', error.formattedAmount),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // Informations du scan
                       _buildDetailSection(
                         'Informations du scan',
@@ -721,17 +788,27 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                         AppTheme.accentColor,
                         null,
                         children: [
-                          _buildDetailItem('UUID QR', error.qrUuid, selectable: true),
+                          _buildDetailItem(
+                            'UUID QR',
+                            error.qrUuid,
+                            selectable: true,
+                          ),
                           if (error.scanDate != null)
-                            _buildDetailItem('Date du scan', dateFormat.format(error.scanDate!)),
+                            _buildDetailItem(
+                              'Date du scan',
+                              dateFormat.format(error.scanDate!),
+                            ),
                           _buildDetailItem('Scanné par', error.scannedBy),
                           if (error.duplicateCount > 0)
-                            _buildDetailItem('Tentatives', '${error.duplicateCount}'),
+                            _buildDetailItem(
+                              'Tentatives',
+                              '${error.duplicateCount}',
+                            ),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 30),
-                      
+
                       // Boutons d'action
                       if (error.retryPossible)
                         SizedBox(
@@ -751,7 +828,10 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                             icon: const Icon(Icons.replay),
                             label: const Text(
                               'Relancer le scan',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -765,7 +845,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       ),
     );
   }
-  
+
   Widget _buildDetailSection(
     String title,
     IconData icon,
@@ -777,10 +857,14 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isError ? AppTheme.getErrorLight(context) : AppTheme.getSurfaceLight(context),
+        color: isError
+            ? AppTheme.getErrorLight(context)
+            : AppTheme.getSurfaceLight(context),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isError ? AppTheme.errorColor.withValues(alpha: 0.3) : AppTheme.getDivider(context),
+          color: isError
+              ? AppTheme.errorColor.withValues(alpha: 0.3)
+              : AppTheme.getDivider(context),
         ),
       ),
       child: Column(
@@ -800,7 +884,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
               Text(
                 title,
                 style: TextStyle(
-                  color: isError ? AppTheme.errorColor : AppTheme.getTextPrimary(context),
+                  color: isError
+                      ? AppTheme.errorColor
+                      : AppTheme.getTextPrimary(context),
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
                 ),
@@ -812,7 +898,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             Text(
               content,
               style: TextStyle(
-                color: isError ? AppTheme.getTextPrimary(context) : AppTheme.getTextSecondary(context),
+                color: isError
+                    ? AppTheme.getTextPrimary(context)
+                    : AppTheme.getTextSecondary(context),
                 fontSize: 14,
                 height: 1.5,
               ),
@@ -822,8 +910,12 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       ),
     );
   }
-  
-  Widget _buildDetailItem(String label, String value, {bool selectable = false}) {
+
+  Widget _buildDetailItem(
+    String label,
+    String value, {
+    bool selectable = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
@@ -862,7 +954,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       ),
     );
   }
-  
+
   Widget _buildCategoryChip(ErrorCategory category) {
     Color chipColor;
     switch (category) {
@@ -885,13 +977,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         chipColor = Colors.grey;
         break;
     }
-    
+
     return Chip(
-      avatar: Icon(
-        _getCategoryIcon(category),
-        size: 16,
-        color: chipColor,
-      ),
+      avatar: Icon(_getCategoryIcon(category), size: 16, color: chipColor),
       label: Text(
         category.label,
         style: TextStyle(color: chipColor, fontSize: 12),
@@ -902,7 +990,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       visualDensity: VisualDensity.compact,
     );
   }
-  
+
   IconData _getCategoryIcon(ErrorCategory category) {
     switch (category) {
       case ErrorCategory.dgiService:
@@ -919,7 +1007,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         return Icons.help_outline;
     }
   }
-  
+
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -927,11 +1015,18 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         children: [
           Icon(icon, size: 16, color: AppTheme.getTextMuted(context)),
           const SizedBox(width: 8),
-          Text('$label: ', style: AppTheme.bodyMedium.copyWith(color: AppTheme.getTextMuted(context))),
+          Text(
+            '$label: ',
+            style: AppTheme.bodyMedium.copyWith(
+              color: AppTheme.getTextMuted(context),
+            ),
+          ),
           Expanded(
             child: Text(
               value.isNotEmpty ? value : '-',
-              style: AppTheme.bodyMedium.copyWith(color: AppTheme.getTextSecondary(context)),
+              style: AppTheme.bodyMedium.copyWith(
+                color: AppTheme.getTextSecondary(context),
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
