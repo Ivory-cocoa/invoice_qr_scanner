@@ -18,14 +18,19 @@ import '../models/scan_record.dart';
 enum QueueItemState {
   /// En attente de traitement
   pending,
+
   /// Extraction DGI en cours
   extracting,
+
   /// Extraction réussie, envoi au serveur en cours
   submitting,
+
   /// Terminé avec succès (facture créée)
   completed,
+
   /// Timeout - saisie manuelle requise
   needsManualEntry,
+
   /// Erreur
   failed,
 }
@@ -125,8 +130,9 @@ class BackgroundScanQueue extends ChangeNotifier {
       _queue.values.where((i) => i.isActive).toList();
   List<QueueItem> get completedItems =>
       _queue.values.where((i) => i.state == QueueItemState.completed).toList();
-  List<QueueItem> get manualEntryItems =>
-      _queue.values.where((i) => i.state == QueueItemState.needsManualEntry).toList();
+  List<QueueItem> get manualEntryItems => _queue.values
+      .where((i) => i.state == QueueItemState.needsManualEntry)
+      .toList();
   List<QueueItem> get failedItems =>
       _queue.values.where((i) => i.state == QueueItemState.failed).toList();
 
@@ -293,7 +299,9 @@ class BackgroundScanQueue extends ChangeNotifier {
         item.isDuplicate = true;
         if (response.data != null &&
             response.data!.containsKey('existing_record')) {
-          item.scanRecord = ScanRecord.fromJson(response.data!['existing_record']);
+          item.scanRecord = ScanRecord.fromJson(
+            response.data!['existing_record'],
+          );
         }
         _sessionDuplicateCount++;
         await _removeSafetyNet(item);
@@ -301,7 +309,8 @@ class BackgroundScanQueue extends ChangeNotifier {
         item.state = QueueItemState.needsManualEntry;
         item.progressMessage = null;
         item.resultMessage =
-            response.errorMessage ?? 'Vérification DGI indisponible - Saisie manuelle requise';
+            response.errorMessage ??
+            'Vérification DGI indisponible - Saisie manuelle requise';
         _sessionManualCount++;
       } else {
         item.state = QueueItemState.failed;
@@ -328,7 +337,11 @@ class BackgroundScanQueue extends ChangeNotifier {
   }
 
   /// Soumettre les données extraites au serveur
-  Future<void> _submitToServer(QueueItem item, DgiParsedData data, bool isManual) async {
+  Future<void> _submitToServer(
+    QueueItem item,
+    DgiParsedData data,
+    bool isManual,
+  ) async {
     try {
       final response = await _api.scanWithData(
         qrUrl: item.qrUrl,
@@ -347,7 +360,8 @@ class BackgroundScanQueue extends ChangeNotifier {
       if (response.success && response.data != null) {
         item.state = QueueItemState.completed;
         item.progressMessage = null;
-        item.resultMessage = response.data!['message'] ??
+        item.resultMessage =
+            response.data!['message'] ??
             (data.isRefund
                 ? 'Avoir enregistré avec succès'
                 : 'Facture créée avec succès');
@@ -362,8 +376,11 @@ class BackgroundScanQueue extends ChangeNotifier {
         item.progressMessage = null;
         item.resultMessage = 'Doublon détecté';
         item.isDuplicate = true;
-        if (response.data != null && response.data!.containsKey('existing_record')) {
-          item.scanRecord = ScanRecord.fromJson(response.data!['existing_record']);
+        if (response.data != null &&
+            response.data!.containsKey('existing_record')) {
+          item.scanRecord = ScanRecord.fromJson(
+            response.data!['existing_record'],
+          );
         }
         _sessionDuplicateCount++;
         await _removeSafetyNet(item);

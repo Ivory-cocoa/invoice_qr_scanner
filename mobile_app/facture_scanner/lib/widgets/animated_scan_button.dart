@@ -33,7 +33,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
   late AnimationController _pulseController;
   late AnimationController _rotationController;
   late AnimationController _scaleController;
-  
+
   late Animation<double> _pulseAnimation;
   late Animation<double> _rotationAnimation;
   late Animation<double> _scaleAnimation;
@@ -41,33 +41,33 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
   @override
   void initState() {
     super.initState();
-    
+
     // Animation de pulsation continue
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    
+
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-    
+
     // Animation de rotation pour le loading
     _rotationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
-    
+
     _rotationAnimation = Tween<double>(begin: 0, end: 2 * math.pi).animate(
       CurvedAnimation(parent: _rotationController, curve: Curves.linear),
     );
-    
+
     // Animation de scale au tap
     _scaleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
     );
-    
+
     _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
       CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
     );
@@ -76,7 +76,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
   @override
   void didUpdateWidget(AnimatedScanButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     if (widget.isLoading && !oldWidget.isLoading) {
       _rotationController.repeat();
       _pulseController.stop();
@@ -125,19 +125,13 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
       onTapCancel: _handleTapCancel,
       onTap: _handleTap,
       child: AnimatedBuilder(
-        animation: Listenable.merge([
-          _pulseAnimation,
-          _scaleAnimation,
-        ]),
+        animation: Listenable.merge([_pulseAnimation, _scaleAnimation]),
         builder: (context, child) {
-          final double scale = widget.isLoading 
-              ? 1.0 
+          final double scale = widget.isLoading
+              ? 1.0
               : _pulseAnimation.value * _scaleAnimation.value;
-          
-          return Transform.scale(
-            scale: scale,
-            child: child,
-          );
+
+          return Transform.scale(scale: scale, child: child);
         },
         child: Container(
           width: widget.size,
@@ -177,7 +171,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
             children: [
               // Cercles concentriques animés
               if (!widget.isLoading) ..._buildRipples(),
-              
+
               // Icône centrale
               widget.isLoading
                   ? _buildLoadingIndicator()
@@ -237,10 +231,7 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
     return AnimatedBuilder(
       animation: _rotationAnimation,
       builder: (context, child) {
-        return Transform.rotate(
-          angle: _rotationAnimation.value,
-          child: child,
-        );
+        return Transform.rotate(angle: _rotationAnimation.value, child: child);
       },
       child: SizedBox(
         width: widget.size * 0.4,

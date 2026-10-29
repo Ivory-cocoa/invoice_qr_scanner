@@ -30,11 +30,11 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    
+
     _slideAnimation = Tween<double>(begin: -1, end: 0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
-    
+
     _opacityAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
@@ -67,20 +67,17 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
     return Consumer<ConnectivityProvider>(
       builder: (context, connectivity, _) {
         _updateBannerState(connectivity.isOnline);
-        
+
         if (!_showBanner && connectivity.isOnline) {
           return const SizedBox.shrink();
         }
-        
+
         return AnimatedBuilder(
           animation: _animationController,
           builder: (context, child) {
             return Transform.translate(
               offset: Offset(0, _slideAnimation.value * 60),
-              child: Opacity(
-                opacity: _opacityAnimation.value,
-                child: child,
-              ),
+              child: Opacity(opacity: _opacityAnimation.value, child: child),
             );
           },
           child: Container(
@@ -96,10 +93,11 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                     ),
               boxShadow: [
                 BoxShadow(
-                  color: (connectivity.isOnline
-                          ? AppTheme.successColor
-                          : AppTheme.warningColor)
-                      .withValues(alpha: 0.3),
+                  color:
+                      (connectivity.isOnline
+                              ? AppTheme.successColor
+                              : AppTheme.warningColor)
+                          .withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -112,7 +110,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                   // Icône avec animation de pulsation
                   _buildAnimatedIcon(connectivity.isOnline),
                   const SizedBox(width: 12),
-                  
+
                   // Texte
                   Expanded(
                     child: Column(
@@ -143,7 +141,7 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                       ],
                     ),
                   ),
-                  
+
                   // Badge de statut
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -230,7 +228,7 @@ class CompactConnectivityBanner extends StatelessWidget {
         if (connectivity.isOnline) {
           return const SizedBox.shrink();
         }
-        
+
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -242,11 +240,7 @@ class CompactConnectivityBanner extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.wifi_off_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
+              const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 18),
               const SizedBox(width: 8),
               const Text(
                 'Mode hors ligne',

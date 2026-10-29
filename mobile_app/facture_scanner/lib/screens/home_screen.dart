@@ -32,28 +32,29 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   /// Attente maximale du résultat d'un scan avant de rendre la main : un peu
   /// plus que le délai de l'appel serveur (30 s), plus une éventuelle file.
   static const _resultWaitTimeout = Duration(seconds: 45);
 
   late TabController _tabController;
   bool _isAutoSyncing = false;
-  
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
     _initializeAndLoad();
-    
+
     // Écouter les changements de connectivité. La redirection en cas de perte
     // de session est assurée globalement par AuthGuard (cf. main.dart).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ConnectivityProvider>().addListener(_onConnectivityChanged);
     });
   }
-  
+
   /// Recharge l'historique à chaque ouverture de l'onglet « Historique ».
   /// Garantit un affichage à jour même si le premier chargement au démarrage
   /// a échoué (token/connectivité pas encore prêts).
@@ -65,34 +66,40 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final connectivity = context.read<ConnectivityProvider>();
     scan.loadHistory(isOnline: connectivity.isOnline);
   }
-  
-  
+
   /// Écoute les changements de connectivité pour synchronisation automatique
   void _onConnectivityChanged() {
     final connectivity = context.read<ConnectivityProvider>();
     final scan = context.read<ScanProvider>();
-    
+
     // Si on vient de passer en ligne et qu'il y a des scans en attente
-    if (connectivity.isOnline && scan.hasPendingScans && !_isAutoSyncing && mounted) {
+    if (connectivity.isOnline &&
+        scan.hasPendingScans &&
+        !_isAutoSyncing &&
+        mounted) {
       _autoSyncPendingScans();
     }
   }
-  
+
   /// Synchronisation automatique silencieuse
   Future<void> _autoSyncPendingScans() async {
     if (_isAutoSyncing) return;
-    
+
     _isAutoSyncing = true;
     final scan = context.read<ScanProvider>();
     final result = await scan.syncPendingScans();
     _isAutoSyncing = false;
-    
+
     if (mounted && result.success && result.syncedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.cloud_done_rounded, color: Colors.white, size: 20),
+              const Icon(
+                Icons.cloud_done_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 12),
               Text('${result.syncedCount} scan(s) synchronisé(s)'),
             ],
@@ -100,35 +107,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           backgroundColor: AppTheme.successColor,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
     }
   }
-  
+
   /// Initialiser le ScanProvider et charger les données
   Future<void> _initializeAndLoad() async {
     final scan = context.read<ScanProvider>();
     await scan.init(); // Initialiser pour charger le nombre de scans en attente
     await _loadData();
   }
-  
+
   Future<void> _loadData() async {
     final connectivity = context.read<ConnectivityProvider>();
     final scan = context.read<ScanProvider>();
-    
+
     await scan.loadHistory(isOnline: connectivity.isOnline);
     if (connectivity.isOnline) {
       await scan.loadStats();
     }
   }
-  
+
   @override
   void dispose() {
     // Retirer les listeners
     try {
-      context.read<ConnectivityProvider>().removeListener(_onConnectivityChanged);
+      context.read<ConnectivityProvider>().removeListener(
+        _onConnectivityChanged,
+      );
     } catch (_) {
       // Ignorer si le context n'est plus disponible
     }
@@ -136,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _tabController.dispose();
     super.dispose();
   }
-  
+
   /// Enchaîne les scans : chaque tour scanne UN QR-code et en affiche le
   /// résultat ; le scanner ne se rouvre que si l'utilisateur choisit
   /// « Nouveau scan ». (Auparavant, le scanner se rouvrait aussitôt la facture
@@ -151,9 +162,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   /// Un scan complet. Renvoie `true` si l'utilisateur veut scanner à nouveau.
   Future<bool> _scanOnce() async {
     final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (context) => const ScannerScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
     if (result == null || !mounted) return false;
 
@@ -172,15 +181,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final progress = ScanProgress.show(context, 'Recherche de doublons...');
 
     try {
-      final validation =
-          await scan.validateQrForQueue(qrContent, checkServer: true);
+      final validation = await scan.validateQrForQueue(
+        qrContent,
+        checkServer: true,
+      );
       if (!mounted) return false;
       if (!validation.valid) {
         progress.close();
         scan.resetState();
         return await _showResult(
-          state:
-              validation.isDuplicate ? ScanState.duplicate : ScanState.error,
+          state: validation.isDuplicate ? ScanState.duplicate : ScanState.error,
           message: validation.error,
           record: validation.existing,
         );
@@ -192,7 +202,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       if (itemId == null) {
         progress.close();
         _showInfoSnackBar(
-            Icons.info_outline, 'Ce scan est déjà en cours de traitement');
+          Icons.info_outline,
+          'Ce scan est déjà en cours de traitement',
+        );
         return false;
       }
 
@@ -222,13 +234,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       if (item == null) {
         if (stopWaiting.isCompleted) {
-          _showInfoSnackBar(Icons.queue_rounded,
-              'Traitement en arrière-plan : le résultat s\'affichera ici');
+          _showInfoSnackBar(
+            Icons.queue_rounded,
+            'Traitement en arrière-plan : le résultat s\'affichera ici',
+          );
           return false;
         }
         return await _showResult(
           state: ScanState.processing,
-          message: 'La vérification prend plus de temps que prévu. Elle se '
+          message:
+              'La vérification prend plus de temps que prévu. Elle se '
               'poursuit en arrière-plan : son résultat s\'affichera en haut '
               'de l\'écran d\'accueil.',
         );
@@ -249,7 +264,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   /// Affiche l'issue d'un scan traité par la file. La saisie manuelle, quand
   /// elle est proposée et choisie, aboutit à son tour à un résultat affiché.
   Future<bool> _showQueueItemResult(
-      BackgroundScanQueue queue, QueueItem item) async {
+    BackgroundScanQueue queue,
+    QueueItem item,
+  ) async {
     switch (item.state) {
       case QueueItemState.completed:
         final scanAgain = await _showResult(
@@ -284,10 +301,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       case QueueItemState.failed:
         // L'item reste dans la file : la bannière permet de le réessayer.
-        return _showResult(
-          state: ScanState.error,
-          message: item.resultMessage,
-        );
+        return _showResult(state: ScanState.error, message: item.resultMessage);
 
       case QueueItemState.pending:
       case QueueItemState.extracting:
@@ -299,11 +313,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   /// Hors ligne : extraction locale, enregistrée pour synchronisation.
   Future<bool> _processOffline(String qrContent) async {
     final scan = context.read<ScanProvider>();
-    await scan.processQrCode(
-      qrContent,
-      isOnline: false,
-      localExtraction: true,
-    );
+    await scan.processQrCode(qrContent, isOnline: false, localExtraction: true);
     if (!mounted) return false;
     if (scan.state == ScanState.idle || scan.state == ScanState.manualEntry) {
       return false;
@@ -323,8 +333,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     String? message,
     ScanRecord? record,
   }) async {
-    final choice =
-        await _showResultDialog(state: state, message: message, record: record);
+    final choice = await _showResultDialog(
+      state: state,
+      message: message,
+      record: record,
+    );
     if (!mounted) return false;
     if (choice == 'link_to_ot' && record != null && record.id > 0) {
       await startOtLinkFlow(context, record);
@@ -340,11 +353,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }) {
     return showDialog<String>(
       context: context,
-      builder: (context) => ScanResultDialog(
-        state: state,
-        message: message,
-        scanRecord: record,
-      ),
+      builder: (context) =>
+          ScanResultDialog(state: state, message: message, scanRecord: record),
     );
   }
 
@@ -366,11 +376,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-  
+
   Future<void> _syncPendingScans() async {
     final scan = context.read<ScanProvider>();
     final result = await scan.syncPendingScans();
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -385,23 +395,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               Expanded(child: Text(result.message)),
             ],
           ),
-          backgroundColor: result.success ? AppTheme.successColor : AppTheme.errorColor,
+          backgroundColor: result.success
+              ? AppTheme.successColor
+              : AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
   }
-  
+
   Future<void> _clearOfflineData() async {
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
-    
+
     final confirmed = await showGeneralDialog<bool>(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Clear Data',
-      barrierColor: AppTheme.isDark(context) ? Colors.black.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.85),
+      barrierColor: AppTheme.isDark(context)
+          ? Colors.black.withValues(alpha: 0.85)
+          : Colors.white.withValues(alpha: 0.85),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -415,9 +431,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 title: Row(
                   children: [
-                    Icon(Icons.delete_sweep, color: AppTheme.getWarning(context)),
+                    Icon(
+                      Icons.delete_sweep,
+                      color: AppTheme.getWarning(context),
+                    ),
                     const SizedBox(width: 12),
-                    const Text('Vider les données', style: AppTheme.headingSmall),
+                    const Text(
+                      'Vider les données',
+                      style: AppTheme.headingSmall,
+                    ),
                   ],
                 ),
                 content: const Text(
@@ -453,11 +475,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         );
       },
     );
-    
+
     if (confirmed == true && mounted) {
       final scan = context.read<ScanProvider>();
       await scan.clearOfflineData();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -471,7 +493,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             backgroundColor: AppTheme.successColor,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -480,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<void> _markAllProcessed() async {
     final connectivity = context.read<ConnectivityProvider>();
-    
+
     if (!connectivity.isOnline) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -494,12 +518,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
       return;
     }
-    
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -533,11 +559,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ],
       ),
     );
-    
+
     if (confirmed == true && mounted) {
       final scan = context.read<ScanProvider>();
       final result = await scan.bulkMarkAsProcessed();
-      
+
       if (mounted) {
         if (result != null) {
           final count = result['successful'] ?? 0;
@@ -545,7 +571,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             SnackBar(
               content: Row(
                 children: [
-                  const Icon(Icons.verified_rounded, color: Colors.white, size: 20),
+                  const Icon(
+                    Icons.verified_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                   const SizedBox(width: 12),
                   Text('$count scan(s) marqué(s) comme traité(s)'),
                 ],
@@ -553,7 +583,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               backgroundColor: const Color(0xFF6C63FF),
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         } else {
@@ -569,22 +601,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               backgroundColor: AppTheme.errorColor,
               behavior: SnackBarBehavior.floating,
               margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
       }
     }
   }
-  
+
   Future<void> _logout() async {
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
-    
+
     final confirmed = await showGeneralDialog<bool>(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Logout',
-      barrierColor: AppTheme.isDark(context) ? Colors.black.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.85),
+      barrierColor: AppTheme.isDark(context)
+          ? Colors.black.withValues(alpha: 0.85)
+          : Colors.white.withValues(alpha: 0.85),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return Center(
@@ -636,14 +672,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         );
       },
     );
-    
+
     if (confirmed == true && mounted) {
       final auth = context.read<AuthProvider>();
       final scan = context.read<ScanProvider>();
-      
+
       await scan.clearData();
       await auth.logout();
-      
+
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/login');
       }
@@ -653,7 +689,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final isDark = AppTheme.isDark(context);
-    
+
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.surfaceLight,
       appBar: _buildAppBar(),
@@ -666,10 +702,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Expanded(
               child: TabBarView(
                 controller: _tabController,
-                children: [
-                  _buildHomeTab(),
-                  const HistoryList(),
-                ],
+                children: [_buildHomeTab(), const HistoryList()],
               ),
             ),
           ],
@@ -687,7 +720,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   PreferredSizeWidget _buildAppBar() {
     final isDark = AppTheme.isDark(context);
-    
+
     return AppBar(
       elevation: 0,
       flexibleSpace: Container(
@@ -738,7 +771,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             );
           },
         ),
-        
+
         // Menu utilisateur
         Consumer<AuthProvider>(
           builder: (context, auth, _) {
@@ -752,8 +785,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 if (value == 'logout') _logout();
                 if (value == 'clear_offline') _clearOfflineData();
                 if (value == 'mark_all_processed') _markAllProcessed();
-                if (value == 'settings') Navigator.pushNamed(context, '/settings');
-                if (value == 'ot_links') Navigator.pushNamed(context, '/ot-links');
+                if (value == 'settings') {
+                  Navigator.pushNamed(context, '/settings');
+                }
+                if (value == 'ot_links') {
+                  Navigator.pushNamed(context, '/ot-links');
+                }
               },
               itemBuilder: (context) => [
                 PopupMenuItem(
@@ -786,7 +823,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     value: 'ot_links',
                     child: Row(
                       children: [
-                        Icon(Icons.link, color: AppTheme.getPrimary(context), size: 20),
+                        Icon(
+                          Icons.link,
+                          color: AppTheme.getPrimary(context),
+                          size: 20,
+                        ),
                         const SizedBox(width: 12),
                         Text(
                           'Mes liaisons OT',
@@ -802,7 +843,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   value: 'mark_all_processed',
                   child: Row(
                     children: [
-                      Icon(Icons.verified_rounded, color: AppTheme.getPrimary(context), size: 20),
+                      Icon(
+                        Icons.verified_rounded,
+                        color: AppTheme.getPrimary(context),
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Text(
                         'Tout marquer traité',
@@ -818,7 +863,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   value: 'clear_offline',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_sweep_rounded, color: AppTheme.getWarning(context), size: 20),
+                      Icon(
+                        Icons.delete_sweep_rounded,
+                        color: AppTheme.getWarning(context),
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Text(
                         'Vider données hors ligne',
@@ -834,7 +883,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   value: 'settings',
                   child: Row(
                     children: [
-                      Icon(Icons.settings_rounded, color: AppTheme.getPrimary(context), size: 20),
+                      Icon(
+                        Icons.settings_rounded,
+                        color: AppTheme.getPrimary(context),
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Text(
                         'Paramètres sync',
@@ -850,7 +903,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   value: 'logout',
                   child: Row(
                     children: [
-                      Icon(Icons.logout_rounded, color: AppTheme.getError(context), size: 20),
+                      Icon(
+                        Icons.logout_rounded,
+                        color: AppTheme.getError(context),
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Text(
                         'Déconnexion',
@@ -875,19 +932,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontSize: 14),
         tabs: const [
-          Tab(
-            icon: Icon(Icons.dashboard_rounded, size: 22),
-            text: 'Accueil',
-          ),
-          Tab(
-            icon: Icon(Icons.history_rounded, size: 22),
-            text: 'Historique',
-          ),
+          Tab(icon: Icon(Icons.dashboard_rounded, size: 22), text: 'Accueil'),
+          Tab(icon: Icon(Icons.history_rounded, size: 22), text: 'Historique'),
         ],
       ),
     );
   }
-  
+
   Widget _buildHomeTab() {
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -900,25 +951,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           children: [
             // Carte de bienvenue (réduite)
             _buildCompactWelcomeCard(),
-            
+
             const SizedBox(height: 16),
-            
+
             // Carte OT proéminente pour les utilisateurs cumul (vérificateur + gestionnaire OT)
             _buildOtManagerCard(),
-            
+
             // Alerte erreurs non traitées (si présentes)
             _buildErrorsAlert(),
-            
+
             // Alerte scans en attente
             _buildPendingScansAlert(),
-            
+
             const SizedBox(height: 16),
-            
+
             // Statistiques
             const StatsCard(),
-            
+
             const SizedBox(height: 16),
-            
+
             // Actions rapides
             _buildQuickActions(),
           ],
@@ -926,7 +977,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
-  
+
   Widget _buildCompactWelcomeCard() {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
@@ -990,7 +1041,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       },
     );
   }
-  
+
   /// Carte proéminente "Liaison OT" pour les utilisateurs cumul.
   /// Affichée uniquement si l'utilisateur a le profil Gestionnaire OT
   /// ET qu'il n'est pas déjà sur l'écran dédié (rôle != 'ot_manager').
@@ -1021,11 +1072,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: primary.withValues(alpha: isDark ? 0.22 : 0.14),
+                          color: primary.withValues(
+                            alpha: isDark ? 0.22 : 0.14,
+                          ),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(Icons.link_rounded,
-                            color: primary, size: 22),
+                        child: Icon(
+                          Icons.link_rounded,
+                          color: primary,
+                          size: 22,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1070,13 +1126,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           style: OutlinedButton.styleFrom(
                             foregroundColor: primary,
                             side: BorderSide(color: primary, width: 1.4),
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
                             textStyle: const TextStyle(
-                                fontWeight: FontWeight.w700),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
@@ -1091,13 +1147,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primary,
                             foregroundColor: Colors.white,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
                             textStyle: const TextStyle(
-                                fontWeight: FontWeight.w700),
+                              fontWeight: FontWeight.w700,
+                            ),
                             elevation: 1.5,
                           ),
                         ),
@@ -1112,16 +1168,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       },
     );
   }
-  
+
   Widget _buildErrorsAlert() {
     return Consumer<ScanProvider>(
       builder: (context, scan, _) {
         final errorCount = scan.combinedStats['error_scans'] ?? 0;
         if (errorCount == 0) return const SizedBox.shrink();
-        
+
         final errorColor = AppTheme.getError(context);
         final errorLight = AppTheme.getErrorLight(context);
-        
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Container(
@@ -1177,7 +1233,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   style: TextButton.styleFrom(
                     backgroundColor: errorColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -1199,10 +1258,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return Consumer<ScanProvider>(
       builder: (context, scan, _) {
         if (!scan.hasPendingScans) return const SizedBox.shrink();
-        
+
         final warningColor = AppTheme.getWarning(context);
         final warningLight = AppTheme.getWarningLight(context);
-        
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Container(
@@ -1255,7 +1314,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   style: TextButton.styleFrom(
                     backgroundColor: warningColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -1334,7 +1396,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Expanded(
               child: Consumer<ScanProvider>(
                 builder: (context, scan, _) {
-                  final duplicateAttempts = scan.combinedStats['duplicate_attempts'] ?? 0;
+                  final duplicateAttempts =
+                      scan.combinedStats['duplicate_attempts'] ?? 0;
                   return _buildActionCard(
                     icon: Icons.copy_rounded,
                     title: 'Doublons',
@@ -1415,7 +1478,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     int? badge,
   }) {
     final isDark = AppTheme.isDark(context);
-    
+
     return Material(
       color: isDark ? AppTheme.darkSurfaceElevated : Colors.white,
       borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -1442,7 +1505,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   if (badge != null && badge > 0) ...[
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: color,
                         borderRadius: BorderRadius.circular(12),
@@ -1486,7 +1552,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildFAB() {
     final primaryColor = AppTheme.getPrimary(context);
-    
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),

@@ -27,7 +27,9 @@ class DgiParserService {
 
     // FOURNISSEUR: NOM - CODE (multi-lignes possible)
     final supplierRegex = RegExp(
-      r'FOURNISSEUR:\s*\n*\s*([A-Z0-9\s\-\.&' "'" r']+?)\s*-\s*([A-Z0-9]+)',
+      r'FOURNISSEUR:\s*\n*\s*([A-Z0-9\s\-\.&'
+      "'"
+      r']+?)\s*-\s*([A-Z0-9]+)',
       caseSensitive: false,
       multiLine: true,
     );
@@ -39,7 +41,9 @@ class DgiParserService {
 
     // CLIENT: NOM - CODE
     final clientRegex = RegExp(
-      r'CLIENT:\s*\n*\s*([A-Z0-9\s\-\.&' "'" r']+?)\s*-\s*([A-Z0-9]+)',
+      r'CLIENT:\s*\n*\s*([A-Z0-9\s\-\.&'
+      "'"
+      r']+?)\s*-\s*([A-Z0-9]+)',
       caseSensitive: false,
       multiLine: true,
     );
@@ -105,19 +109,21 @@ class DgiParserService {
     //
     // Cette détection n'est qu'un filet : le serveur reconfirme la nature
     // auprès de l'API FNE, seule source d'autorité.
-    final looksLikeRefund = RegExp(
-              r'\bAVOIRS?\b|\bREFUND\b|NOTE DE CR[EÉ]DIT',
-              caseSensitive: false)
-            .hasMatch(textContent) ||
+    final looksLikeRefund =
+        RegExp(
+          r'\bAVOIRS?\b|\bREFUND\b|NOTE DE CR[EÉ]DIT',
+          caseSensitive: false,
+        ).hasMatch(textContent) ||
         (amountTtc != null && amountTtc < 0) ||
         (invoiceNumberDgi != null &&
-            RegExp(r'^A[0-9]{7}[A-Z]', caseSensitive: false)
-                .hasMatch(invoiceNumberDgi));
+            RegExp(
+              r'^A[0-9]{7}[A-Z]',
+              caseSensitive: false,
+            ).hasMatch(invoiceNumberDgi));
 
     // Vérifier qu'on a au moins un champ exploitable
-    final hasData = supplierName != null ||
-        invoiceNumberDgi != null ||
-        amountTtc != null;
+    final hasData =
+        supplierName != null || invoiceNumberDgi != null || amountTtc != null;
 
     if (!hasData) return null;
 
@@ -130,8 +136,9 @@ class DgiParserService {
       invoiceDate: invoiceDate,
       verificationId: verificationId ?? '',
       amountTtc: (amountTtc ?? 0).abs(),
-      documentType:
-          looksLikeRefund ? DocumentType.refund : DocumentType.invoice,
+      documentType: looksLikeRefund
+          ? DocumentType.refund
+          : DocumentType.invoice,
       rawText: textContent.length > 3000
           ? textContent.substring(0, 3000)
           : textContent,
@@ -234,10 +241,12 @@ class DgiParsedData {
   }
 
   String get formattedAmount {
-    final formatted = amountTtc.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]} ',
-    );
+    final formatted = amountTtc
+        .toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]} ',
+        );
     return isRefund ? '− $formatted FCFA' : '$formatted FCFA';
   }
 

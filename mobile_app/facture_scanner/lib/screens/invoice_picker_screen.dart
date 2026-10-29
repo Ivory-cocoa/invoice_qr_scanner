@@ -77,8 +77,9 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
       _loading = false;
       if (resp.success && resp.data != null) {
         final data = resp.data!;
-        final records =
-            List<Map<String, dynamic>>.from(data['records'] ?? const []);
+        final records = List<Map<String, dynamic>>.from(
+          data['records'] ?? const [],
+        );
         _items.addAll(records);
         final pag = data['pagination'] as Map<String, dynamic>?;
         _hasNext = pag?['has_next'] == true;
@@ -101,7 +102,8 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
   Future<void> _openLink(Map<String, dynamic> scan) async {
     final supplier = (scan['supplier_name'] ?? '').toString();
     final invoiceNum = (scan['invoice_number_dgi'] ?? '').toString();
-    final isRefund = (scan['is_refund'] as bool?) ??
+    final isRefund =
+        (scan['is_refund'] as bool?) ??
         ((scan['document_type'] as String?) == 'refund');
     final kind = isRefund ? 'Avoir' : 'Facture';
     final label = invoiceNum.isNotEmpty
@@ -172,9 +174,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
   Widget build(BuildContext context) {
     final primary = AppTheme.getPrimary(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sélectionner une facture'),
-      ),
+      appBar: AppBar(title: const Text('Sélectionner une facture')),
       body: SafeArea(
         child: Column(
           children: [
@@ -196,8 +196,10 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                           },
                         ),
                   filled: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 0,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -227,8 +229,11 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           const SizedBox(height: 80),
-          Icon(Icons.error_outline_rounded,
-              size: 64, color: AppTheme.getError(context)),
+          Icon(
+            Icons.error_outline_rounded,
+            size: 64,
+            color: AppTheme.getError(context),
+          ),
           const SizedBox(height: 12),
           Center(
             child: Padding(
@@ -297,8 +302,11 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                       color: primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.receipt_long_rounded,
-                        color: primary, size: 24),
+                    child: Icon(
+                      Icons.receipt_long_rounded,
+                      color: primary,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -329,9 +337,11 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            Icon(Icons.event_rounded,
-                                size: 13,
-                                color: AppTheme.getTextMuted(context)),
+                            Icon(
+                              Icons.event_rounded,
+                              size: 13,
+                              color: AppTheme.getTextMuted(context),
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               date.isNotEmpty ? date : '—',
@@ -342,8 +352,11 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                             ),
                             const SizedBox(width: 12),
                             if (linkedCount > 0) ...[
-                              Icon(Icons.link_rounded,
-                                  size: 13, color: primary),
+                              Icon(
+                                Icons.link_rounded,
+                                size: 13,
+                                color: primary,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '$linkedCount OT(s) lié(s)',
@@ -371,8 +384,10 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Icon(Icons.chevron_right_rounded,
-                          color: AppTheme.getTextMuted(context)),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppTheme.getTextMuted(context),
+                      ),
                     ],
                   ),
                 ],

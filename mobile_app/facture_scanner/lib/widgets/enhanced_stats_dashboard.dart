@@ -72,10 +72,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
         return AnimatedBuilder(
           animation: _animation,
           builder: (context, child) {
-            return Opacity(
-              opacity: _animation.value,
-              child: child,
-            );
+            return Opacity(opacity: _animation.value, child: child);
           },
           child: Container(
             decoration: AppTheme.getCardDecoration(context),
@@ -232,7 +229,12 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildFullKPIs(BuildContext context, int success, int duplicates, int errors) {
+  Widget _buildFullKPIs(
+    BuildContext context,
+    int success,
+    int duplicates,
+    int errors,
+  ) {
     return Column(
       children: [
         Row(
@@ -389,7 +391,12 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildPieChart(BuildContext context, int success, int duplicates, int errors) {
+  Widget _buildPieChart(
+    BuildContext context,
+    int success,
+    int duplicates,
+    int errors,
+  ) {
     final total = success + duplicates + errors;
     if (total == 0) return const SizedBox.shrink();
 
@@ -457,7 +464,13 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildLegendItem(BuildContext context, String label, int value, int total, Color color) {
+  Widget _buildLegendItem(
+    BuildContext context,
+    String label,
+    int value,
+    int total,
+    Color color,
+  ) {
     final percentage = total > 0 ? (value / total * 100) : 0.0;
 
     return Row(
@@ -496,8 +509,12 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
   /// Section « montant ». Le total affiché est NET : les avoirs y sont déjà
   /// soustraits. La ligne « dont N avoirs » explique l'écart, sans quoi une
   /// baisse du total resterait incompréhensible.
-  Widget _buildAmountSection(BuildContext context, double amount,
-      int refundCount, double refundAmount) {
+  Widget _buildAmountSection(
+    BuildContext context,
+    double amount,
+    int refundCount,
+    double refundAmount,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -559,8 +576,11 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                     padding: const EdgeInsets.only(top: 4),
                     child: Row(
                       children: [
-                        Icon(Icons.undo_rounded,
-                            size: 13, color: AppTheme.getError(context)),
+                        Icon(
+                          Icons.undo_rounded,
+                          size: 13,
+                          color: AppTheme.getError(context),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'dont $refundCount avoir${refundCount > 1 ? 's' : ''} '
@@ -582,7 +602,11 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
     );
   }
 
-  Widget _buildSuccessRateSection(BuildContext context, int total, int success) {
+  Widget _buildSuccessRateSection(
+    BuildContext context,
+    int total,
+    int success,
+  ) {
     final rate = total > 0 ? (success / total * 100) : 0.0;
 
     return Padding(
@@ -650,20 +674,25 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
 
   Widget _buildLoadingSkeleton(BuildContext context) {
     final bool dark = AppTheme.isDark(context);
-    final Color placeholder = dark ? AppTheme.darkSurfaceElevated : Colors.white;
+    final Color placeholder = dark
+        ? AppTheme.darkSurfaceElevated
+        : Colors.white;
     return Container(
       decoration: AppTheme.getCardDecoration(context),
       child: Shimmer.fromColors(
         baseColor: dark ? AppTheme.darkDivider : Colors.grey.shade300,
-        highlightColor: dark ? AppTheme.darkSurfaceElevated : Colors.grey.shade100,
+        highlightColor: dark
+            ? AppTheme.darkSurfaceElevated
+            : Colors.grey.shade100,
         child: Column(
           children: [
             Container(
               height: 80,
               decoration: BoxDecoration(
                 color: placeholder,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
               ),
             ),
             Padding(

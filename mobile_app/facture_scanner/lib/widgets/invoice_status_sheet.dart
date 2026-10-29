@@ -76,9 +76,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
     // donc sur la valeur absolue du restant, pas sur son signe. Comparer
     // `remaining <= 0` déclarait tout avoir « déjà totalement alloué » et
     // fermait le parcours de liaison — c'était le premier des trois verrous.
-    final isRefund = (status['is_refund'] as bool?) ??
-        ((status['document_type'] as String?) == 'refund') ||
-            invoiceAmount < 0;
+    final isRefund =
+        (status['is_refund'] as bool?) ??
+        ((status['document_type'] as String?) == 'refund') || invoiceAmount < 0;
 
     // Détermination du cas
     final _Case kase;
@@ -145,11 +145,13 @@ class _InvoiceStatusSheet extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        ...links.map((l) => _buildLinkCard(
-                              context,
-                              l as Map<String, dynamic>,
-                              currency: currency,
-                            )),
+                        ...links.map(
+                          (l) => _buildLinkCard(
+                            context,
+                            l as Map<String, dynamic>,
+                            currency: currency,
+                          ),
+                        ),
                       ],
                     ],
                   ),
@@ -165,7 +167,11 @@ class _InvoiceStatusSheet extends StatelessWidget {
   }
 
   Widget _buildHeader(
-      BuildContext context, _Case kase, String invoiceNum, String supplier) {
+    BuildContext context,
+    _Case kase,
+    String invoiceNum,
+    String supplier,
+  ) {
     final IconData icon;
     final Color color;
     final String title;
@@ -232,7 +238,10 @@ class _InvoiceStatusSheet extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Partager',
-            icon: Icon(Icons.share_outlined, color: AppTheme.getTextSecondary(context)),
+            icon: Icon(
+              Icons.share_outlined,
+              color: AppTheme.getTextSecondary(context),
+            ),
             onPressed: () async {
               try {
                 await shareScanStatus(status);
@@ -284,11 +293,20 @@ class _InvoiceStatusSheet extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildAmountRow('Facture', invoiceAmount, currency,
-              bold: true, color: AppTheme.getTextPrimary(context)),
+          _buildAmountRow(
+            'Facture',
+            invoiceAmount,
+            currency,
+            bold: true,
+            color: AppTheme.getTextPrimary(context),
+          ),
           const SizedBox(height: 6),
-          _buildAmountRow('Alloué', linkedAmount, currency,
-              color: AppTheme.getTextSecondary(context)),
+          _buildAmountRow(
+            'Alloué',
+            linkedAmount,
+            currency,
+            color: AppTheme.getTextSecondary(context),
+          ),
           const SizedBox(height: 6),
           _buildAmountRow(
             'Restant',
@@ -296,8 +314,8 @@ class _InvoiceStatusSheet extends StatelessWidget {
             currency,
             bold: true,
             color: remaining.abs() > 0.0001
-              ? AppTheme.warningColor
-              : AppTheme.successColor,
+                ? AppTheme.warningColor
+                : AppTheme.successColor,
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -314,8 +332,13 @@ class _InvoiceStatusSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildAmountRow(String label, double amount, String currency,
-      {bool bold = false, required Color color}) {
+  Widget _buildAmountRow(
+    String label,
+    double amount,
+    String currency, {
+    bool bold = false,
+    required Color color,
+  }) {
     final style = TextStyle(
       fontSize: 14,
       fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
@@ -330,7 +353,11 @@ class _InvoiceStatusSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildLinkCard(BuildContext context, Map<String, dynamic> link, {required String currency}) {
+  Widget _buildLinkCard(
+    BuildContext context,
+    Map<String, dynamic> link, {
+    required String currency,
+  }) {
     final otRef = (link['transit_order_ref'] as String?) ?? '';
     final costLabel = (link['cost_type_label'] as String?) ?? '';
     final amount = (link['amount'] as num?)?.toDouble() ?? 0.0;
@@ -434,10 +461,13 @@ class _InvoiceStatusSheet extends StatelessWidget {
                   TextSpan(
                     text: 'AVOIR. ',
                     style: TextStyle(
-                        color: errorColor, fontWeight: FontWeight.w800),
+                      color: errorColor,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const TextSpan(
-                    text: 'Saisissez le montant sans le signe : il sera '
+                    text:
+                        'Saisissez le montant sans le signe : il sera '
                         'automatiquement DÉDUIT du coût des OTs choisis.',
                   ),
                 ],
@@ -449,8 +479,12 @@ class _InvoiceStatusSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildActions(BuildContext context, _Case kase, double remaining,
-      double invoiceAmount) {
+  Widget _buildActions(
+    BuildContext context,
+    _Case kase,
+    double remaining,
+    double invoiceAmount,
+  ) {
     // Cas A : Lier maintenant (montant total)
     // Cas B : Voir / ajouter une liaison (montant 0, l'utilisateur saisira)
     // Cas C : Ajouter une liaison (remaining)
@@ -484,9 +518,9 @@ class _InvoiceStatusSheet extends StatelessWidget {
         children: [
           Expanded(
             child: OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(
-                const InvoiceStatusResult(InvoiceStatusAction.close),
-              ),
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(const InvoiceStatusResult(InvoiceStatusAction.close)),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 foregroundColor: AppTheme.getTextSecondary(context),

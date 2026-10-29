@@ -26,7 +26,8 @@ class TraiteurHomeScreen extends StatefulWidget {
   State<TraiteurHomeScreen> createState() => _TraiteurHomeScreenState();
 }
 
-class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTickerProviderStateMixin {
+class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -75,7 +76,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
   /// Un scan complet. Renvoie `true` si l'utilisateur veut scanner à nouveau.
   Future<bool> _scanOnce() async {
     final connectivity = context.read<ConnectivityProvider>();
-    
+
     if (!connectivity.isOnline) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -89,7 +90,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
       return false;
@@ -98,9 +101,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
     final scan = context.read<ScanProvider>();
 
     final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (context) => const ScannerScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const ScannerScreen()),
     );
     if (result == null || !mounted) return false;
 
@@ -198,10 +199,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
             Expanded(
               child: TabBarView(
                 controller: _tabController,
-                children: [
-                  _buildDashboardTab(),
-                  _buildPendingTab(),
-                ],
+                children: [_buildDashboardTab(), _buildPendingTab()],
               ),
             ),
           ],
@@ -224,11 +222,13 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       elevation: 0,
       flexibleSpace: Container(
         decoration: BoxDecoration(
-          gradient: isDark ? AppTheme.darkGradient : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF00897B), Color(0xFF004D40)],
-          ),
+          gradient: isDark
+              ? AppTheme.darkGradient
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF00897B), Color(0xFF004D40)],
+                ),
         ),
       ),
       title: const Row(
@@ -298,9 +298,16 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                   value: 'logout',
                   child: Row(
                     children: [
-                      Icon(Icons.logout, color: AppTheme.getError(context), size: 20),
+                      Icon(
+                        Icons.logout,
+                        color: AppTheme.getError(context),
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
-                      Text('Déconnexion', style: TextStyle(color: AppTheme.getError(context))),
+                      Text(
+                        'Déconnexion',
+                        style: TextStyle(color: AppTheme.getError(context)),
+                      ),
                     ],
                   ),
                 ),
@@ -321,10 +328,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       icon: const Icon(Icons.qr_code_scanner_rounded, size: 24),
       label: const Text(
         'Scanner pour traiter',
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 15,
-        ),
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
       ),
     );
   }
@@ -410,10 +414,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 const SizedBox(height: 4),
                 const Text(
                   'Scannez les QR-codes pour traiter les factures',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -466,7 +467,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 null,
                 Icons.done_all_rounded,
                 AppTheme.getPrimary(context),
-                AppTheme.isDark(context) ? AppTheme.getPrimary(context).withValues(alpha: 0.15) : AppTheme.primarySurface,
+                AppTheme.isDark(context)
+                    ? AppTheme.getPrimary(context).withValues(alpha: 0.15)
+                    : AppTheme.primarySurface,
               ),
             ),
             const SizedBox(width: 12),
@@ -477,7 +480,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 null,
                 Icons.speed_rounded,
                 AppTheme.accentColor,
-                AppTheme.isDark(context) ? AppTheme.accentColor.withValues(alpha: 0.15) : const Color(0xFFE0F2F1),
+                AppTheme.isDark(context)
+                    ? AppTheme.accentColor.withValues(alpha: 0.15)
+                    : const Color(0xFFE0F2F1),
               ),
             ),
           ],
@@ -548,8 +553,8 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
     final color = rate >= 75
         ? AppTheme.getSuccess(context)
         : rate >= 50
-            ? AppTheme.getWarning(context)
-            : AppTheme.getError(context);
+        ? AppTheme.getWarning(context)
+        : AppTheme.getError(context);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -559,7 +564,11 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
         children: [
           Row(
             children: [
-              const Icon(Icons.bar_chart_rounded, color: AppTheme.accentColor, size: 22),
+              const Icon(
+                Icons.bar_chart_rounded,
+                color: AppTheme.accentColor,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Text(
                 'Taux de traitement global',
@@ -625,7 +634,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
               gradient: const LinearGradient(
                 colors: [Color(0xFF00897B), Color(0xFF004D40)],
               ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
             ),
             child: const Row(
               children: [
@@ -649,11 +660,18 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.inbox_rounded, color: AppTheme.getTextMuted(context), size: 40),
+                    Icon(
+                      Icons.inbox_rounded,
+                      color: AppTheme.getTextMuted(context),
+                      size: 40,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Aucun traitement r\u00e9cent',
-                      style: TextStyle(color: AppTheme.getTextMuted(context), fontSize: 14),
+                      style: TextStyle(
+                        color: AppTheme.getTextMuted(context),
+                        fontSize: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -682,7 +700,8 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   itemCount: pending.length,
-                  itemBuilder: (context, index) => _buildPendingCard(pending[index]),
+                  itemBuilder: (context, index) =>
+                      _buildPendingCard(pending[index]),
                 ),
         );
       },
@@ -711,10 +730,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           const SizedBox(height: 8),
           const Text(
             'Toutes les factures ont été traitées !',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppTheme.textLight,
-            ),
+            style: TextStyle(fontSize: 14, color: AppTheme.textLight),
           ),
         ],
       ),
@@ -728,7 +744,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceElevated(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.getWarning(context).withValues(alpha: 0.3)),
+        border: Border.all(
+          color: AppTheme.getWarning(context).withValues(alpha: 0.3),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -778,7 +796,10 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.getWarningLight(context),
                   borderRadius: BorderRadius.circular(8),
@@ -816,7 +837,10 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                       color: _amountColor(
-                          context, record, AppTheme.getPrimary(context)),
+                        context,
+                        record,
+                        AppTheme.getPrimary(context),
+                      ),
                     ),
                   ),
                 ],
@@ -827,7 +851,11 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
             const SizedBox(height: 6),
             Row(
               children: [
-                Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.getTextMuted(context)),
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 14,
+                  color: AppTheme.getTextMuted(context),
+                ),
                 const SizedBox(width: 6),
                 Text(
                   _formatDate(record.scanDate!),
@@ -871,9 +899,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
             Container(
@@ -882,11 +908,18 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                 color: AppTheme.getSuccessLight(context),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.check_circle_rounded, color: AppTheme.getSuccess(context), size: 22),
+              child: Icon(
+                Icons.check_circle_rounded,
+                color: AppTheme.getSuccess(context),
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             const Expanded(
-              child: Text('Confirmer le traitement', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              child: Text(
+                'Confirmer le traitement',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
@@ -909,10 +942,22 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(record.reference, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                  Text(
+                    record.reference,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
                   if (record.supplierName.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(record.supplierName, style: TextStyle(color: AppTheme.getTextMuted(context), fontSize: 13)),
+                    Text(
+                      record.supplierName,
+                      style: TextStyle(
+                        color: AppTheme.getTextMuted(context),
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 4),
                   Row(
@@ -921,10 +966,14 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
                       Text(
                         _formatAmount(record.amountSigned),
                         style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: _amountColor(
-                                context, record, AppTheme.getPrimary(context)),
-                            fontSize: 14),
+                          fontWeight: FontWeight.w700,
+                          color: _amountColor(
+                            context,
+                            record,
+                            AppTheme.getPrimary(context),
+                          ),
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
@@ -936,14 +985,19 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text('Annuler', style: TextStyle(color: AppTheme.getTextSecondary(context))),
+            child: Text(
+              'Annuler',
+              style: TextStyle(color: AppTheme.getTextSecondary(context)),
+            ),
           ),
           ElevatedButton.icon(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.successColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             icon: const Icon(Icons.check_rounded, size: 18),
             label: const Text('Confirmer'),
@@ -984,7 +1038,11 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
         SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -996,7 +1054,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           ),
           backgroundColor: AppTheme.successColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -1017,7 +1077,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           ),
           backgroundColor: AppTheme.errorColor,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -1043,7 +1105,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
       ),
       subtitle: Text(
-        record.supplierName.isNotEmpty ? record.supplierName : 'Fournisseur inconnu',
+        record.supplierName.isNotEmpty
+            ? record.supplierName
+            : 'Fournisseur inconnu',
         style: TextStyle(fontSize: 12, color: AppTheme.getTextMuted(context)),
       ),
       trailing: Row(
@@ -1055,8 +1119,11 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 14,
-              color:
-                  _amountColor(context, record, AppTheme.getSuccess(context)),
+              color: _amountColor(
+                context,
+                record,
+                AppTheme.getSuccess(context),
+              ),
             ),
           ),
         ],

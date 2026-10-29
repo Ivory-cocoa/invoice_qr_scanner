@@ -32,7 +32,7 @@ class ApiService {
 
   // Default URL from environment configuration
   static String get _defaultBaseUrl => AppConfig.apiBaseUrl;
-  
+
   String? _baseUrl;
   String? _token;
   User? _currentUser;
@@ -89,7 +89,7 @@ class ApiService {
       parsed.millisecond,
     );
   }
-  
+
   /// Initialize the API service
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -171,7 +171,7 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
   }
-  
+
   /// Set API base URL
   Future<void> setBaseUrl(String url) async {
     var cleaned = url.trim();
@@ -190,14 +190,15 @@ class ApiService {
     final u = baseUrl.toLowerCase();
     if (!u.startsWith('http://')) return false;
     // Autoriser sans avertissement les adresses de réseau local privé.
-    final isLocal = u.contains('localhost') ||
+    final isLocal =
+        u.contains('localhost') ||
         u.contains('127.0.0.1') ||
         u.contains('192.168.') ||
         u.contains('10.') ||
         u.contains('172.');
     return !isLocal;
   }
-  
+
   /// Demander l'envoi d'un code de connexion à usage unique par email.
   ///
   /// Le serveur répond volontairement de la même manière que le compte existe
@@ -212,7 +213,10 @@ class ApiService {
   }
 
   /// Échanger le code reçu par email contre un token d'API.
-  Future<ApiResponse<Map<String, dynamic>>> verifyOtp(String login, String otp) async {
+  Future<ApiResponse<Map<String, dynamic>>> verifyOtp(
+    String login,
+    String otp,
+  ) async {
     final response = await _post<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/auth/verify-otp',
       {'login': login, 'otp': otp},
@@ -222,7 +226,9 @@ class ApiService {
     if (response.success && response.data != null) {
       _token = response.data!['token'];
       _currentUser = User.fromJson(response.data!['user']);
-      _tokenExpiresAt = parseServerDate(response.data!['expires_at'] as String?);
+      _tokenExpiresAt = parseServerDate(
+        response.data!['expires_at'] as String?,
+      );
       _sessionExpiredAtStartup = false;
 
       // Save to storage
@@ -231,7 +237,9 @@ class ApiService {
       await prefs.setString(_userKey, jsonEncode(_currentUser!.toJson()));
       if (_tokenExpiresAt != null) {
         await prefs.setString(
-            _tokenExpiresAtKey, _tokenExpiresAt!.toIso8601String());
+          _tokenExpiresAtKey,
+          _tokenExpiresAt!.toIso8601String(),
+        );
       } else {
         await prefs.remove(_tokenExpiresAtKey);
       }
@@ -244,13 +252,16 @@ class ApiService {
   Future<void> logout() async {
     // Try to logout on server (ignore errors)
     try {
-      await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/auth/logout', {});
+      await _post<Map<String, dynamic>>(
+        '/api/v1/invoice-scanner/auth/logout',
+        {},
+      );
     } catch (_) {}
 
     _sessionExpiredAtStartup = false;
     await _clearSession();
   }
-  
+
   /// Check if QR code already exists
   /// Scanner une facture DGI en laissant le SERVEUR interroger la plateforme FNE.
   ///
@@ -260,10 +271,9 @@ class ApiService {
   /// `manual_entry_suggested` : l'appelant bascule alors sur la saisie
   /// manuelle, comme le fait l'application Android quand l'extraction échoue.
   Future<ApiResponse<Map<String, dynamic>>> scanFromUrl(String qrUrl) async {
-    return await _post<Map<String, dynamic>>(
-      '/api/v1/invoice-scanner/scan',
-      {'qr_url': qrUrl},
-    );
+    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/scan', {
+      'qr_url': qrUrl,
+    });
   }
 
   /// OT probablement concernés par une facture scannée (aide à la saisie).
@@ -293,73 +303,93 @@ class ApiService {
     double verificationDuration = 0,
     bool isManualEntry = false,
   }) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/scan-with-data', {
-      'qr_url': qrUrl,
-      'supplier_name': supplierName,
-      if (supplierCodeDgi != null) 'supplier_code_dgi': supplierCodeDgi,
-      if (customerName != null) 'customer_name': customerName,
-      if (customerCodeDgi != null) 'customer_code_dgi': customerCodeDgi,
-      'invoice_number_dgi': invoiceNumberDgi,
-      if (invoiceDate != null) 'invoice_date': invoiceDate,
-      // Montant TOUJOURS en valeur absolue, nature transmise à part : le
-      // serveur reconfirme cette nature auprès de la DGI, mais il doit savoir
-      // ce que le client, lui, a compris.
-      'amount_ttc': amountTtc.abs(),
-      'document_type': documentType.code,
-      'verification_duration': verificationDuration,
-      'is_manual_entry': isManualEntry,
-    });
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan-with-data',
+      {
+        'qr_url': qrUrl,
+        'supplier_name': supplierName,
+        if (supplierCodeDgi != null) 'supplier_code_dgi': supplierCodeDgi,
+        if (customerName != null) 'customer_name': customerName,
+        if (customerCodeDgi != null) 'customer_code_dgi': customerCodeDgi,
+        'invoice_number_dgi': invoiceNumberDgi,
+        if (invoiceDate != null) 'invoice_date': invoiceDate,
+        // Montant TOUJOURS en valeur absolue, nature transmise à part : le
+        // serveur reconfirme cette nature auprès de la DGI, mais il doit savoir
+        // ce que le client, lui, a compris.
+        'amount_ttc': amountTtc.abs(),
+        'document_type': documentType.code,
+        'verification_duration': verificationDuration,
+        'is_manual_entry': isManualEntry,
+      },
+    );
   }
-  
+
   /// Get scan history
   Future<ApiResponse<Map<String, dynamic>>> getHistory({
     int page = 1,
     int limit = 20,
     String? state,
   }) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/history', {
-      'page': page,
-      'limit': limit,
-      if (state != null) 'state': state,
-    });
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/history',
+      {'page': page, 'limit': limit, if (state != null) 'state': state},
+    );
   }
-  
+
   /// Get invoice details
-  Future<ApiResponse<Map<String, dynamic>>> getInvoiceDetails(int invoiceId) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/invoice/$invoiceId', {});
+  Future<ApiResponse<Map<String, dynamic>>> getInvoiceDetails(
+    int invoiceId,
+  ) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/invoice/$invoiceId',
+      {},
+    );
   }
-  
+
   /// Get statistics
   Future<ApiResponse<Map<String, dynamic>>> getStats() async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/stats', {});
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/stats',
+      {},
+    );
   }
-  
+
   /// Dernière version publiée de l'application (bandeau de mise à jour) ;
   /// null en cas d'erreur ou si aucune version n'est publiée (non bloquant).
   Future<Map<String, dynamic>?> getAppUpdate() async {
     try {
-      final res = await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/app/update', {});
+      final res = await _post<Map<String, dynamic>>(
+        '/api/v1/invoice-scanner/app/update',
+        {},
+      );
       final data = res.data;
-      return res.success && data != null && data['available'] == true ? data : null;
+      return res.success && data != null && data['available'] == true
+          ? data
+          : null;
     } catch (_) {
       return null;
     }
   }
 
   /// Sync offline scans
-  Future<ApiResponse<Map<String, dynamic>>> syncOfflineScans(List<Map<String, dynamic>> scans) async {
+  Future<ApiResponse<Map<String, dynamic>>> syncOfflineScans(
+    List<Map<String, dynamic>> scans,
+  ) async {
     return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/sync', {
       'scans': scans,
     });
   }
 
   /// Sync offline scans with pre-parsed DGI data (no server-side fetch needed)
-  Future<ApiResponse<Map<String, dynamic>>> syncParsedScans(List<Map<String, dynamic>> scans) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/sync-parsed', {
-      'scans': scans,
-    });
+  Future<ApiResponse<Map<String, dynamic>>> syncParsedScans(
+    List<Map<String, dynamic>> scans,
+  ) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/sync-parsed',
+      {'scans': scans},
+    );
   }
-  
+
   /// Get errors list with filters
   Future<ApiResponse<Map<String, dynamic>>> getErrors({
     int page = 1,
@@ -376,39 +406,56 @@ class ApiService {
       if (retryPossible != null) 'retry_possible': retryPossible,
     });
   }
-  
+
   /// Retry a single error
   Future<ApiResponse<Map<String, dynamic>>> retryError(int recordId) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/errors/$recordId/retry', {});
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/errors/$recordId/retry',
+      {},
+    );
   }
-  
+
   /// Bulk retry multiple errors
   Future<ApiResponse<Map<String, dynamic>>> bulkRetryErrors({
     List<int>? recordIds,
     int maxRecords = 50,
   }) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/errors/bulk-retry', {
-      if (recordIds != null) 'record_ids': recordIds,
-      'max_records': maxRecords,
-    });
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/errors/bulk-retry',
+      {
+        if (recordIds != null) 'record_ids': recordIds,
+        'max_records': maxRecords,
+      },
+    );
   }
-  
+
   /// Report a duplicate attempt to the server
   /// This ensures the server's duplicate_count is always incremented
-  Future<ApiResponse<Map<String, dynamic>>> reportDuplicate(String qrUrl) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/report-duplicate', {
-      'qr_url': qrUrl,
-    });
+  Future<ApiResponse<Map<String, dynamic>>> reportDuplicate(
+    String qrUrl,
+  ) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/report-duplicate',
+      {'qr_url': qrUrl},
+    );
   }
 
   /// Mark a scan record as processed (traité)
   Future<ApiResponse<Map<String, dynamic>>> markProcessed(int recordId) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/mark-processed/$recordId', {});
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/mark-processed/$recordId',
+      {},
+    );
   }
 
   /// Mark a scan record as unprocessed (non traité)
-  Future<ApiResponse<Map<String, dynamic>>> markUnprocessed(int recordId) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/mark-unprocessed/$recordId', {});
+  Future<ApiResponse<Map<String, dynamic>>> markUnprocessed(
+    int recordId,
+  ) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/mark-unprocessed/$recordId',
+      {},
+    );
   }
 
   /// Bulk mark scan records as processed (traités en masse)
@@ -416,19 +463,23 @@ class ApiService {
     List<int>? recordIds,
     int maxRecords = 50,
   }) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/bulk-mark-processed', {
-      if (recordIds != null) 'record_ids': recordIds,
-      'max_records': maxRecords,
-    });
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/bulk-mark-processed',
+      {
+        if (recordIds != null) 'record_ids': recordIds,
+        'max_records': maxRecords,
+      },
+    );
   }
 
   // ============ Traiteur-specific endpoints ============
 
   /// Scan QR to find and process an existing invoice (Traiteur flow)
   Future<ApiResponse<Map<String, dynamic>>> scanToProcess(String qrUrl) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/scan-to-process', {
-      'qr_url': qrUrl,
-    });
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan-to-process',
+      {'qr_url': qrUrl},
+    );
   }
 
   /// Get pending invoices for Traiteur
@@ -436,26 +487,34 @@ class ApiService {
     int page = 1,
     int limit = 20,
   }) async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/traiteur/pending', {
-      'page': page,
-      'limit': limit,
-    });
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/traiteur/pending',
+      {'page': page, 'limit': limit},
+    );
   }
 
   /// Get Traiteur statistics
   Future<ApiResponse<Map<String, dynamic>>> getTraiteurStats() async {
-    return await _post<Map<String, dynamic>>('/api/v1/invoice-scanner/traiteur/stats', {});
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/traiteur/stats',
+      {},
+    );
   }
 
   // ==================== ENDPOINTS GESTIONNAIRE OT ====================
 
   /// Liste des types de coût disponibles pour potting.cost.line
   Future<ApiResponse<Map<String, dynamic>>> getOtCostTypes() async {
-    return await _get<Map<String, dynamic>>('/api/v1/invoice-scanner/ot/cost-types');
+    return await _get<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/ot/cost-types',
+    );
   }
 
   /// Liste des OTs ouverts (avec recherche optionnelle)
-  Future<ApiResponse<Map<String, dynamic>>> listOts({String? search, int limit = 100}) async {
+  Future<ApiResponse<Map<String, dynamic>>> listOts({
+    String? search,
+    int limit = 100,
+  }) async {
     final params = <String, String>{'limit': '$limit'};
     if (search != null && search.isNotEmpty) {
       params['search'] = search;
@@ -487,7 +546,8 @@ class ApiService {
       'mode': mode,
       if (costType != null) 'cost_type': costType,
       if (costLineId != null) 'cost_line_id': costLineId,
-      if (description != null && description.isNotEmpty) 'description': description,
+      if (description != null && description.isNotEmpty)
+        'description': description,
     };
     return await _post<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/scan/$scanId/link-ot',
@@ -520,7 +580,9 @@ class ApiService {
   }
 
   /// Liaisons effectuées par l'utilisateur courant
-  Future<ApiResponse<Map<String, dynamic>>> getMyOtLinks({int limit = 50}) async {
+  Future<ApiResponse<Map<String, dynamic>>> getMyOtLinks({
+    int limit = 50,
+  }) async {
     return await _get<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/ot/my-links',
       queryParams: {'limit': '$limit'},
@@ -533,10 +595,7 @@ class ApiService {
     int page = 1,
     int limit = 20,
   }) async {
-    final params = <String, String>{
-      'page': '$page',
-      'limit': '$limit',
-    };
+    final params = <String, String>{'page': '$page', 'limit': '$limit'};
     if (search != null && search.trim().isNotEmpty) {
       params['search'] = search.trim();
     }
@@ -548,9 +607,7 @@ class ApiService {
 
   /// Statistiques pour le tableau de bord Gestionnaire OT
   Future<ApiResponse<Map<String, dynamic>>> getOtStats() async {
-    return await _get<Map<String, dynamic>>(
-      '/api/v1/invoice-scanner/ot/stats',
-    );
+    return await _get<Map<String, dynamic>>('/api/v1/invoice-scanner/ot/stats');
   }
 
   // ===========================================================================
@@ -596,7 +653,7 @@ class ApiService {
       return false;
     }
   }
-  
+
   /// Generic POST request
   Future<ApiResponse<T>> _post<T>(
     String endpoint,
@@ -605,23 +662,22 @@ class ApiService {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$endpoint');
-      
+
       final headers = <String, String>{
         'Content-Type': 'application/json',
         if (authenticated && _token != null) 'Authorization': 'Bearer $_token',
       };
-      
-      final response = await http.post(
-        uri,
-        headers: headers,
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 30));
-      
+
+      final response = await http
+          .post(uri, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
+
       // Vérifier que la réponse est bien du JSON avant de parser
       final contentType = response.headers['content-type'] ?? '';
       final bodyText = response.body.trimLeft();
-      
-      if (!contentType.contains('application/json') && bodyText.startsWith('<')) {
+
+      if (!contentType.contains('application/json') &&
+          bodyText.startsWith('<')) {
         // Le serveur a renvoyé du HTML (page d'erreur, redirection, etc.)
         if (response.statusCode == 401 && authenticated) {
           onUnauthorized?.call();
@@ -633,13 +689,17 @@ class ApiService {
         }
         String errorMsg;
         if (response.statusCode == 301 || response.statusCode == 302) {
-          errorMsg = 'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
+          errorMsg =
+              'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
         } else if (response.statusCode >= 500) {
-          errorMsg = 'Erreur interne du serveur (${response.statusCode}). Réessayez plus tard.';
+          errorMsg =
+              'Erreur interne du serveur (${response.statusCode}). Réessayez plus tard.';
         } else if (response.statusCode == 404) {
-          errorMsg = 'Endpoint non trouvé. Vérifiez la version de l\'API sur le serveur.';
+          errorMsg =
+              'Endpoint non trouvé. Vérifiez la version de l\'API sur le serveur.';
         } else {
-          errorMsg = 'Le serveur a renvoyé une réponse inattendue (${response.statusCode}). Vérifiez l\'URL du serveur.';
+          errorMsg =
+              'Le serveur a renvoyé une réponse inattendue (${response.statusCode}). Vérifiez l\'URL du serveur.';
         }
         return ApiResponse<T>(
           success: false,
@@ -647,10 +707,10 @@ class ApiService {
           errorMessage: errorMsg,
         );
       }
-      
+
       // Parse la réponse JSON pour tous les status (200, 400, etc.)
       final jsonResponse = jsonDecode(response.body);
-      
+
       if (response.statusCode == 200 && jsonResponse['success'] == true) {
         return ApiResponse<T>(
           success: true,
@@ -669,7 +729,9 @@ class ApiService {
           success: false,
           errorCode: errorCode,
           errorMessage: error?['message'] ?? 'Une erreur est survenue',
-          data: jsonResponse['data'] as T?, // Inclure les données (ex: existing_record pour les doublons)
+          data:
+              jsonResponse['data']
+                  as T?, // Inclure les données (ex: existing_record pour les doublons)
         );
       }
     } on http.ClientException {
@@ -692,7 +754,8 @@ class ApiService {
       return ApiResponse<T>(
         success: false,
         errorCode: 'PARSE_ERROR',
-        errorMessage: 'Réponse invalide du serveur. Vérifiez l\'URL et la connexion.',
+        errorMessage:
+            'Réponse invalide du serveur. Vérifiez l\'URL et la connexion.',
       );
     } catch (e) {
       return ApiResponse<T>(
@@ -724,7 +787,8 @@ class ApiService {
 
       final contentType = response.headers['content-type'] ?? '';
       final bodyText = response.body.trimLeft();
-      if (!contentType.contains('application/json') && bodyText.startsWith('<')) {
+      if (!contentType.contains('application/json') &&
+          bodyText.startsWith('<')) {
         // Le serveur a renvoyé du HTML (page d'erreur, redirection, session
         // expirée, etc.) : fournir un message actionnable.
         if (response.statusCode == 401 && authenticated) {
@@ -737,13 +801,17 @@ class ApiService {
         }
         String errorMsg;
         if (response.statusCode == 301 || response.statusCode == 302) {
-          errorMsg = 'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
+          errorMsg =
+              'Le serveur a redirigé la requête. Vérifiez l\'URL du serveur.';
         } else if (response.statusCode >= 500) {
-          errorMsg = 'Erreur interne du serveur (${response.statusCode}). Réessayez plus tard.';
+          errorMsg =
+              'Erreur interne du serveur (${response.statusCode}). Réessayez plus tard.';
         } else if (response.statusCode == 404) {
-          errorMsg = 'Endpoint non trouvé. Vérifiez la version de l\'API sur le serveur.';
+          errorMsg =
+              'Endpoint non trouvé. Vérifiez la version de l\'API sur le serveur.';
         } else {
-          errorMsg = 'Réponse inattendue du serveur (${response.statusCode}). Vérifiez l\'URL du serveur.';
+          errorMsg =
+              'Réponse inattendue du serveur (${response.statusCode}). Vérifiez l\'URL du serveur.';
         }
         return ApiResponse<T>(
           success: false,

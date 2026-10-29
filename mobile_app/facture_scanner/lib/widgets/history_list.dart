@@ -22,7 +22,7 @@ class HistoryList extends StatelessWidget {
         if (scan.isLoadingHistory) {
           return _buildLoadingList(context);
         }
-        
+
         if (scan.history.isEmpty) {
           // État vide RAFRAÎCHISSABLE : permet à l'utilisateur de retenter
           // le chargement (pull-to-refresh) même quand l'historique est vide,
@@ -45,7 +45,7 @@ class HistoryList extends StatelessWidget {
             ),
           );
         }
-        
+
         return RefreshIndicator(
           onRefresh: () => scan.loadHistory(
             forceRefresh: true,
@@ -67,7 +67,7 @@ class HistoryList extends StatelessWidget {
 
   Widget _buildHistoryItem(BuildContext context, ScanRecord record, int index) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    
+
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: Duration(milliseconds: 300 + (index * 50)),
@@ -136,12 +136,16 @@ class HistoryList extends StatelessWidget {
                           ],
                         ),
                       ),
-                      _buildStateBadge(context, record.state, record.stateLabel),
+                      _buildStateBadge(
+                        context,
+                        record.state,
+                        record.stateLabel,
+                      ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 14),
-                  
+
                   // Divider avec gradient
                   Container(
                     height: 1,
@@ -149,9 +153,9 @@ class HistoryList extends StatelessWidget {
                       color: AppTheme.getDivider(context),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 14),
-                  
+
                   // Details row
                   Row(
                     children: [
@@ -159,8 +163,8 @@ class HistoryList extends StatelessWidget {
                         child: _buildDetailColumn(
                           context,
                           'N° Facture DGI',
-                          record.invoiceNumberDgi.isNotEmpty 
-                              ? record.invoiceNumberDgi 
+                          record.invoiceNumberDgi.isNotEmpty
+                              ? record.invoiceNumberDgi
                               : '-',
                           Icons.receipt_long_rounded,
                         ),
@@ -182,12 +186,15 @@ class HistoryList extends StatelessWidget {
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Footer row
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.getSurfaceLight(context),
                       borderRadius: BorderRadius.circular(10),
@@ -201,8 +208,8 @@ class HistoryList extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          record.scanDate != null 
-                              ? dateFormat.format(record.scanDate!) 
+                          record.scanDate != null
+                              ? dateFormat.format(record.scanDate!)
                               : '-',
                           style: TextStyle(
                             fontSize: 13,
@@ -219,10 +226,14 @@ class HistoryList extends StatelessWidget {
                             ),
                             margin: const EdgeInsets.only(right: 6),
                             decoration: BoxDecoration(
-                              color: AppTheme.getPrimary(context).withValues(alpha: 0.1),
+                              color: AppTheme.getPrimary(
+                                context,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(
-                                color: AppTheme.getPrimary(context).withValues(alpha: 0.3),
+                                color: AppTheme.getPrimary(
+                                  context,
+                                ).withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
@@ -252,7 +263,9 @@ class HistoryList extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: AppTheme.getPrimary(context).withValues(alpha: 0.1),
+                              color: AppTheme.getPrimary(
+                                context,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -306,7 +319,9 @@ class HistoryList extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: primaryColor.withValues(alpha: AppTheme.isDark(context) ? 0.18 : 0.08),
+            color: primaryColor.withValues(
+              alpha: AppTheme.isDark(context) ? 0.18 : 0.08,
+            ),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
           ),
@@ -340,11 +355,11 @@ class HistoryList extends StatelessWidget {
       }).toList(),
     );
   }
-  
+
   Widget _buildStateIcon(BuildContext context, String state) {
     IconData icon;
     Color color;
-    
+
     switch (state) {
       case 'done':
         icon = Icons.check_circle_rounded;
@@ -366,7 +381,7 @@ class HistoryList extends StatelessWidget {
         icon = Icons.pending_rounded;
         color = AppTheme.getTextMuted(context);
     }
-    
+
     return Container(
       width: 48,
       height: 48,
@@ -374,25 +389,19 @@ class HistoryList extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.2),
-            color.withValues(alpha: 0.1),
-          ],
+          colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0.1)],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
       child: Icon(icon, color: color, size: 26),
     );
   }
-  
+
   Widget _buildStateBadge(BuildContext context, String state, String label) {
     Color color;
     Color bgColor;
-    
+
     switch (state) {
       case 'done':
         color = AppTheme.getSuccess(context);
@@ -414,7 +423,7 @@ class HistoryList extends StatelessWidget {
         color = AppTheme.getTextMuted(context);
         bgColor = AppTheme.getTextMuted(context).withValues(alpha: 0.1);
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -432,7 +441,7 @@ class HistoryList extends StatelessWidget {
       ),
     );
   }
-  
+
   /// Pastille « AVOIR » de la liste d'historique.
   Widget _buildRefundChip(BuildContext context) {
     return Container(
@@ -460,7 +469,14 @@ class HistoryList extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailColumn(BuildContext context, String label, String value, IconData icon, {bool isAmount = false, bool isNegative = false}) {
+  Widget _buildDetailColumn(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon, {
+    bool isAmount = false,
+    bool isNegative = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
@@ -487,8 +503,8 @@ class HistoryList extends StatelessWidget {
               color: isNegative
                   ? AppTheme.getError(context)
                   : (isAmount
-                      ? AppTheme.getSuccess(context)
-                      : AppTheme.getTextPrimary(context)),
+                        ? AppTheme.getSuccess(context)
+                        : AppTheme.getTextPrimary(context)),
               fontWeight: FontWeight.w700,
               fontSize: 15,
             ),
@@ -499,7 +515,7 @@ class HistoryList extends StatelessWidget {
       ),
     );
   }
-  
+
   void _showRecordDetails(BuildContext context, ScanRecord record) {
     showModalBottomSheet(
       context: context,
@@ -518,8 +534,12 @@ class HistoryList extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 12),
           decoration: AppTheme.getCardDecoration(context),
           child: Shimmer.fromColors(
-            baseColor: AppTheme.isDark(context) ? const Color(0xFF3A3A3A) : Colors.grey.shade300,
-            highlightColor: AppTheme.isDark(context) ? const Color(0xFF4A4A4A) : Colors.grey.shade100,
+            baseColor: AppTheme.isDark(context)
+                ? const Color(0xFF3A3A3A)
+                : Colors.grey.shade300,
+            highlightColor: AppTheme.isDark(context)
+                ? const Color(0xFF4A4A4A)
+                : Colors.grey.shade100,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -540,9 +560,17 @@ class HistoryList extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(width: 150, height: 16, color: Colors.white),
+                            Container(
+                              width: 150,
+                              height: 16,
+                              color: Colors.white,
+                            ),
                             const SizedBox(height: 6),
-                            Container(width: 100, height: 12, color: Colors.white),
+                            Container(
+                              width: 100,
+                              height: 12,
+                              color: Colors.white,
+                            ),
                           ],
                         ),
                       ),
@@ -565,9 +593,17 @@ class HistoryList extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(width: 80, height: 10, color: Colors.white),
+                            Container(
+                              width: 80,
+                              height: 10,
+                              color: Colors.white,
+                            ),
                             const SizedBox(height: 6),
-                            Container(width: 100, height: 14, color: Colors.white),
+                            Container(
+                              width: 100,
+                              height: 14,
+                              color: Colors.white,
+                            ),
                           ],
                         ),
                       ),
@@ -575,9 +611,17 @@ class HistoryList extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(width: 60, height: 10, color: Colors.white),
+                            Container(
+                              width: 60,
+                              height: 10,
+                              color: Colors.white,
+                            ),
                             const SizedBox(height: 6),
-                            Container(width: 90, height: 14, color: Colors.white),
+                            Container(
+                              width: 90,
+                              height: 14,
+                              color: Colors.white,
+                            ),
                           ],
                         ),
                       ),
@@ -640,13 +684,13 @@ class HistoryList extends StatelessWidget {
 /// Bottom sheet pour les détails d'un enregistrement
 class _RecordDetailsSheet extends StatelessWidget {
   final ScanRecord record;
-  
+
   const _RecordDetailsSheet({required this.record});
-  
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
-    
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceElevated(context),
@@ -665,7 +709,7 @@ class _RecordDetailsSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          
+
           // Header
           Padding(
             padding: const EdgeInsets.all(20),
@@ -706,52 +750,86 @@ class _RecordDetailsSheet extends StatelessWidget {
               ],
             ),
           ),
-          
+
           const Divider(height: 1),
-          
+
           // Content
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
-                _buildDetailRow(context, 'Référence', record.reference, Icons.tag_rounded),
+                _buildDetailRow(
+                  context,
+                  'Référence',
+                  record.reference,
+                  Icons.tag_rounded,
+                ),
                 if (record.supplierName.isNotEmpty)
-                  _buildDetailRow(context, 'Fournisseur', record.supplierName, Icons.business_rounded),
+                  _buildDetailRow(
+                    context,
+                    'Fournisseur',
+                    record.supplierName,
+                    Icons.business_rounded,
+                  ),
                 if (record.invoiceNumberDgi.isNotEmpty)
-                  _buildDetailRow(context, 'N° Facture DGI', record.invoiceNumberDgi, Icons.receipt_long_rounded),
-                _buildDetailRow(
+                  _buildDetailRow(
                     context,
-                    record.isRefund ? 'Nature' : 'Nature',
-                    record.isRefund ? 'AVOIR fournisseur' : 'Facture',
-                    record.isRefund
-                        ? Icons.undo_rounded
-                        : Icons.receipt_long_rounded),
+                    'N° Facture DGI',
+                    record.invoiceNumberDgi,
+                    Icons.receipt_long_rounded,
+                  ),
                 _buildDetailRow(
-                    context,
-                    record.isRefund ? 'Montant de l\'avoir' : 'Montant',
-                    record.formattedAmount,
-                    Icons.payments_rounded,
-                    highlight: true),
+                  context,
+                  record.isRefund ? 'Nature' : 'Nature',
+                  record.isRefund ? 'AVOIR fournisseur' : 'Facture',
+                  record.isRefund
+                      ? Icons.undo_rounded
+                      : Icons.receipt_long_rounded,
+                ),
+                _buildDetailRow(
+                  context,
+                  record.isRefund ? 'Montant de l\'avoir' : 'Montant',
+                  record.formattedAmount,
+                  Icons.payments_rounded,
+                  highlight: true,
+                ),
                 if (record.isRefund && record.originInvoiceNumberDgi.isNotEmpty)
                   _buildDetailRow(
-                      context,
-                      'Facture d\'origine',
-                      record.originScanReference.isNotEmpty
-                          ? '${record.originInvoiceNumberDgi} (${record.originScanReference})'
-                          : record.originInvoiceNumberDgi,
-                      Icons.call_split_rounded),
+                    context,
+                    'Facture d\'origine',
+                    record.originScanReference.isNotEmpty
+                        ? '${record.originInvoiceNumberDgi} (${record.originScanReference})'
+                        : record.originInvoiceNumberDgi,
+                    Icons.call_split_rounded,
+                  ),
                 if (record.invoiceName != null)
                   _buildDetailRow(
-                      context,
-                      record.isRefund ? 'Avoir Odoo' : 'Facture Odoo',
-                      record.invoiceName!,
-                      Icons.link_rounded),
+                    context,
+                    record.isRefund ? 'Avoir Odoo' : 'Facture Odoo',
+                    record.invoiceName!,
+                    Icons.link_rounded,
+                  ),
                 if (record.scanDate != null)
-                  _buildDetailRow(context, 'Date du scan', dateFormat.format(record.scanDate!), Icons.schedule_rounded),
+                  _buildDetailRow(
+                    context,
+                    'Date du scan',
+                    dateFormat.format(record.scanDate!),
+                    Icons.schedule_rounded,
+                  ),
                 if (record.isProcessed && record.processedBy != null)
-                  _buildDetailRow(context, 'Traité par', record.processedBy!, Icons.verified_rounded),
+                  _buildDetailRow(
+                    context,
+                    'Traité par',
+                    record.processedBy!,
+                    Icons.verified_rounded,
+                  ),
                 if (record.isProcessed && record.processedDate != null)
-                  _buildDetailRow(context, 'Date de traitement', dateFormat.format(record.processedDate!), Icons.event_available_rounded),
+                  _buildDetailRow(
+                    context,
+                    'Date de traitement',
+                    dateFormat.format(record.processedDate!),
+                    Icons.event_available_rounded,
+                  ),
                 if (record.hasOtLinks)
                   ...record.otLinks.map((link) {
                     final ref = link.otReference.isNotEmpty
@@ -771,7 +849,7 @@ class _RecordDetailsSheet extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Actions
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
@@ -801,7 +879,10 @@ class _RecordDetailsSheet extends StatelessWidget {
                     icon: const Icon(Icons.check_rounded),
                     label: const Text(
                       'Fermer',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -812,11 +893,11 @@ class _RecordDetailsSheet extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildStateIcon(BuildContext context, String state) {
     IconData icon;
     Color color;
-    
+
     switch (state) {
       case 'done':
         icon = Icons.check_circle_rounded;
@@ -838,7 +919,7 @@ class _RecordDetailsSheet extends StatelessWidget {
         icon = Icons.pending_rounded;
         color = AppTheme.getTextMuted(context);
     }
-    
+
     return Container(
       width: 56,
       height: 56,
@@ -853,18 +934,29 @@ class _RecordDetailsSheet extends StatelessWidget {
       child: Icon(icon, color: color, size: 32),
     );
   }
-  
+
   Color _getStateColor(BuildContext context, String state) {
     switch (state) {
-      case 'done': return AppTheme.getSuccess(context);
-      case 'processed': return AppTheme.getPrimary(context);
-      case 'error': return AppTheme.getError(context);
-      case 'duplicate': return AppTheme.getWarning(context);
-      default: return AppTheme.getTextMuted(context);
+      case 'done':
+        return AppTheme.getSuccess(context);
+      case 'processed':
+        return AppTheme.getPrimary(context);
+      case 'error':
+        return AppTheme.getError(context);
+      case 'duplicate':
+        return AppTheme.getWarning(context);
+      default:
+        return AppTheme.getTextMuted(context);
     }
   }
-  
-  Widget _buildDetailRow(BuildContext context, String label, String value, IconData icon, {bool highlight = false}) {
+
+  Widget _buildDetailRow(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon, {
+    bool highlight = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -873,13 +965,19 @@ class _RecordDetailsSheet extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: (highlight ? AppTheme.getSuccess(context) : AppTheme.getPrimary(context)).withValues(alpha: 0.1),
+              color:
+                  (highlight
+                          ? AppTheme.getSuccess(context)
+                          : AppTheme.getPrimary(context))
+                      .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               size: 20,
-              color: highlight ? AppTheme.getSuccess(context) : AppTheme.getPrimary(context),
+              color: highlight
+                  ? AppTheme.getSuccess(context)
+                  : AppTheme.getPrimary(context),
             ),
           ),
           const SizedBox(width: 14),
@@ -899,7 +997,9 @@ class _RecordDetailsSheet extends StatelessWidget {
                 Text(
                   value,
                   style: TextStyle(
-                    color: highlight ? AppTheme.getSuccess(context) : AppTheme.getTextPrimary(context),
+                    color: highlight
+                        ? AppTheme.getSuccess(context)
+                        : AppTheme.getTextPrimary(context),
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
@@ -916,31 +1016,31 @@ class _RecordDetailsSheet extends StatelessWidget {
 /// Bouton toggle pour marquer un scan comme traité / non traité
 class _ProcessToggleButton extends StatefulWidget {
   final ScanRecord record;
-  
+
   const _ProcessToggleButton({required this.record});
-  
+
   @override
   State<_ProcessToggleButton> createState() => _ProcessToggleButtonState();
 }
 
 class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
   bool _isLoading = false;
-  
+
   Future<void> _toggleProcessed() async {
     setState(() => _isLoading = true);
-    
+
     final scan = context.read<ScanProvider>();
     bool success;
-    
+
     if (widget.record.state == 'done') {
       success = await scan.markAsProcessed(widget.record.id);
     } else {
       success = await scan.markAsUnprocessed(widget.record.id);
     }
-    
+
     if (mounted) {
       setState(() => _isLoading = false);
-      
+
       if (success) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -948,8 +1048,8 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
             content: Row(
               children: [
                 Icon(
-                  widget.record.state == 'done' 
-                      ? Icons.verified_rounded 
+                  widget.record.state == 'done'
+                      ? Icons.verified_rounded
                       : Icons.undo_rounded,
                   color: Colors.white,
                   size: 20,
@@ -962,12 +1062,14 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
                 ),
               ],
             ),
-            backgroundColor: widget.record.state == 'done' 
-                ? AppTheme.getPrimary(context) 
+            backgroundColor: widget.record.state == 'done'
+                ? AppTheme.getPrimary(context)
                 : AppTheme.getWarning(context),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -984,33 +1086,35 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
             backgroundColor: AppTheme.getError(context),
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final isProcessed = widget.record.state == 'processed';
-    
+
     return ElevatedButton.icon(
       onPressed: _isLoading ? null : _toggleProcessed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: isProcessed 
-            ? Colors.orange.shade50 
+        backgroundColor: isProcessed
+            ? Colors.orange.shade50
             : AppTheme.getPrimary(context).withValues(alpha: 0.1),
-        foregroundColor: isProcessed 
-            ? Colors.orange.shade700 
+        foregroundColor: isProcessed
+            ? Colors.orange.shade700
             : AppTheme.getPrimary(context),
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isProcessed 
-                ? Colors.orange.shade300 
+            color: isProcessed
+                ? Colors.orange.shade300
                 : AppTheme.getPrimary(context).withValues(alpha: 0.3),
           ),
         ),
@@ -1021,7 +1125,9 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
               height: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: isProcessed ? Colors.orange.shade700 : AppTheme.getPrimary(context),
+                color: isProcessed
+                    ? Colors.orange.shade700
+                    : AppTheme.getPrimary(context),
               ),
             )
           : Icon(isProcessed ? Icons.undo_rounded : Icons.verified_rounded),

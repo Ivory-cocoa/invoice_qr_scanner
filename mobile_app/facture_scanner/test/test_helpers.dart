@@ -11,9 +11,9 @@ void mockPlatformPlugins() {
   SharedPreferences.setMockInitialValues({});
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(
-    const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
-    (_) async => null,
-  );
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (_) async => null,
+      );
 }
 
 /// Écran d'un téléphone Android courant (360 × 690 dp) : les défauts de mise

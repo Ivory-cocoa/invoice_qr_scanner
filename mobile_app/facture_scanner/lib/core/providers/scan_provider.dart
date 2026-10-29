@@ -14,15 +14,24 @@ import '../services/dgi_parser_service.dart';
 import '../models/scan_record.dart';
 import 'auth_provider.dart';
 
-enum ScanState { idle, scanning, processing, success, error, duplicate, alreadyProcessed, manualEntry }
+enum ScanState {
+  idle,
+  scanning,
+  processing,
+  success,
+  error,
+  duplicate,
+  alreadyProcessed,
+  manualEntry,
+}
 
 class ScanProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
   final SyncService _sync = SyncService();
-  
+
   AuthProvider? _auth;
-  
+
   ScanState _state = ScanState.idle;
   String? _message;
   ScanRecord? _lastScanResult;
@@ -30,25 +39,25 @@ class ScanProvider extends ChangeNotifier {
   bool _isLoadingHistory = false;
   int _pendingScansCount = 0;
   Map<String, dynamic>? _stats;
-  
+
   // Compteurs locaux pour les KPIs (quand offline ou en temps réel)
   int _localDuplicateCount = 0;
   int _localErrorCount = 0;
   int _localSuccessCount = 0;
-  
+
   // Progression de l'extraction DGI
   String? _extractionProgress;
-  
+
   // Timeout configurable pour la vérification DGI (en secondes)
   static const String _timeoutKey = 'dgi_verification_timeout';
   static const int defaultTimeout = 5;
   int _verificationTimeout = defaultTimeout;
-  
+
   // Données DGI extraites (pour le formulaire manuel)
   DgiParsedData? _extractedDgiData;
   String? _pendingQrUrl;
   double _lastVerificationDuration = 0;
-  
+
   // Getters
   ScanState get state => _state;
   String? get message => _message;
@@ -63,29 +72,37 @@ class ScanProvider extends ChangeNotifier {
   DgiParsedData? get extractedDgiData => _extractedDgiData;
   String? get pendingQrUrl => _pendingQrUrl;
   double get lastVerificationDuration => _lastVerificationDuration;
-  
+
   // Stats avec compteurs locaux combinés
   // Retourne toujours les stats (même si vides) pour permettre l'affichage des compteurs locaux
   Map<String, dynamic> get combinedStats {
-    final baseStats = _stats ?? {
-      'total_scans': 0,
-      'successful_scans': 0,
-      'processed_scans': 0,
-      'unprocessed_scans': 0,
-      'duplicate_attempts': 0,
-      'records_with_duplicates': 0,
-      'error_scans': 0,
-      'total_amount': 0,
-    };
+    final baseStats =
+        _stats ??
+        {
+          'total_scans': 0,
+          'successful_scans': 0,
+          'processed_scans': 0,
+          'unprocessed_scans': 0,
+          'duplicate_attempts': 0,
+          'records_with_duplicates': 0,
+          'error_scans': 0,
+          'total_amount': 0,
+        };
     return {
       ...baseStats,
-      'duplicate_attempts': (baseStats['duplicate_attempts'] ?? 0) + _localDuplicateCount,
+      'duplicate_attempts':
+          (baseStats['duplicate_attempts'] ?? 0) + _localDuplicateCount,
       'error_scans': (baseStats['error_scans'] ?? 0) + _localErrorCount,
-      'successful_scans': (baseStats['successful_scans'] ?? 0) + _localSuccessCount,
-      'total_scans': (baseStats['total_scans'] ?? 0) + _localDuplicateCount + _localErrorCount + _localSuccessCount,
+      'successful_scans':
+          (baseStats['successful_scans'] ?? 0) + _localSuccessCount,
+      'total_scans':
+          (baseStats['total_scans'] ?? 0) +
+          _localDuplicateCount +
+          _localErrorCount +
+          _localSuccessCount,
     };
   }
-  
+
   void updateAuth(AuthProvider auth) {
     _auth = auth;
   }
@@ -106,27 +123,34 @@ class ScanProvider extends ChangeNotifier {
     if (_disposed) return;
     super.notifyListeners();
   }
-  
+
   /// Extract UUID from DGI URL
   String? extractUuidFromUrl(String url) {
-    final pattern = RegExp(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', caseSensitive: false);
+    final pattern = RegExp(
+      r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+      caseSensitive: false,
+    );
     final match = pattern.firstMatch(url);
     return match?.group(0)?.toLowerCase();
   }
-  
+
   /// Validate QR code URL
   bool isValidDgiUrl(String url) {
     return url.contains('services.fne.dgi.gouv.ci');
   }
-  
+
   /// Process a scanned QR code
   /// If [localExtraction] is true, extract DGI data locally and save for scheduled sync
-  Future<void> processQrCode(String qrContent, {bool isOnline = true, bool localExtraction = false}) async {
+  Future<void> processQrCode(
+    String qrContent, {
+    bool isOnline = true,
+    bool localExtraction = false,
+  }) async {
     _state = ScanState.processing;
     _message = null;
     _lastScanResult = null;
     notifyListeners();
-    
+
     // Validate URL
     if (!isValidDgiUrl(qrContent)) {
       _state = ScanState.error;
@@ -135,7 +159,7 @@ class ScanProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    
+
     final qrUuid = extractUuidFromUrl(qrContent);
     if (qrUuid == null) {
       _state = ScanState.error;
@@ -144,7 +168,7 @@ class ScanProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    
+
     // Check local cache first (for duplicates) - but we'll still report to server
     final cached = await _db.findInHistoryCache(qrUuid);
     if (cached != null) {
@@ -152,16 +176,16 @@ class ScanProvider extends ChangeNotifier {
       _message = 'Cette facture a déjà été scannée';
       _lastScanResult = cached;
       _localDuplicateCount++; // Incrémenter le compteur de doublons local
-      
+
       // IMPORTANT: Signaler le doublon au serveur pour incrémenter le compteur
       if (isOnline) {
         _reportDuplicateToServer(qrContent);
       }
-      
+
       notifyListeners();
       return;
     }
-    
+
     // Check pending scans
     final isPending = await _db.isPendingScan(qrUuid);
     if (isPending) {
@@ -171,7 +195,7 @@ class ScanProvider extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    
+
     if (isOnline && !localExtraction) {
       // Online mode uses processQrCodeWithExtraction() instead
       _state = ScanState.error;
@@ -182,7 +206,7 @@ class ScanProvider extends ChangeNotifier {
       await _processOffline(qrContent, qrUuid);
     }
   }
-  
+
   /// Report a duplicate detection to the server (fire and forget)
   Future<void> _reportDuplicateToServer(String qrUrl) async {
     try {
@@ -214,7 +238,7 @@ class ScanProvider extends ChangeNotifier {
                 : DateTime.now(),
             lastDuplicateUser: recordData['last_duplicate_user'],
           );
-          
+
           // Mettre à jour le cache local
           await _db.cacheScanHistory([updatedRecord]);
           _lastScanResult = updatedRecord;
@@ -229,7 +253,10 @@ class ScanProvider extends ChangeNotifier {
   /// Process QR code with client-side DGI extraction and configurable timeout.
   /// If extraction takes longer than the timeout, switches to manual entry.
   /// Returns true if manual entry is needed (caller should navigate to form).
-  Future<bool> processQrCodeWithExtraction(String qrContent, {bool isOnline = true}) async {
+  Future<bool> processQrCodeWithExtraction(
+    String qrContent, {
+    bool isOnline = true,
+  }) async {
     _state = ScanState.processing;
     _message = null;
     _lastScanResult = null;
@@ -357,7 +384,10 @@ class ScanProvider extends ChangeNotifier {
     }
 
     _state = ScanState.error;
-    _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
+    _message = _getUserFriendlyMessage(
+      response.errorCode,
+      response.errorMessage,
+    );
     _localErrorCount++;
     notifyListeners();
     return false;
@@ -366,20 +396,40 @@ class ScanProvider extends ChangeNotifier {
   /// Validate QR code and check for duplicates (without starting extraction).
   /// Returns ({bool valid, String? error, String? qrUuid, bool isDuplicate, ScanRecord? existing}).
   /// Used by HomeScreen before enqueuing to BackgroundScanQueue.
-  Future<({bool valid, String? error, String? qrUuid, bool isDuplicate, ScanRecord? existing})>
-      validateQrForQueue(String qrContent, {bool checkServer = true}) async {
+  Future<
+    ({
+      bool valid,
+      String? error,
+      String? qrUuid,
+      bool isDuplicate,
+      ScanRecord? existing,
+    })
+  >
+  validateQrForQueue(String qrContent, {bool checkServer = true}) async {
     // Validate URL
     if (!isValidDgiUrl(qrContent)) {
       _localErrorCount++;
       notifyListeners();
-      return (valid: false, error: 'QR-code non valide. Seules les factures DGI sont supportées.', qrUuid: null, isDuplicate: false, existing: null);
+      return (
+        valid: false,
+        error: 'QR-code non valide. Seules les factures DGI sont supportées.',
+        qrUuid: null,
+        isDuplicate: false,
+        existing: null,
+      );
     }
 
     final qrUuid = extractUuidFromUrl(qrContent);
     if (qrUuid == null) {
       _localErrorCount++;
       notifyListeners();
-      return (valid: false, error: 'Impossible d\'extraire l\'identifiant du QR-code', qrUuid: null, isDuplicate: false, existing: null);
+      return (
+        valid: false,
+        error: 'Impossible d\'extraire l\'identifiant du QR-code',
+        qrUuid: null,
+        isDuplicate: false,
+        existing: null,
+      );
     }
 
     // Check local cache
@@ -388,7 +438,13 @@ class ScanProvider extends ChangeNotifier {
       _localDuplicateCount++;
       if (checkServer) _reportDuplicateToServer(qrContent);
       notifyListeners();
-      return (valid: false, error: 'Cette facture a déjà été scannée', qrUuid: qrUuid, isDuplicate: true, existing: cached);
+      return (
+        valid: false,
+        error: 'Cette facture a déjà été scannée',
+        qrUuid: qrUuid,
+        isDuplicate: true,
+        existing: cached,
+      );
     }
 
     // Check pending scans
@@ -396,7 +452,13 @@ class ScanProvider extends ChangeNotifier {
     if (isPending) {
       _localDuplicateCount++;
       notifyListeners();
-      return (valid: false, error: 'Ce scan est en attente de synchronisation', qrUuid: qrUuid, isDuplicate: true, existing: null);
+      return (
+        valid: false,
+        error: 'Ce scan est en attente de synchronisation',
+        qrUuid: qrUuid,
+        isDuplicate: true,
+        existing: null,
+      );
     }
 
     // Check server
@@ -406,18 +468,35 @@ class ScanProvider extends ChangeNotifier {
         if (!checkResponse.success && checkResponse.errorCode == 'DUPLICATE') {
           _localDuplicateCount++;
           ScanRecord? existing;
-          if (checkResponse.data != null && checkResponse.data!.containsKey('existing_record')) {
-            existing = ScanRecord.fromJson(checkResponse.data!['existing_record']);
+          if (checkResponse.data != null &&
+              checkResponse.data!.containsKey('existing_record')) {
+            existing = ScanRecord.fromJson(
+              checkResponse.data!['existing_record'],
+            );
           }
           notifyListeners();
-          return (valid: false, error: checkResponse.errorMessage ?? 'Cette facture a déjà été scannée', qrUuid: qrUuid, isDuplicate: true, existing: existing);
+          return (
+            valid: false,
+            error:
+                checkResponse.errorMessage ??
+                'Cette facture a déjà été scannée',
+            qrUuid: qrUuid,
+            isDuplicate: true,
+            existing: existing,
+          );
         }
       } catch (_) {
         // If check fails, allow enqueue
       }
     }
 
-    return (valid: true, error: null, qrUuid: qrUuid, isDuplicate: false, existing: null);
+    return (
+      valid: true,
+      error: null,
+      qrUuid: qrUuid,
+      isDuplicate: false,
+      existing: null,
+    );
   }
 
   /// Submit data from the manual entry form to the server
@@ -435,7 +514,9 @@ class ScanProvider extends ChangeNotifier {
   }) async {
     final isRefund = documentType == DocumentType.refund;
     _state = ScanState.processing;
-    _message = isRefund ? 'Enregistrement de l\'avoir...' : 'Création de la facture...';
+    _message = isRefund
+        ? 'Enregistrement de l\'avoir...'
+        : 'Création de la facture...';
     notifyListeners();
 
     try {
@@ -455,7 +536,8 @@ class ScanProvider extends ChangeNotifier {
 
       if (response.success && response.data != null) {
         _state = ScanState.success;
-        _message = response.data!['message'] ??
+        _message =
+            response.data!['message'] ??
             (isRefund
                 ? 'Avoir enregistré avec succès (saisie manuelle)'
                 : 'Facture créée avec succès (saisie manuelle)');
@@ -469,12 +551,18 @@ class ScanProvider extends ChangeNotifier {
         _state = ScanState.duplicate;
         _message = response.errorMessage ?? 'Cette facture a déjà été scannée';
         _localDuplicateCount++;
-        if (response.data != null && response.data!.containsKey('existing_record')) {
-          _lastScanResult = ScanRecord.fromJson(response.data!['existing_record']);
+        if (response.data != null &&
+            response.data!.containsKey('existing_record')) {
+          _lastScanResult = ScanRecord.fromJson(
+            response.data!['existing_record'],
+          );
         }
       } else {
         _state = ScanState.error;
-        _message = _getUserFriendlyMessage(response.errorCode, response.errorMessage);
+        _message = _getUserFriendlyMessage(
+          response.errorCode,
+          response.errorMessage,
+        );
         _localErrorCount++;
       }
     } catch (e) {
@@ -510,25 +598,25 @@ class ScanProvider extends ChangeNotifier {
     switch (errorCode) {
       case 'DGI_INCOMPLETE':
         return 'Le site DGI n\'a pas fourni toutes les informations de la facture. '
-               'Veuillez réessayer dans quelques instants.';
+            'Veuillez réessayer dans quelques instants.';
       case 'DGI_ERROR':
         return 'Impossible d\'accéder au site DGI pour vérifier cette facture. '
-               'Le site peut être temporairement indisponible.';
+            'Le site peut être temporairement indisponible.';
       case 'INVOICE_ERROR':
         return 'La facture n\'a pas pu être créée dans le système. '
-               'Veuillez contacter l\'administrateur si le problème persiste.';
+            'Veuillez contacter l\'administrateur si le problème persiste.';
       case 'INVALID_URL':
         return 'Le QR code scanné n\'est pas un QR code de facture DGI valide. '
-               'Veuillez vérifier que vous scannez le bon QR code.';
+            'Veuillez vérifier que vous scannez le bon QR code.';
       case 'SERVER_BUSY':
         return 'Le serveur traite d\'autres scans en ce moment. '
-               'Veuillez patienter quelques secondes et réessayer.';
+            'Veuillez patienter quelques secondes et réessayer.';
       case 'TIMEOUT':
         return 'Le traitement prend plus de temps que prévu. '
-               'Le site DGI peut être lent. Veuillez réessayer.';
+            'Le site DGI peut être lent. Veuillez réessayer.';
       case 'NETWORK_ERROR':
         return 'Pas de connexion internet. '
-               'Vérifiez votre Wi-Fi ou vos données mobiles.';
+            'Vérifiez votre Wi-Fi ou vos données mobiles.';
       case 'AUTH_INVALID':
       case 'AUTH_REQUIRED':
       case 'TOKEN_EXPIRED':
@@ -537,10 +625,12 @@ class ScanProvider extends ChangeNotifier {
         // Si le message brut contient des infos utiles du serveur, l'utiliser
         if (rawMessage != null && rawMessage.isNotEmpty) {
           // Nettoyer les messages techniques
-          if (rawMessage.contains('TimeoutException') || rawMessage.contains('timeout')) {
+          if (rawMessage.contains('TimeoutException') ||
+              rawMessage.contains('timeout')) {
             return 'Le traitement a pris trop de temps. Veuillez réessayer.';
           }
-          if (rawMessage.contains('SocketException') || rawMessage.contains('Connection refused')) {
+          if (rawMessage.contains('SocketException') ||
+              rawMessage.contains('Connection refused')) {
             return 'Impossible de contacter le serveur. Vérifiez votre connexion.';
           }
           // Retourner le message tel quel s'il vient du serveur (déjà en français)
@@ -549,7 +639,7 @@ class ScanProvider extends ChangeNotifier {
         return 'Une erreur est survenue lors du scan. Veuillez réessayer.';
     }
   }
-  
+
   Future<void> _processOffline(String qrUrl, String qrUuid) async {
     // Hors ligne, on ne conserve QUE l'URL du QR-code.
     //
@@ -563,7 +653,8 @@ class ScanProvider extends ChangeNotifier {
       await _updatePendingCount();
 
       _state = ScanState.success;
-      _message = 'Scan enregistré localement.\n'
+      _message =
+          'Scan enregistré localement.\n'
           'La facture sera créée à la prochaine synchronisation.';
       _localSuccessCount++;
     } catch (e) {
@@ -574,24 +665,27 @@ class ScanProvider extends ChangeNotifier {
     _extractionProgress = null;
     notifyListeners();
   }
-  
+
   /// Load scan history from server or cache
-  Future<void> loadHistory({bool forceRefresh = false, bool isOnline = true}) async {
+  Future<void> loadHistory({
+    bool forceRefresh = false,
+    bool isOnline = true,
+  }) async {
     _isLoadingHistory = true;
     notifyListeners();
-    
+
     try {
       if (isOnline) {
         final response = await _api.getHistory();
-        
+
         if (response.success && response.data != null) {
           final records = (response.data!['records'] as List)
               .map((json) => ScanRecord.fromJson(json))
               .toList();
-          
+
           // Afficher immédiatement les données du serveur.
           _history = records;
-          
+
           // Mettre en cache SÉPARÉMENT : une éventuelle erreur d'écriture du
           // cache ne doit JAMAIS écraser l'historique déjà chargé du serveur.
           try {
@@ -613,11 +707,11 @@ class ScanProvider extends ChangeNotifier {
       // On error, try loading from cache
       _history = await _db.getCachedHistory();
     }
-    
+
     _isLoadingHistory = false;
     notifyListeners();
   }
-  
+
   /// Load statistics
   Future<void> loadStats() async {
     try {
@@ -634,26 +728,26 @@ class ScanProvider extends ChangeNotifier {
       // Ignore stats errors
     }
   }
-  
+
   /// Sync pending scans
   Future<SyncResult> syncPendingScans() async {
     final result = await _sync.syncPendingScans();
     await _updatePendingCount();
-    
+
     if (result.success && result.syncedCount > 0) {
       await loadHistory();
       await loadStats(); // Recharger les stats après sync
     }
-    
+
     notifyListeners();
     return result;
   }
-  
+
   Future<void> _updatePendingCount() async {
     _pendingScansCount = await _db.getPendingScansCount();
     notifyListeners();
   }
-  
+
   /// Initialize provider
   Future<void> init() async {
     await _updatePendingCount();
@@ -661,7 +755,7 @@ class ScanProvider extends ChangeNotifier {
     // Nettoyer les données de plus de 24h au démarrage
     await _db.cleanupOldData();
   }
-  
+
   /// Reset state
   void resetState() {
     _state = ScanState.idle;
@@ -669,7 +763,7 @@ class ScanProvider extends ChangeNotifier {
     _lastScanResult = null;
     notifyListeners();
   }
-  
+
   /// Clear offline data only (keep history from server)
   Future<void> clearOfflineData() async {
     await _db.clearAllData();
@@ -679,7 +773,7 @@ class ScanProvider extends ChangeNotifier {
     _localSuccessCount = 0;
     notifyListeners();
   }
-  
+
   /// Clear all data (on logout)
   Future<void> clearData() async {
     _history = [];
@@ -735,7 +829,10 @@ class ScanProvider extends ChangeNotifier {
   }
 
   /// Bulk mark scan records as processed (traités en masse)
-  Future<Map<String, dynamic>?> bulkMarkAsProcessed({List<int>? recordIds, int maxRecords = 50}) async {
+  Future<Map<String, dynamic>?> bulkMarkAsProcessed({
+    List<int>? recordIds,
+    int maxRecords = 50,
+  }) async {
     try {
       final response = await _api.bulkMarkProcessed(
         recordIds: recordIds,
@@ -762,11 +859,11 @@ class ScanProvider extends ChangeNotifier {
   }
 
   // ============ Traiteur-specific methods ============
-  
+
   /// Traiteur stats
   Map<String, dynamic>? _traiteurStats;
   Map<String, dynamic>? get traiteurStats => _traiteurStats;
-  
+
   /// Pending invoices for Traiteur
   List<ScanRecord> _pendingInvoices = [];
   List<ScanRecord> get pendingInvoices => _pendingInvoices;
@@ -790,21 +887,21 @@ class ScanProvider extends ChangeNotifier {
 
     try {
       final response = await _api.scanToProcess(qrContent);
-      
+
       if (response.success && response.data != null) {
         _state = ScanState.success;
         _message = response.data!['message'] ?? 'Facture traitée avec succès';
-        
+
         if (response.data!.containsKey('record')) {
           final recordData = response.data!['record'];
           _lastScanResult = ScanRecord.fromJson(recordData);
         }
-        
+
         // Refresh data
         await loadTraiteurPending();
         await loadTraiteurStats();
       } else {
-        if (response.errorCode == 'AUTH_INVALID' || 
+        if (response.errorCode == 'AUTH_INVALID' ||
             response.errorCode == 'AUTH_REQUIRED' ||
             response.errorCode == 'TOKEN_EXPIRED') {
           _state = ScanState.error;
@@ -812,7 +909,8 @@ class ScanProvider extends ChangeNotifier {
           _auth?.handleSessionExpired();
         } else if (response.errorCode == 'ALREADY_PROCESSED') {
           _state = ScanState.alreadyProcessed;
-          _message = response.errorMessage ?? 'Cette facture a déjà été traitée';
+          _message =
+              response.errorMessage ?? 'Cette facture a déjà été traitée';
           if (response.data != null && response.data!.containsKey('record')) {
             _lastScanResult = ScanRecord.fromJson(response.data!['record']);
           }
@@ -825,7 +923,7 @@ class ScanProvider extends ChangeNotifier {
       _state = ScanState.error;
       _message = 'Erreur: ${e.toString()}';
     }
-    
+
     notifyListeners();
   }
 
@@ -833,7 +931,7 @@ class ScanProvider extends ChangeNotifier {
   Future<void> loadTraiteurPending({int page = 1, int limit = 20}) async {
     _isLoadingPending = true;
     notifyListeners();
-    
+
     try {
       final response = await _api.getTraiteurPending(page: page, limit: limit);
       if (response.success && response.data != null) {
@@ -844,7 +942,7 @@ class ScanProvider extends ChangeNotifier {
     } catch (e) {
       // Keep existing data on error
     }
-    
+
     _isLoadingPending = false;
     notifyListeners();
   }

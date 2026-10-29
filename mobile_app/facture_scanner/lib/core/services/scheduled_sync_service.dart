@@ -48,7 +48,13 @@ void callbackDispatcher() {
         final now = DateTime.now();
 
         // Tolérance de 30 minutes autour de l'heure configurée
-        final scheduledTime = DateTime(now.year, now.month, now.day, syncHour, syncMinute);
+        final scheduledTime = DateTime(
+          now.year,
+          now.month,
+          now.day,
+          syncHour,
+          syncMinute,
+        );
         final diff = now.difference(scheduledTime).inMinutes.abs();
         if (diff > 30) {
           debugPrint('[ScheduledSync] Hors fenêtre de sync (diff: ${diff}min)');
@@ -80,7 +86,8 @@ class ScheduledSyncService {
   final DatabaseService _db = DatabaseService();
 
   // Singleton
-  static final ScheduledSyncService _instance = ScheduledSyncService._internal();
+  static final ScheduledSyncService _instance =
+      ScheduledSyncService._internal();
   factory ScheduledSyncService() => _instance;
   ScheduledSyncService._internal();
 
@@ -92,9 +99,7 @@ class ScheduledSyncService {
   /// Initialiser WorkManager (appeler une seule fois au démarrage)
   Future<void> initialize() async {
     if (_disabledOnWeb) return;
-    await Workmanager().initialize(
-      callbackDispatcher,
-    );
+    await Workmanager().initialize(callbackDispatcher);
     // Programmer la sync si activée
     await rescheduleSync();
   }
@@ -110,7 +115,9 @@ class ScheduledSyncService {
     await Workmanager().cancelByUniqueName(periodicSyncTaskName);
 
     if (!autoSyncEnabled) {
-      debugPrint('[ScheduledSync] Sync automatique désactivée, tâches annulées');
+      debugPrint(
+        '[ScheduledSync] Sync automatique désactivée, tâches annulées',
+      );
       return;
     }
 
@@ -136,9 +143,7 @@ class ScheduledSyncService {
       scheduledSyncTaskName,
       scheduledSyncTaskName,
       initialDelay: initialDelay,
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
+      constraints: Constraints(networkType: NetworkType.connected),
       existingWorkPolicy: ExistingWorkPolicy.replace,
     );
 
@@ -148,9 +153,7 @@ class ScheduledSyncService {
       periodicSyncTaskName,
       frequency: const Duration(hours: 12),
       initialDelay: initialDelay,
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
+      constraints: Constraints(networkType: NetworkType.connected),
       existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
     );
   }

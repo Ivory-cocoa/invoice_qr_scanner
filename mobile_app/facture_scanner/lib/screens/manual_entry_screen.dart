@@ -132,7 +132,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         _reExtractionStatus = response.errorCode == 'DUPLICATE'
             ? 'Cette facture a déjà été enregistrée.'
             : 'Récupération automatique impossible. '
-                'Ouvrez le lien DGI ci-dessous et recopiez les informations.';
+                  'Ouvrez le lien DGI ci-dessous et recopiez les informations.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -144,7 +144,6 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       });
     }
   }
-
 
   /// Ouvre le lien DGI dans le navigateur externe.
   Future<void> _openDgiLink() async {
@@ -173,11 +172,14 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       customerCodeDgi: _customerCodeCtrl.text.trim(),
       invoiceNumberDgi: _invoiceNumberCtrl.text.trim(),
       invoiceDate: _invoiceDateCtrl.text.trim(),
-      amountTtc: (double.tryParse(
-            _amountTtcCtrl.text.replaceAll(' ', '').replaceAll('\u00a0', ''),
-          ) ??
-              0)
-          .abs(),
+      amountTtc:
+          (double.tryParse(
+                    _amountTtcCtrl.text
+                        .replaceAll(' ', '')
+                        .replaceAll('\u00a0', ''),
+                  ) ??
+                  0)
+              .abs(),
       documentType: _documentType,
       verificationDuration: widget.verificationDuration,
     );
@@ -203,95 +205,32 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-              // Info banner
-              if (widget.timedOut)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppTheme.warningColor.withValues(alpha: 0.2)
-                        : AppTheme.warningLight,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.warningColor.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.timer_off_rounded,
-                          color: AppTheme.warningColor, size: 24),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'La vérification DGI a dépassé le délai. '
-                          'Veuillez compléter ou corriger les informations ci-dessous.',
-                          style: TextStyle(
-                            color: AppTheme.getTextPrimary(context),
-                            fontSize: 13,
-                          ),
-                        ),
+                // Info banner
+                if (widget.timedOut)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppTheme.warningColor.withValues(alpha: 0.2)
+                          : AppTheme.warningLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.warningColor.withValues(alpha: 0.3),
                       ),
-                    ],
-                  ),
-                ),
-
-              if (widget.prefillData != null && !widget.timedOut)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppTheme.infoColor.withValues(alpha: 0.2)
-                        : AppTheme.infoLight,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppTheme.infoColor.withValues(alpha: 0.3),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          color: AppTheme.infoColor, size: 24),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Le site DGI est indisponible. Les données pré-remplies '
-                          'proviennent d\'une extraction partielle.',
-                          style: TextStyle(
-                            color: AppTheme.getTextPrimary(context),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // --- Lien DGI cliquable ---
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.blue.shade900.withValues(alpha: 0.3)
-                      : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.blue.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.link_rounded,
-                            color: Colors.blue.shade700, size: 22),
-                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.timer_off_rounded,
+                          color: AppTheme.warningColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Consultez la facture sur le site DGI pour retrouver les informations (codes DGI, etc.)',
+                            'La vérification DGI a dépassé le délai. '
+                            'Veuillez compléter ou corriger les informations ci-dessous.',
                             style: TextStyle(
                               color: AppTheme.getTextPrimary(context),
                               fontSize: 13,
@@ -300,201 +239,312 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _openDgiLink,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blue.shade700,
-                          side: BorderSide(color: Colors.blue.shade300),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10, horizontal: 14),
-                        ),
-                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                        label: const Text(
-                          'Ouvrir la facture sur le site DGI',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
+                  ),
+
+                if (widget.prefillData != null && !widget.timedOut)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? AppTheme.infoColor.withValues(alpha: 0.2)
+                          : AppTheme.infoLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppTheme.infoColor.withValues(alpha: 0.3),
                       ),
                     ),
-                  ],
-                ),
-              ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: AppTheme.infoColor,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Le site DGI est indisponible. Les données pré-remplies '
+                            'proviennent d\'une extraction partielle.',
+                            style: TextStyle(
+                              color: AppTheme.getTextPrimary(context),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-              // --- Statut de la ré-extraction automatique ---
-              if (_isReExtracting || _reExtractionDone)
+                // --- Lien DGI cliquable ---
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? (_isReExtracting
-                            ? Colors.orange.shade900.withValues(alpha: 0.2)
-                            : (_reExtractionStatus.contains('succès')
-                                ? Colors.green.shade900.withValues(alpha: 0.2)
-                                : Colors.grey.shade800.withValues(alpha: 0.3)))
-                        : (_isReExtracting
-                            ? Colors.orange.shade50
-                            : (_reExtractionStatus.contains('succès')
-                                ? Colors.green.shade50
-                                : Colors.grey.shade100)),
-                    borderRadius: BorderRadius.circular(10),
+                        ? Colors.blue.shade900.withValues(alpha: 0.3)
+                        : Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.3),
+                    ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (_isReExtracting)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.orange),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.link_rounded,
+                            color: Colors.blue.shade700,
+                            size: 22,
                           ),
-                        )
-                      else if (_reExtractionStatus.contains('succès'))
-                        const Icon(Icons.check_circle_rounded,
-                            color: Colors.green, size: 20)
-                      else
-                        Icon(Icons.info_outline_rounded,
-                            color: Colors.grey.shade600, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _reExtractionStatus,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.getTextSecondary(context),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Consultez la facture sur le site DGI pour retrouver les informations (codes DGI, etc.)',
+                              style: TextStyle(
+                                color: AppTheme.getTextPrimary(context),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _openDgiLink,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.blue.shade700,
+                            side: BorderSide(color: Colors.blue.shade300),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                              horizontal: 14,
+                            ),
+                          ),
+                          icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                          label: const Text(
+                            'Ouvrir la facture sur le site DGI',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                      if (!_isReExtracting && !_reExtractionStatus.contains('succès'))
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() => _reExtractionDone = false);
-                            _startBackgroundReExtraction();
-                          },
-                          icon: const Icon(Icons.refresh_rounded, size: 16),
-                          label: const Text('Réessayer', style: TextStyle(fontSize: 12)),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
                     ],
                   ),
                 ),
 
-              // --- Nature du document (facture / avoir) ---
-              _buildSectionTitle(
-                  context, 'Nature du document', Icons.rule_folder_rounded),
-              const SizedBox(height: 8),
-              _buildDocumentTypeSelector(context, isDark),
-              const SizedBox(height: 20),
+                // --- Statut de la ré-extraction automatique ---
+                if (_isReExtracting || _reExtractionDone)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? (_isReExtracting
+                                ? Colors.orange.shade900.withValues(alpha: 0.2)
+                                : (_reExtractionStatus.contains('succès')
+                                      ? Colors.green.shade900.withValues(
+                                          alpha: 0.2,
+                                        )
+                                      : Colors.grey.shade800.withValues(
+                                          alpha: 0.3,
+                                        )))
+                          : (_isReExtracting
+                                ? Colors.orange.shade50
+                                : (_reExtractionStatus.contains('succès')
+                                      ? Colors.green.shade50
+                                      : Colors.grey.shade100)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        if (_isReExtracting)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.orange,
+                              ),
+                            ),
+                          )
+                        else if (_reExtractionStatus.contains('succès'))
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Colors.green,
+                            size: 20,
+                          )
+                        else
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: Colors.grey.shade600,
+                            size: 20,
+                          ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _reExtractionStatus,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.getTextSecondary(context),
+                            ),
+                          ),
+                        ),
+                        if (!_isReExtracting &&
+                            !_reExtractionStatus.contains('succès'))
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() => _reExtractionDone = false);
+                              _startBackgroundReExtraction();
+                            },
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: const Text(
+                              'Réessayer',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
 
-              // --- Champs essentiels ---
-              _buildSectionTitle(
+                // --- Nature du document (facture / avoir) ---
+                _buildSectionTitle(
+                  context,
+                  'Nature du document',
+                  Icons.rule_folder_rounded,
+                ),
+                const SizedBox(height: 8),
+                _buildDocumentTypeSelector(context, isDark),
+                const SizedBox(height: 20),
+
+                // --- Champs essentiels ---
+                _buildSectionTitle(
                   context,
                   _isRefund ? 'Avoir' : 'Facture',
-                  _isRefund ? Icons.undo_rounded : Icons.receipt_long_rounded),
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _supplierNameCtrl,
-                label: 'Nom du fournisseur *',
-                icon: Icons.business_rounded,
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _invoiceNumberCtrl,
-                label: _isRefund ? 'Numéro de l\'avoir *' : 'Numéro de facture *',
-                icon: Icons.numbers_rounded,
-                textCapitalization: TextCapitalization.characters,
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Champ obligatoire' : null,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _amountTtcCtrl,
-                label: _isRefund
-                    ? 'Montant TTC de l\'avoir (FCFA, sans le signe) *'
-                    : 'Montant TTC (FCFA) *',
-                icon: Icons.payments_rounded,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Champ obligatoire';
-                  final amount = double.tryParse(v.replaceAll(' ', ''));
-                  if (amount == null || amount <= 0) return 'Montant invalide';
-                  return null;
-                },
-              ),
+                  _isRefund ? Icons.undo_rounded : Icons.receipt_long_rounded,
+                ),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _supplierNameCtrl,
+                  label: 'Nom du fournisseur *',
+                  icon: Icons.business_rounded,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Champ obligatoire'
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                _buildTextField(
+                  controller: _invoiceNumberCtrl,
+                  label: _isRefund
+                      ? 'Numéro de l\'avoir *'
+                      : 'Numéro de facture *',
+                  icon: Icons.numbers_rounded,
+                  textCapitalization: TextCapitalization.characters,
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Champ obligatoire'
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                _buildTextField(
+                  controller: _amountTtcCtrl,
+                  label: _isRefund
+                      ? 'Montant TTC de l\'avoir (FCFA, sans le signe) *'
+                      : 'Montant TTC (FCFA) *',
+                  icon: Icons.payments_rounded,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Champ obligatoire';
+                    }
+                    final amount = double.tryParse(v.replaceAll(' ', ''));
+                    if (amount == null || amount <= 0) {
+                      return 'Montant invalide';
+                    }
+                    return null;
+                  },
+                ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // --- Codes DGI (préremplis automatiquement) ---
-              _buildDgiCodesSection(context, isDark),
+                // --- Codes DGI (préremplis automatiquement) ---
+                _buildDgiCodesSection(context, isDark),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // --- Détails supplémentaires (rétractable) ---
-              _buildOptionalFieldsSection(context, isDark),
+                // --- Détails supplémentaires (rétractable) ---
+                _buildOptionalFieldsSection(context, isDark),
 
-              const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-              // Submit button
-              SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isRefund
-                        ? AppTheme.getError(context)
-                        : AppTheme.getPrimary(context),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                // Submit button
+                SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isRefund
+                          ? AppTheme.getError(context)
+                          : AppTheme.getPrimary(context),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 2,
                     ),
-                    elevation: 2,
-                  ),
-                  icon: Icon(_isRefund
-                      ? Icons.undo_rounded
-                      : Icons.check_circle_rounded),
-                  label: Text(
-                    _isRefund
-                        ? 'Valider et enregistrer l\'avoir'
-                        : 'Valider et créer la facture',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Cancel button
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(null),
-                child: Text(
-                  'Annuler',
-                  style: TextStyle(
-                    color: AppTheme.getTextMuted(context),
-                    fontSize: 15,
+                    icon: Icon(
+                      _isRefund
+                          ? Icons.undo_rounded
+                          : Icons.check_circle_rounded,
+                    ),
+                    label: Text(
+                      _isRefund
+                          ? 'Valider et enregistrer l\'avoir'
+                          : 'Valider et créer la facture',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 12),
+
+                // Cancel button
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(null),
+                  child: Text(
+                    'Annuler',
+                    style: TextStyle(
+                      color: AppTheme.getTextMuted(context),
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -533,8 +583,9 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
           style: ButtonStyle(
             backgroundColor: WidgetStateProperty.resolveWith((states) {
               if (!states.contains(WidgetState.selected)) return null;
-              return (_isRefund ? errorColor : primaryColor)
-                  .withValues(alpha: isDark ? 0.35 : 0.15);
+              return (_isRefund ? errorColor : primaryColor).withValues(
+                alpha: isDark ? 0.35 : 0.15,
+              );
             }),
           ),
         ),
@@ -542,12 +593,14 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: (_isRefund ? errorColor : primaryColor)
-                .withValues(alpha: isDark ? 0.18 : 0.08),
+            color: (_isRefund ? errorColor : primaryColor).withValues(
+              alpha: isDark ? 0.18 : 0.08,
+            ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: (_isRefund ? errorColor : primaryColor)
-                  .withValues(alpha: 0.35),
+              color: (_isRefund ? errorColor : primaryColor).withValues(
+                alpha: 0.35,
+              ),
             ),
           ),
           child: Row(
@@ -562,10 +615,10 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 child: Text(
                   _isRefund
                       ? 'AVOIR : le fournisseur vous doit ce montant. '
-                          'Un avoir fournisseur sera créé, et il viendra en '
-                          'DÉDUCTION des coûts.'
+                            'Un avoir fournisseur sera créé, et il viendra en '
+                            'DÉDUCTION des coûts.'
                       : 'FACTURE : vous devez ce montant au fournisseur. '
-                          'Une facture d\'achat sera créée.',
+                            'Une facture d\'achat sera créée.',
                   style: TextStyle(
                     color: AppTheme.getTextPrimary(context),
                     fontSize: 13,
@@ -591,12 +644,14 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       decoration: BoxDecoration(
         color: isDark
             ? (hasCodes
-                ? Colors.green.shade900.withValues(alpha: 0.2)
-                : Colors.orange.shade900.withValues(alpha: 0.2))
+                  ? Colors.green.shade900.withValues(alpha: 0.2)
+                  : Colors.orange.shade900.withValues(alpha: 0.2))
             : (hasCodes ? Colors.green.shade50 : Colors.orange.shade50),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: (hasCodes ? Colors.green : Colors.orange).withValues(alpha: 0.3),
+          color: (hasCodes ? Colors.green : Colors.orange).withValues(
+            alpha: 0.3,
+          ),
         ),
       ),
       child: Column(
@@ -606,7 +661,9 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
             children: [
               Icon(
                 hasCodes ? Icons.verified_rounded : Icons.info_outline_rounded,
-                color: hasCodes ? Colors.green.shade700 : Colors.orange.shade700,
+                color: hasCodes
+                    ? Colors.green.shade700
+                    : Colors.orange.shade700,
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -633,8 +690,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 _supplierCodeCtrl.text.trim(),
                 isDark,
               ),
-            if (hasSupplierCode && hasCustomerCode)
-              const SizedBox(height: 6),
+            if (hasSupplierCode && hasCustomerCode) const SizedBox(height: 6),
             if (hasCustomerCode)
               _buildDgiCodeDisplay(
                 context,
@@ -648,7 +704,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
               _isReExtracting
                   ? 'Récupération en cours... Veuillez patienter.'
                   : 'Ouvrez le lien DGI ci-dessus, puis copiez et collez '
-                      'les codes DGI fournisseur et client ci-dessous.',
+                        'les codes DGI fournisseur et client ci-dessous.',
               style: TextStyle(
                 fontSize: 12,
                 color: AppTheme.getTextSecondary(context),
@@ -713,7 +769,8 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         InkWell(
-          onTap: () => setState(() => _showOptionalFields = !_showOptionalFields),
+          onTap: () =>
+              setState(() => _showOptionalFields = !_showOptionalFields),
           borderRadius: BorderRadius.circular(10),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -758,8 +815,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     );
   }
 
-  Widget _buildSectionTitle(
-      BuildContext context, String title, IconData icon) {
+  Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
     return Row(
       children: [
         Icon(icon, size: 20, color: AppTheme.getPrimary(context)),
@@ -792,11 +848,11 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         labelText: label,
         hintText: hintText,
         prefixIcon: Icon(icon, size: 20),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       keyboardType: keyboardType,
       textCapitalization: textCapitalization,

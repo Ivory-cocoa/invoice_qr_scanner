@@ -8,13 +8,17 @@ const _frame = Duration(milliseconds: 500);
 Future<(BuildContext, NavigatorState)> _pumpHome(WidgetTester tester) async {
   final navigatorKey = GlobalKey<NavigatorState>();
   late BuildContext homeContext;
-  await tester.pumpWidget(MaterialApp(
-    navigatorKey: navigatorKey,
-    home: Builder(builder: (context) {
-      homeContext = context;
-      return const Scaffold(body: Text('accueil'));
-    }),
-  ));
+  await tester.pumpWidget(
+    MaterialApp(
+      navigatorKey: navigatorKey,
+      home: Builder(
+        builder: (context) {
+          homeContext = context;
+          return const Scaffold(body: Text('accueil'));
+        },
+      ),
+    ),
+  );
   return (homeContext, navigatorKey.currentState!);
 }
 
@@ -35,8 +39,9 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
   });
 
-  testWidgets('« Continuer en arrière-plan » et le retour système',
-      (tester) async {
+  testWidgets('« Continuer en arrière-plan » et le retour système', (
+    tester,
+  ) async {
     final (context, navigator) = await _pumpHome(tester);
     final progress = ScanProgress.show(context, 'Vérification...');
     var calls = 0;
@@ -56,15 +61,19 @@ void main() {
     await tester.pump(_frame);
   });
 
-  testWidgets('retire SA route, même si un écran a été empilé au-dessus',
-      (tester) async {
+  testWidgets('retire SA route, même si un écran a été empilé au-dessus', (
+    tester,
+  ) async {
     final (context, navigator) = await _pumpHome(tester);
     final progress = ScanProgress.show(context, 'Vérification...');
     await tester.pump(_frame);
 
     // Par exemple : session expirée, redirection vers la connexion.
-    navigator.push(MaterialPageRoute<void>(
-        builder: (_) => const Scaffold(body: Text('connexion'))));
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('connexion')),
+      ),
+    );
     await tester.pump(_frame);
 
     progress.close();

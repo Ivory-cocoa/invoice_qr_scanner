@@ -24,7 +24,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _loginController = TextEditingController();
   final _otpController = TextEditingController();
@@ -55,16 +56,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
-    
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
-    
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic));
-    
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
     _animationController.forward();
   }
 
@@ -138,15 +142,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    
+
     return Scaffold(
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
         child: Container(
           height: size.height,
-          decoration: const BoxDecoration(
-            gradient: AppTheme.darkGradient,
-          ),
+          decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
           child: SafeArea(
             child: SingleChildScrollView(
               physics: const BouncingScrollPhysics(),
@@ -159,20 +161,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     child: Column(
                       children: [
                         SizedBox(height: size.height * 0.08),
-                        
+
                         // Logo et titre
                         _buildHeader(),
-                        
+
                         const SizedBox(height: 40),
-                        
+
                         // Carte de formulaire
                         _buildLoginCard(),
-                        
+
                         const SizedBox(height: 24),
-                        
+
                         // Footer
                         _buildFooter(),
-                        
+
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -210,9 +212,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             color: AppTheme.primaryDark,
           ),
         ),
-        
+
         const SizedBox(height: 24),
-        
+
         // Titre
         const Text(
           'Facture Scanner',
@@ -223,9 +225,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             letterSpacing: -0.5,
           ),
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         // Sous-titre
         Text(
           'Scanner QR DGI - Ivory Cocoa Products',
@@ -269,9 +271,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 ),
                 textAlign: TextAlign.center,
               ),
-              
+
               const SizedBox(height: 8),
-              
+
               Consumer<AuthProvider>(
                 builder: (context, auth, _) => Text(
                   auth.isAwaitingOtp
@@ -284,9 +286,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   textAlign: TextAlign.center,
                 ),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               // Message d'erreur
               Consumer<AuthProvider>(
                 builder: (context, auth, _) {
@@ -296,12 +298,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: AppTheme.getErrorLight(context),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                        border: Border.all(color: AppTheme.getError(context).withValues(alpha: 0.3)),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusSmall,
+                        ),
+                        border: Border.all(
+                          color: AppTheme.getError(
+                            context,
+                          ).withValues(alpha: 0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, color: AppTheme.getError(context), size: 22),
+                          Icon(
+                            Icons.error_outline,
+                            color: AppTheme.getError(context),
+                            size: 22,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -320,7 +332,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   return const SizedBox.shrink();
                 },
               ),
-              
+
               // Étape 1 (identifiant + serveur) ou étape 2 (code reçu)
               Consumer<AuthProvider>(
                 builder: (context, auth, _) {
@@ -498,7 +510,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       inputFormatters: inputFormatters,
       validator: validator,
       style: const TextStyle(
-        color: AppTheme.primaryDark,  // TEXTE BLEU FONCÉ
+        color: AppTheme.primaryDark, // TEXTE BLEU FONCÉ
         fontSize: 16,
         fontWeight: FontWeight.w500,
       ),
@@ -522,14 +534,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           color: AppTheme.getPrimary(context),
           fontWeight: FontWeight.w600,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-          borderSide: BorderSide(color: AppTheme.dividerColor.withValues(alpha: 0.5), width: 1),
+          borderSide: BorderSide(
+            color: AppTheme.dividerColor.withValues(alpha: 0.5),
+            width: 1,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
@@ -551,7 +569,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _isUrlInsecure(String url) {
     final u = url.trim().toLowerCase();
     if (!u.startsWith('http://')) return false;
-    final isLocal = u.contains('localhost') ||
+    final isLocal =
+        u.contains('localhost') ||
         u.contains('127.0.0.1') ||
         u.contains('//192.168.') ||
         u.contains('//10.') ||
@@ -607,7 +626,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             Text(
               'Configuration serveur',
               style: TextStyle(
-                color: AppTheme.getTextSecondary(context).withValues(alpha: 0.8),
+                color: AppTheme.getTextSecondary(
+                  context,
+                ).withValues(alpha: 0.8),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -637,7 +658,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.getPrimary(context),
               foregroundColor: Colors.white,
-              disabledBackgroundColor: AppTheme.getPrimary(context).withValues(alpha: 0.6),
+              disabledBackgroundColor: AppTheme.getPrimary(
+                context,
+              ).withValues(alpha: 0.6),
               elevation: auth.isLoading ? 0 : 4,
               shadowColor: AppTheme.getPrimary(context).withValues(alpha: 0.4),
               shape: RoundedRectangleBorder(
@@ -645,17 +668,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               ),
             ),
             child: auth.isLoading
-                ? const SpinKitThreeBounce(
-                    color: Colors.white,
-                    size: 24,
-                  )
+                ? const SpinKitThreeBounce(color: Colors.white, size: 24)
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        awaitingOtp
-                            ? Icons.login_rounded
-                            : Icons.send_rounded,
+                        awaitingOtp ? Icons.login_rounded : Icons.send_rounded,
                         size: 22,
                       ),
                       const SizedBox(width: 10),

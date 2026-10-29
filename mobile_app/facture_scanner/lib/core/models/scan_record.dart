@@ -54,20 +54,22 @@ class OtLink {
   }
 
   Map<String, dynamic> toJson() => {
-        'cost_line_id': costLineId,
-        'ot_id': otId,
-        'ot_reference': otReference,
-        'cost_type': costType,
-        'cost_type_code': costTypeCode,
-        'amount': amount,
-        'currency': currency,
-        'state': state,
-        'state_label': stateLabel,
-      };
+    'cost_line_id': costLineId,
+    'ot_id': otId,
+    'ot_reference': otReference,
+    'cost_type': costType,
+    'cost_type_code': costTypeCode,
+    'amount': amount,
+    'currency': currency,
+    'state': state,
+    'state_label': stateLabel,
+  };
 
   /// Montant formaté avec séparateurs de milliers.
   String get formattedAmount {
-    final formatted = amount.toStringAsFixed(0).replaceAllMapped(
+    final formatted = amount
+        .toStringAsFixed(0)
+        .replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (Match m) => '${m[1]} ',
         );
@@ -165,30 +167,30 @@ class ScanRecord {
   final DateTime? scanDate;
   final String scannedBy;
   final String? errorMessage;
-  
+
   // Champs pour le suivi des doublons
   final int duplicateCount;
   final DateTime? lastDuplicateAttempt;
   final String? lastDuplicateUser;
-  
+
   // Champs pour le suivi des tentatives de retraitement
   final int reprocessAttemptCount;
   final DateTime? lastReprocessAttempt;
   final String? lastReprocessUser;
-  
+
   // Champs pour le marquage traité
   final bool isProcessed;
   final String? processedBy;
   final int? processedById;
   final DateTime? processedDate;
-  
+
   // Champs pour la vérification DGI
   final double verificationDuration;
   final bool isManualEntry;
 
   // Liens vers les Ordres de Transit (OT) — un scan peut être lié à plusieurs OT
   final List<OtLink> otLinks;
-  
+
   ScanRecord({
     required this.id,
     required this.reference,
@@ -229,7 +231,7 @@ class ScanRecord {
 
   /// Vrai si le scan est rattaché à au moins un Ordre de Transit.
   bool get hasOtLinks => otLinks.isNotEmpty;
-  
+
   factory ScanRecord.fromJson(Map<String, dynamic> json) {
     return ScanRecord(
       id: json['id'] as int,
@@ -238,13 +240,14 @@ class ScanRecord {
       supplierName: json['supplier_name'] as String? ?? '',
       supplierCodeDgi: json['supplier_code_dgi'] as String? ?? '',
       invoiceNumberDgi: json['invoice_number_dgi'] as String? ?? '',
-      invoiceDate: json['invoice_date'] != null 
-          ? DateTime.tryParse(json['invoice_date']) 
+      invoiceDate: json['invoice_date'] != null
+          ? DateTime.tryParse(json['invoice_date'])
           : null,
       amountTtc: ((json['amount_ttc'] as num?)?.toDouble() ?? 0.0).abs(),
       documentType: DocumentType.parse(json['document_type']),
       documentTypeVerified: _asBool(json['document_type_verified']),
-      originInvoiceNumberDgi: json['origin_invoice_number_dgi'] as String? ?? '',
+      originInvoiceNumberDgi:
+          json['origin_invoice_number_dgi'] as String? ?? '',
       originScanReference: json['origin_scan_reference'] as String? ?? '',
       refundCount: (json['refund_count'] as num?)?.toInt() ?? 0,
       currency: json['currency'] as String? ?? 'XOF',
@@ -253,8 +256,8 @@ class ScanRecord {
       invoiceId: json['invoice_id'] as int?,
       invoiceName: json['invoice_name'] as String?,
       invoiceState: json['invoice_state'] as String?,
-      scanDate: json['scan_date'] != null 
-          ? DateTime.tryParse(json['scan_date']) 
+      scanDate: json['scan_date'] != null
+          ? DateTime.tryParse(json['scan_date'])
           : null,
       scannedBy: json['scanned_by'] as String? ?? '',
       errorMessage: json['error_message'] as String?,
@@ -268,18 +271,20 @@ class ScanRecord {
           ? DateTime.tryParse(json['last_reprocess_attempt'])
           : null,
       lastReprocessUser: json['last_reprocess_user'] as String?,
-      isProcessed: json['is_processed'] as bool? ?? (json['state'] == 'processed'),
+      isProcessed:
+          json['is_processed'] as bool? ?? (json['state'] == 'processed'),
       processedBy: json['processed_by'] as String?,
       processedById: json['processed_by_id'] as int?,
       processedDate: json['processed_date'] != null
           ? DateTime.tryParse(json['processed_date'])
           : null,
-      verificationDuration: (json['verification_duration'] as num?)?.toDouble() ?? 0,
+      verificationDuration:
+          (json['verification_duration'] as num?)?.toDouble() ?? 0,
       isManualEntry: json['is_manual_entry'] as bool? ?? false,
       otLinks: _parseOtLinks(json['ot_links']),
     );
   }
-  
+
   factory ScanRecord.fromMap(Map<String, dynamic> map) {
     return ScanRecord(
       id: map['id'] as int,
@@ -288,8 +293,8 @@ class ScanRecord {
       supplierName: map['supplier_name'] as String? ?? '',
       supplierCodeDgi: map['supplier_code_dgi'] as String? ?? '',
       invoiceNumberDgi: map['invoice_number_dgi'] as String? ?? '',
-      invoiceDate: map['invoice_date'] != null 
-          ? DateTime.tryParse(map['invoice_date']) 
+      invoiceDate: map['invoice_date'] != null
+          ? DateTime.tryParse(map['invoice_date'])
           : null,
       amountTtc: ((map['amount_ttc'] as num?)?.toDouble() ?? 0.0).abs(),
       documentType: DocumentType.parse(map['document_type']),
@@ -303,8 +308,8 @@ class ScanRecord {
       invoiceId: map['invoice_id'] as int?,
       invoiceName: map['invoice_name'] as String?,
       invoiceState: map['invoice_state'] as String?,
-      scanDate: map['scan_date'] != null 
-          ? DateTime.tryParse(map['scan_date']) 
+      scanDate: map['scan_date'] != null
+          ? DateTime.tryParse(map['scan_date'])
           : null,
       scannedBy: map['scanned_by'] as String? ?? '',
       errorMessage: map['error_message'] as String?,
@@ -318,7 +323,8 @@ class ScanRecord {
           ? DateTime.tryParse(map['last_reprocess_attempt'])
           : null,
       lastReprocessUser: map['last_reprocess_user'] as String?,
-      isProcessed: map.containsKey('is_processed') && map['is_processed'] != null
+      isProcessed:
+          map.containsKey('is_processed') && map['is_processed'] != null
           ? _asBool(map['is_processed'])
           : (map['state'] == 'processed'),
       processedBy: map['processed_by'] as String?,
@@ -326,12 +332,13 @@ class ScanRecord {
       processedDate: map['processed_date'] != null
           ? DateTime.tryParse(map['processed_date'])
           : null,
-      verificationDuration: (map['verification_duration'] as num?)?.toDouble() ?? 0,
+      verificationDuration:
+          (map['verification_duration'] as num?)?.toDouble() ?? 0,
       isManualEntry: _asBool(map['is_manual_entry']),
       otLinks: _parseOtLinks(map['ot_links']),
     );
   }
-  
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -372,7 +379,7 @@ class ScanRecord {
       'ot_links': jsonEncode(otLinks.map((e) => e.toJson()).toList()),
     };
   }
-  
+
   bool get isSuccess => state == 'done' || state == 'processed';
   bool get isError => state == 'error';
   bool get hasDuplicates => duplicateCount > 0;
@@ -394,13 +401,15 @@ class ScanRecord {
   /// un avoir affiché comme une facture est le défaut même que cette version
   /// corrige, et il ne doit pas pouvoir revenir par un écran oublié.
   String get formattedAmount {
-    final formatted = amountTtc.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]} ',
-    );
+    final formatted = amountTtc
+        .toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]} ',
+        );
     return isRefund ? '− $formatted $currency' : '$formatted $currency';
   }
-  
+
   @override
   String toString() => 'ScanRecord($reference - $supplierName)';
 }

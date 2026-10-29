@@ -15,27 +15,27 @@ enum AuthState { initial, loading, authenticated, unauthenticated, error }
 class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
-  
+
   AuthState _state = AuthState.initial;
   User? _user;
   String? _errorMessage;
-  
+
   AuthState get state => _state;
   User? get user => _user;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _state == AuthState.authenticated;
   bool get isLoading => _state == AuthState.loading;
-  
+
   AuthProvider() {
     // Brancher la déconnexion automatique sur expiration de token (401).
     ApiService.onUnauthorized = handleSessionExpired;
     _checkAuth();
   }
-  
+
   Future<void> _checkAuth() async {
     _state = AuthState.loading;
     notifyListeners();
-    
+
     await _api.init();
 
     if (_api.isAuthenticated) {
@@ -55,7 +55,7 @@ class AuthProvider extends ChangeNotifier {
 
     notifyListeners();
   }
-  
+
   /// Identifiant pour lequel un code a été demandé, conservé entre les deux
   /// étapes de la connexion (l'écran le réaffiche et le renvoie à la vérif).
   String? _pendingLogin;
@@ -139,14 +139,14 @@ class AuthProvider extends ChangeNotifier {
     }
     notifyListeners();
   }
-  
+
   Future<void> logout() async {
     _state = AuthState.loading;
     notifyListeners();
-    
+
     await _api.logout();
     await _db.clearAllData();
-    
+
     _user = null;
     _pendingLogin = null;
     _state = AuthState.unauthenticated;
@@ -179,7 +179,7 @@ class AuthProvider extends ChangeNotifier {
       _handlingSessionExpiry = false;
     });
   }
-  
+
   void clearError() {
     _errorMessage = null;
     if (_state == AuthState.error) {
@@ -187,11 +187,11 @@ class AuthProvider extends ChangeNotifier {
     }
     notifyListeners();
   }
-  
+
   /// Update base URL (for server configuration)
   Future<void> setServerUrl(String url) async {
     await _api.setBaseUrl(url);
   }
-  
+
   String get serverUrl => _api.baseUrl;
 }

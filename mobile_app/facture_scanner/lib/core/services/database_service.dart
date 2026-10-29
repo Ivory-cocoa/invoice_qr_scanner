@@ -12,7 +12,7 @@ import 'dgi_parser_service.dart';
 
 class DatabaseService {
   static Database? _database;
-  
+
   // Durée de conservation des données déjà synchronisées (24 heures)
   static const int maxOfflineHours = 24;
   // Durée de conservation des scans en échec définitif (7 jours) afin que
@@ -21,7 +21,7 @@ class DatabaseService {
   // Durée de conservation du cache d'historique (7 jours) : il sert aussi à
   // la détection locale de doublons, une purge trop agressive la dégrade.
   static const int maxHistoryCacheDays = 7;
-  
+
   // Singleton
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
@@ -48,24 +48,25 @@ class DatabaseService {
   Future<Database> init() async {
     if (_disabledOnWeb) {
       throw UnsupportedError(
-          'Pas de base locale sur le web : la PWA fonctionne en ligne.');
+        'Pas de base locale sur le web : la PWA fonctionne en ligne.',
+      );
     }
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'facture_scanner.db');
-    
+
     final db = await openDatabase(
       path,
       version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
-    
+
     // Nettoyage automatique des données > 24h au démarrage
     await cleanupOldData(db);
-    
+
     return db;
   }
-  
+
   Future<void> _onCreate(Database db, int version) async {
     if (_disabledOnWeb) return;
     // Pending scans table (for offline scans with parsed DGI data)
@@ -111,7 +112,7 @@ class DatabaseService {
       'sync_minute': 0,
       'auto_sync_enabled': 1,
     });
-    
+
     // Scan history cache table
     await db.execute('''
       CREATE TABLE scan_history (
@@ -153,44 +154,74 @@ class DatabaseService {
         cached_at TEXT DEFAULT CURRENT_TIMESTAMP
       )
     ''');
-    
+
     // Create indexes
-    await db.execute('CREATE INDEX idx_pending_synced ON pending_scans(synced)');
+    await db.execute(
+      'CREATE INDEX idx_pending_synced ON pending_scans(synced)',
+    );
     await db.execute('CREATE INDEX idx_pending_uuid ON pending_scans(qr_uuid)');
     await db.execute('CREATE INDEX idx_history_uuid ON scan_history(qr_uuid)');
   }
-  
+
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (_disabledOnWeb) return;
     // Handle migrations here
     if (oldVersion < 2) {
       // Add index for cleanup queries
       try {
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_pending_created ON pending_scans(created_at)');
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_history_cached ON scan_history(cached_at)');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_pending_created ON pending_scans(created_at)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_history_cached ON scan_history(cached_at)',
+        );
       } catch (_) {}
     }
     if (oldVersion < 3) {
       // Add duplicate tracking columns
       try {
-        await db.execute('ALTER TABLE scan_history ADD COLUMN duplicate_count INTEGER DEFAULT 0');
-        await db.execute('ALTER TABLE scan_history ADD COLUMN last_duplicate_attempt TEXT');
-        await db.execute('ALTER TABLE scan_history ADD COLUMN last_duplicate_user TEXT');
+        await db.execute(
+          'ALTER TABLE scan_history ADD COLUMN duplicate_count INTEGER DEFAULT 0',
+        );
+        await db.execute(
+          'ALTER TABLE scan_history ADD COLUMN last_duplicate_attempt TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE scan_history ADD COLUMN last_duplicate_user TEXT',
+        );
       } catch (_) {}
     }
     if (oldVersion < 4) {
       // Add parsed DGI data columns to pending_scans
       try {
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN supplier_name TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN supplier_code_dgi TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN customer_name TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN customer_code_dgi TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN invoice_number_dgi TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN invoice_date TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN verification_id TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN amount_ttc REAL');
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN supplier_name TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN supplier_code_dgi TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN customer_name TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN customer_code_dgi TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN invoice_number_dgi TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN invoice_date TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN verification_id TEXT',
+        );
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN amount_ttc REAL',
+        );
         await db.execute('ALTER TABLE pending_scans ADD COLUMN raw_text TEXT');
-        await db.execute('ALTER TABLE pending_scans ADD COLUMN parsed INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE pending_scans ADD COLUMN parsed INTEGER DEFAULT 0',
+        );
       } catch (_) {}
       // Create sync_settings table
       try {
@@ -246,7 +277,8 @@ class DatabaseService {
       // infinies lors des synchronisations).
       try {
         await db.execute(
-            'ALTER TABLE pending_scans ADD COLUMN extraction_attempts INTEGER DEFAULT 0');
+          'ALTER TABLE pending_scans ADD COLUMN extraction_attempts INTEGER DEFAULT 0',
+        );
       } catch (_) {
         // Colonne déjà présente : ignorer.
       }
@@ -272,7 +304,7 @@ class DatabaseService {
       }
     }
   }
-  
+
   /// Nettoyer les anciennes données.
   /// IMPORTANT : ne supprime JAMAIS un scan non synchronisé (synced = 0) —
   /// ce sont des données utilisateur qui n'ont pas encore atteint le serveur.
@@ -280,8 +312,9 @@ class DatabaseService {
     if (_disabledOnWeb) return;
     final db = providedDb ?? await database;
     final now = DateTime.now();
-    final syncedCutoff =
-        now.subtract(const Duration(hours: maxOfflineHours)).toIso8601String();
+    final syncedCutoff = now
+        .subtract(const Duration(hours: maxOfflineHours))
+        .toIso8601String();
     final failedCutoff = now
         .subtract(const Duration(days: maxFailedRetentionDays))
         .toIso8601String();
@@ -310,9 +343,9 @@ class DatabaseService {
       whereArgs: [historyCutoff],
     );
   }
-  
+
   // ==================== PENDING SCANS ====================
-  
+
   /// Add a pending scan (offline mode)
   Future<int> addPendingScan(String qrUrl, String qrUuid) async {
     if (_disabledOnWeb) return 0;
@@ -354,7 +387,7 @@ class DatabaseService {
       'document_type': parsedData.documentType.code,
     });
   }
-  
+
   /// Get all pending (unsynced) scans
   Future<List<Map<String, dynamic>>> getPendingScans() async {
     final db = await database;
@@ -365,7 +398,7 @@ class DatabaseService {
       orderBy: 'created_at ASC',
     );
   }
-  
+
   /// Mark scan as synced
   Future<void> markScanSynced(int id) async {
     if (_disabledOnWeb) return;
@@ -377,7 +410,7 @@ class DatabaseService {
       whereArgs: [id],
     );
   }
-  
+
   /// Mark scan as permanently failed with error (synced=2)
   Future<void> markScanFailed(int id, String error) async {
     if (_disabledOnWeb) return;
@@ -427,13 +460,9 @@ class DatabaseService {
   Future<void> deletePendingScan(int id) async {
     if (_disabledOnWeb) return;
     final db = await database;
-    await db.delete(
-      'pending_scans',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete('pending_scans', where: 'id = ?', whereArgs: [id]);
   }
-  
+
   /// Check if QR code exists in pending scans
   Future<bool> isPendingScan(String qrUuid) async {
     if (_disabledOnWeb) return false;
@@ -446,17 +475,17 @@ class DatabaseService {
     );
     return result.isNotEmpty;
   }
-  
+
   /// Get pending scans count
   Future<int> getPendingScansCount() async {
     if (_disabledOnWeb) return 0;
     final db = await database;
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM pending_scans WHERE synced = 0'
+      'SELECT COUNT(*) as count FROM pending_scans WHERE synced = 0',
     );
     return result.first['count'] as int? ?? 0;
   }
-  
+
   /// Delete successfully synced scans (cleanup).
   /// Les scans en échec définitif (synced=2) sont conservés pour que
   /// l'utilisateur puisse voir l'erreur ; ils sont purgés après 7 jours
@@ -464,13 +493,9 @@ class DatabaseService {
   Future<void> deleteSyncedScans() async {
     if (_disabledOnWeb) return;
     final db = await database;
-    await db.delete(
-      'pending_scans',
-      where: 'synced = ?',
-      whereArgs: [1],
-    );
+    await db.delete('pending_scans', where: 'synced = ?', whereArgs: [1]);
   }
-  
+
   /// Update an unparsed scan with extracted DGI data (convert parsed=0 → parsed=1)
   /// Used during sync when we extract DGI data for previously unparsed scans.
   Future<void> updateScanWithParsedData(int id, DgiParsedData data) async {
@@ -496,13 +521,13 @@ class DatabaseService {
   }
 
   // ==================== SCAN HISTORY CACHE ====================
-  
+
   /// Cache scan history from server
   Future<void> cacheScanHistory(List<ScanRecord> records) async {
     if (_disabledOnWeb) return;
     final db = await database;
     final batch = db.batch();
-    
+
     for (final record in records) {
       batch.insert(
         'scan_history',
@@ -510,12 +535,12 @@ class DatabaseService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
-    
+
     // continueOnError : une ligne problématique ne doit pas faire échouer
     // tout le lot ni propager une exception jusqu'à l'appelant.
     await batch.commit(noResult: true, continueOnError: true);
   }
-  
+
   /// Convertit une map pour un stockage SQLite sûr : sqflite n'accepte que
   /// num / String / Uint8List / null. Les booléens (is_processed,
   /// is_manual_entry) sont convertis en 0/1.
@@ -525,7 +550,7 @@ class DatabaseService {
       return MapEntry(key, value);
     });
   }
-  
+
   /// Get cached scan history
   Future<List<ScanRecord>> getCachedHistory({int limit = 50}) async {
     if (_disabledOnWeb) return [];
@@ -535,7 +560,7 @@ class DatabaseService {
       orderBy: 'scan_date DESC',
       limit: limit,
     );
-    
+
     // Ignorer silencieusement une éventuelle ligne corrompue plutôt que de
     // faire échouer tout le chargement de l'historique.
     final records = <ScanRecord>[];
@@ -548,7 +573,7 @@ class DatabaseService {
     }
     return records;
   }
-  
+
   /// Check if QR code exists in history cache
   Future<ScanRecord?> findInHistoryCache(String qrUuid) async {
     if (_disabledOnWeb) return null;
@@ -559,20 +584,20 @@ class DatabaseService {
       whereArgs: [qrUuid],
       limit: 1,
     );
-    
+
     if (result.isEmpty) return null;
     return ScanRecord.fromMap(result.first);
   }
-  
+
   /// Clear history cache
   Future<void> clearHistoryCache() async {
     if (_disabledOnWeb) return;
     final db = await database;
     await db.delete('scan_history');
   }
-  
+
   // ==================== UTILITIES ====================
-  
+
   /// Get all parsed pending scans (for enriched sync)
   Future<List<Map<String, dynamic>>> getParsedPendingScans() async {
     final db = await database;
@@ -611,11 +636,7 @@ class DatabaseService {
         'sync_minute': 0,
         'auto_sync_enabled': 1,
       });
-      return {
-        'sync_hour': 20,
-        'sync_minute': 0,
-        'auto_sync_enabled': 1,
-      };
+      return {'sync_hour': 20, 'sync_minute': 0, 'auto_sync_enabled': 1};
     }
     return results.first;
   }
@@ -634,7 +655,8 @@ class DatabaseService {
       {
         if (syncHour != null) 'sync_hour': syncHour,
         if (syncMinute != null) 'sync_minute': syncMinute,
-        if (autoSyncEnabled != null) 'auto_sync_enabled': autoSyncEnabled ? 1 : 0,
+        if (autoSyncEnabled != null)
+          'auto_sync_enabled': autoSyncEnabled ? 1 : 0,
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'id = ?',
@@ -649,9 +671,7 @@ class DatabaseService {
     final current = await getSyncSettings();
     await db.update(
       'sync_settings',
-      {
-        'last_scheduled_sync': DateTime.now().toIso8601String(),
-      },
+      {'last_scheduled_sync': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [current['id']],
     );

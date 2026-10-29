@@ -104,7 +104,8 @@ class QueueStatusBanner extends StatelessWidget {
                 ),
                 // Bouton saisie manuelle rapide
                 _ManualEntryShortcutButton(
-                  onTap: () => openManualEntryForQueueItem(context, queue, currentItem),
+                  onTap: () =>
+                      openManualEntryForQueueItem(context, queue, currentItem),
                 ),
               ],
             ),
@@ -115,7 +116,10 @@ class QueueStatusBanner extends StatelessWidget {
   }
 
   Widget _buildManualEntryCard(
-      BuildContext context, BackgroundScanQueue queue, QueueItem item) {
+    BuildContext context,
+    BackgroundScanQueue queue,
+    QueueItem item,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
@@ -160,7 +164,10 @@ class QueueStatusBanner extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         item.resultMessage ?? 'Timeout DGI',
-                        style: TextStyle(fontSize: 12, color: AppTheme.getTextSecondary(context)),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.getTextSecondary(context),
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -181,17 +188,22 @@ class QueueStatusBanner extends StatelessWidget {
   }
 
   Widget _buildCompletedCard(
-      BuildContext context, BackgroundScanQueue queue, QueueItem item) {
+    BuildContext context,
+    BackgroundScanQueue queue,
+    QueueItem item,
+  ) {
     // Le gestionnaire OT peut lier directement la facture créée à un OT
     // depuis la carte de succès (le scan en ligne ne passe pas par un dialogue).
     final record = item.scanRecord;
-    final canLinkToOt = context.read<AuthProvider>().user?.isOtManager == true &&
+    final canLinkToOt =
+        context.read<AuthProvider>().user?.isOtManager == true &&
         record != null &&
         record.id > 0;
     // Un doublon n'est pas une facture créée : couleur et icône d'alerte,
     // pour qu'il ne se confonde pas avec un succès d'un simple coup d'œil.
-    final color =
-        item.isDuplicate ? AppTheme.getWarning(context) : AppTheme.successColor;
+    final color = item.isDuplicate
+        ? AppTheme.getWarning(context)
+        : AppTheme.successColor;
     final background = item.isDuplicate
         ? AppTheme.getWarningLight(context)
         : AppTheme.getSuccessLight(context);
@@ -215,60 +227,61 @@ class QueueStatusBanner extends StatelessWidget {
             onTap: record == null
                 ? null
                 : () => showDialog<String>(
-                      context: context,
-                      builder: (_) => ScanResultDialog(
-                        state: item.isDuplicate
-                            ? ScanState.duplicate
-                            : ScanState.success,
-                        message: item.isDuplicate
-                            ? 'Cette facture a déjà été scannée.'
-                            : item.resultMessage,
-                        scanRecord: record,
-                        showScanAgain: false,
-                      ),
+                    context: context,
+                    builder: (_) => ScanResultDialog(
+                      state: item.isDuplicate
+                          ? ScanState.duplicate
+                          : ScanState.success,
+                      message: item.isDuplicate
+                          ? 'Cette facture a déjà été scannée.'
+                          : item.resultMessage,
+                      scanRecord: record,
+                      showScanAgain: false,
                     ),
+                  ),
             child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(
-                item.isDuplicate
-                    ? Icons.content_copy_rounded
-                    : Icons.check_circle_rounded,
-                color: color,
-                size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _completedLabel(item),
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                  color: color,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Icon(
+                    item.isDuplicate
+                        ? Icons.content_copy_rounded
+                        : Icons.check_circle_rounded,
+                    color: color,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _completedLabel(item),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        color: color,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (canLinkToOt) ...[
+                    _OtLinkShortcutButton(
+                      onTap: () async {
+                        await startOtLinkFlow(context, record);
+                        queue.removeItem(item.id);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => queue.removeItem(item.id),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppTheme.getTextMuted(context),
+                    tooltip: 'Masquer',
+                  ),
+                ],
               ),
-            ),
-            if (canLinkToOt) ...[
-              _OtLinkShortcutButton(
-                onTap: () async {
-                  await startOtLinkFlow(context, record);
-                  queue.removeItem(item.id);
-                },
-              ),
-              const SizedBox(width: 8),
-            ],
-            IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: () => queue.removeItem(item.id),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              color: AppTheme.getTextMuted(context),
-              tooltip: 'Masquer',
-            ),
-          ],
-        ),
             ),
           ),
         ),
@@ -292,7 +305,10 @@ class QueueStatusBanner extends StatelessWidget {
   }
 
   Widget _buildFailedCard(
-      BuildContext context, BackgroundScanQueue queue, QueueItem item) {
+    BuildContext context,
+    BackgroundScanQueue queue,
+    QueueItem item,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(12),
@@ -303,8 +319,11 @@ class QueueStatusBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppTheme.errorColor, size: 24),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppTheme.errorColor,
+            size: 24,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -493,8 +512,10 @@ class _QueueDetailsSheet extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    const Icon(Icons.queue_rounded,
-                        color: AppTheme.primaryColor),
+                    const Icon(
+                      Icons.queue_rounded,
+                      color: AppTheme.primaryColor,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'File d\'attente (${items.length})',
@@ -564,7 +585,8 @@ class _QueueDetailsSheet extends StatelessWidget {
                         itemCount: items.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          final item = items[items.length - 1 - index]; // Recent first
+                          final item =
+                              items[items.length - 1 - index]; // Recent first
                           return _QueueItemTile(item: item, queue: queue);
                         },
                       ),
@@ -601,9 +623,14 @@ class _StatChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
@@ -645,7 +672,10 @@ class _QueueItemTile extends StatelessWidget {
                 ),
                 Text(
                   item.progressMessage ?? item.resultMessage ?? item.qrUrl,
-                  style: TextStyle(fontSize: 11, color: AppTheme.getTextSecondary(context)),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.getTextSecondary(context),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -690,8 +720,11 @@ class _QueueItemTile extends StatelessWidget {
         return (
           Icons.edit_note_rounded,
           AppTheme.warningColor,
-          const Icon(Icons.arrow_forward_ios,
-              size: 14, color: AppTheme.warningColor),
+          const Icon(
+            Icons.arrow_forward_ios,
+            size: 14,
+            color: AppTheme.warningColor,
+          ),
         );
       case QueueItemState.failed:
         return (
@@ -734,7 +767,10 @@ class _QueueItemTile extends StatelessWidget {
 /// route était typée `ManualEntryResult` : ce second cas levait une erreur de
 /// type et laissait le scan bloqué en « Saisie manuelle requise ».
 Future<void> openManualEntryForQueueItem(
-    BuildContext context, BackgroundScanQueue queue, QueueItem item) async {
+  BuildContext context,
+  BackgroundScanQueue queue,
+  QueueItem item,
+) async {
   final result = await Navigator.of(context).push<Object?>(
     MaterialPageRoute<Object?>(
       builder: (context) => ManualEntryScreen(

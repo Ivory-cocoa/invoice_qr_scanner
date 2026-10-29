@@ -19,7 +19,8 @@ class UpdateBannerHost extends StatefulWidget {
   State<UpdateBannerHost> createState() => _UpdateBannerHostState();
 }
 
-class _UpdateBannerHostState extends State<UpdateBannerHost> with WidgetsBindingObserver {
+class _UpdateBannerHostState extends State<UpdateBannerHost>
+    with WidgetsBindingObserver {
   final ApkUpdater _updater = ApkUpdater();
   ApkUpdate? _update;
   bool _wasAuthenticated = false;
@@ -60,7 +61,8 @@ class _UpdateBannerHostState extends State<UpdateBannerHost> with WidgetsBinding
 
   @override
   Widget build(BuildContext context) {
-    final show = !kIsWeb && (_update?.isNewerThan(AppConfig.buildNumber) ?? false);
+    final show =
+        !kIsWeb && (_update?.isNewerThan(AppConfig.buildNumber) ?? false);
     if (!show) return widget.child;
     return Column(
       children: [
@@ -80,7 +82,11 @@ class _UpdateBannerHostState extends State<UpdateBannerHost> with WidgetsBinding
           ),
         ),
         Expanded(
-          child: MediaQuery.removePadding(context: context, removeTop: true, child: widget.child),
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: widget.child,
+          ),
         ),
       ],
     );

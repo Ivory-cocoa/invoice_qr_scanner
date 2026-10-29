@@ -6,16 +6,20 @@ enum ErrorCategory {
   dgiService('dgi_service', 'Service DGI', 'Erreur du service DGI'),
   network('network', 'Réseau', 'Erreur de connexion réseau'),
   parsing('parsing', 'Analyse', 'Erreur d\'analyse des données'),
-  invoiceCreation('invoice_creation', 'Création facture', 'Erreur lors de la création de la facture'),
+  invoiceCreation(
+    'invoice_creation',
+    'Création facture',
+    'Erreur lors de la création de la facture',
+  ),
   browser('browser', 'Navigateur', 'Erreur du navigateur'),
   other('other', 'Autre', 'Autre type d\'erreur');
-  
+
   final String code;
   final String label;
   final String description;
-  
+
   const ErrorCategory(this.code, this.label, this.description);
-  
+
   static ErrorCategory fromCode(String code) {
     return ErrorCategory.values.firstWhere(
       (e) => e.code == code,
@@ -42,12 +46,12 @@ class ErrorRecord {
   final bool retryPossible;
   final DateTime? scanDate;
   final String scannedBy;
-  
+
   // Champs pour le suivi des doublons
   final int duplicateCount;
   final DateTime? lastDuplicateAttempt;
   final String? lastDuplicateUser;
-  
+
   ErrorRecord({
     required this.id,
     required this.reference,
@@ -70,7 +74,7 @@ class ErrorRecord {
     this.lastDuplicateAttempt,
     this.lastDuplicateUser,
   });
-  
+
   factory ErrorRecord.fromJson(Map<String, dynamic> json) {
     return ErrorRecord(
       id: json['id'] as int,
@@ -79,19 +83,21 @@ class ErrorRecord {
       supplierName: json['supplier_name'] as String? ?? '',
       supplierCodeDgi: json['supplier_code_dgi'] as String? ?? '',
       invoiceNumberDgi: json['invoice_number_dgi'] as String? ?? '',
-      invoiceDate: json['invoice_date'] != null 
-          ? DateTime.tryParse(json['invoice_date']) 
+      invoiceDate: json['invoice_date'] != null
+          ? DateTime.tryParse(json['invoice_date'])
           : null,
       amountTtc: (json['amount_ttc'] as num?)?.toDouble() ?? 0.0,
       currency: json['currency'] as String? ?? 'XOF',
       state: json['state'] as String? ?? 'error',
       stateLabel: json['state_label'] as String? ?? 'Erreur',
       errorMessage: json['error_message'] as String?,
-      errorCategory: ErrorCategory.fromCode(json['error_category'] as String? ?? 'other'),
+      errorCategory: ErrorCategory.fromCode(
+        json['error_category'] as String? ?? 'other',
+      ),
       errorCategoryLabel: json['error_category_label'] as String? ?? 'Autre',
       retryPossible: json['retry_possible'] as bool? ?? false,
-      scanDate: json['scan_date'] != null 
-          ? DateTime.tryParse(json['scan_date']) 
+      scanDate: json['scan_date'] != null
+          ? DateTime.tryParse(json['scan_date'])
           : null,
       scannedBy: json['scanned_by'] as String? ?? '',
       duplicateCount: json['duplicate_count'] as int? ?? 0,
@@ -101,15 +107,17 @@ class ErrorRecord {
       lastDuplicateUser: json['last_duplicate_user'] as String?,
     );
   }
-  
+
   String get formattedAmount {
-    final formatted = amountTtc.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]} ',
-    );
+    final formatted = amountTtc
+        .toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]} ',
+        );
     return '$formatted $currency';
   }
-  
+
   @override
   String toString() => 'ErrorRecord($reference - $errorCategoryLabel)';
 }
@@ -120,19 +128,21 @@ class BulkRetryResult {
   final int successful;
   final int failed;
   final List<RetryDetail> details;
-  
+
   BulkRetryResult({
     required this.processed,
     required this.successful,
     required this.failed,
     required this.details,
   });
-  
+
   factory BulkRetryResult.fromJson(Map<String, dynamic> json) {
-    final detailsList = (json['details'] as List<dynamic>?)
-        ?.map((d) => RetryDetail.fromJson(d))
-        .toList() ?? [];
-    
+    final detailsList =
+        (json['details'] as List<dynamic>?)
+            ?.map((d) => RetryDetail.fromJson(d))
+            .toList() ??
+        [];
+
     return BulkRetryResult(
       processed: json['processed'] as int? ?? 0,
       successful: json['successful'] as int? ?? 0,
@@ -140,7 +150,7 @@ class BulkRetryResult {
       details: detailsList,
     );
   }
-  
+
   bool get hasFailures => failed > 0;
   double get successRate => processed > 0 ? (successful / processed) * 100 : 0;
 }
@@ -151,7 +161,7 @@ class RetryDetail {
   final bool success;
   final String? newState;
   final String? error;
-  
+
   RetryDetail({
     required this.recordId,
     required this.reference,
@@ -159,7 +169,7 @@ class RetryDetail {
     this.newState,
     this.error,
   });
-  
+
   factory RetryDetail.fromJson(Map<String, dynamic> json) {
     return RetryDetail(
       recordId: json['record_id'] as int? ?? 0,

@@ -17,11 +17,12 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _textController;
   late AnimationController _progressController;
-  
+
   late Animation<double> _logoScale;
   late Animation<double> _logoOpacity;
   late Animation<double> _textOpacity;
@@ -41,40 +42,42 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    
+
     _logoScale = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(parent: _logoController, curve: Curves.elasticOut),
     );
-    
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _logoController, curve: Curves.easeOut),
-    );
-    
+
+    _logoOpacity = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _logoController, curve: Curves.easeOut));
+
     // Animation du texte
     _textController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _textController, curve: Curves.easeOut),
-    );
-    
-    _textSlide = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic));
-    
+
+    _textOpacity = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _textController, curve: Curves.easeOut));
+
+    _textSlide = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _textController, curve: Curves.easeOutCubic),
+        );
+
     // Animation de la barre de progression
     _progressController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     );
-    
+
     _progressValue = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
     );
-    
+
     // Démarrer les animations en séquence
     _logoController.forward();
     Future.delayed(const Duration(milliseconds: 400), () {
@@ -88,16 +91,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Future<void> _checkAuth() async {
     // Attendre que l'animation soit terminée
     await Future.delayed(const Duration(milliseconds: 2800));
-    
+
     if (!mounted) return;
-    
+
     final auth = context.read<AuthProvider>();
     // L'AuthProvider vérifie automatiquement l'auth dans son constructeur
     // Attendre un peu que l'état soit mis à jour
     await Future.delayed(const Duration(milliseconds: 300));
-    
+
     if (!mounted) return;
-    
+
     // Navigation selon l'état d'authentification
     if (auth.isAuthenticated) {
       Navigator.of(context).pushReplacementNamed('/home');
@@ -122,32 +125,30 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         child: Container(
           width: double.infinity,
           height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: AppTheme.darkGradient,
-          ),
+          decoration: const BoxDecoration(gradient: AppTheme.darkGradient),
           child: SafeArea(
             child: Column(
               children: [
                 const Spacer(flex: 2),
-                
+
                 // Logo animé
                 _buildAnimatedLogo(),
-                
+
                 const SizedBox(height: 32),
-                
+
                 // Texte animé
                 _buildAnimatedText(),
-                
+
                 const Spacer(flex: 2),
-                
+
                 // Barre de progression
                 _buildProgressIndicator(),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // Footer
                 _buildFooter(),
-                
+
                 const SizedBox(height: 40),
               ],
             ),

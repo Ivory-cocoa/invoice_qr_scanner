@@ -68,7 +68,7 @@ class _ScannerScreenState extends State<ScannerScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    
+
     _scanLineAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
@@ -103,7 +103,9 @@ class _ScannerScreenState extends State<ScannerScreen>
       _hasScanned = true;
       HapticFeedback.vibrate();
       if (mounted) {
-        setState(() => _errorFlash = 'QR-code non reconnu. Scannez une facture DGI.');
+        setState(
+          () => _errorFlash = 'QR-code non reconnu. Scannez une facture DGI.',
+        );
       }
       _resetTimer?.cancel();
       _resetTimer = Timer(const Duration(milliseconds: 1800), () {
@@ -155,7 +157,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final scanAreaSize = size.width * 0.75;
-    
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -219,7 +221,9 @@ class _ScannerScreenState extends State<ScannerScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                denied ? Icons.no_photography_rounded : Icons.videocam_off_rounded,
+                denied
+                    ? Icons.no_photography_rounded
+                    : Icons.videocam_off_rounded,
                 color: Colors.white70,
                 size: 64,
               ),
@@ -237,9 +241,9 @@ class _ScannerScreenState extends State<ScannerScreen>
               Text(
                 denied
                     ? 'Autorisez l\'accès à la caméra dans les réglages du '
-                        'téléphone pour scanner les QR-codes des factures.'
+                          'téléphone pour scanner les QR-codes des factures.'
                     : 'La caméra n\'a pas pu démarrer. Fermez les autres '
-                        'applications qui l\'utilisent, puis réessayez.',
+                          'applications qui l\'utilisent, puis réessayez.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.75),
@@ -255,7 +259,9 @@ class _ScannerScreenState extends State<ScannerScreen>
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 14),
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
                   ),
                   icon: const Icon(Icons.settings_rounded),
                   label: const Text('Ouvrir les réglages'),
@@ -299,7 +305,11 @@ class _ScannerScreenState extends State<ScannerScreen>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 22),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
@@ -337,7 +347,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                 onTap: () => Navigator.of(context).pop(),
                 semanticLabel: 'Retour',
               ),
-              
+
               // Titre
               const Text(
                 'Scanner QR',
@@ -347,7 +357,7 @@ class _ScannerScreenState extends State<ScannerScreen>
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              
+
               // Bouton flash (masqué si l'appareil n'en a pas ; un espace de
               // même largeur garde le titre centré)
               if (torch == TorchState.unavailable)
@@ -359,8 +369,9 @@ class _ScannerScreenState extends State<ScannerScreen>
                       : Icons.flash_off_rounded,
                   onTap: _toggleFlash,
                   isActive: isFlashOn,
-                  semanticLabel:
-                      isFlashOn ? 'Désactiver le flash' : 'Activer le flash',
+                  semanticLabel: isFlashOn
+                      ? 'Désactiver le flash'
+                      : 'Activer le flash',
                 ),
             ],
           ),
@@ -379,7 +390,9 @@ class _ScannerScreenState extends State<ScannerScreen>
       label: semanticLabel,
       button: true,
       child: Material(
-        color: isActive ? AppTheme.primaryColor : Colors.black.withValues(alpha: 0.5),
+        color: isActive
+            ? AppTheme.primaryColor
+            : Colors.black.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(25),
         child: InkWell(
           onTap: onTap,
@@ -388,11 +401,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             width: 50,
             height: 50,
             alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 24,
-            ),
+            child: Icon(icon, color: Colors.white, size: 24),
           ),
         ),
       ),
@@ -412,7 +421,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   Widget _buildScanArea(Size size, double scanAreaSize) {
     final top = (size.height - scanAreaSize) / 2 - 30;
     final left = (size.width - scanAreaSize) / 2;
-    
+
     return Positioned(
       top: top,
       left: left,
@@ -426,7 +435,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             _buildCorner(Alignment.topRight),
             _buildCorner(Alignment.bottomLeft),
             _buildCorner(Alignment.bottomRight),
-            
+
             // Ligne de scan animée
             AnimatedBuilder(
               animation: _scanLineAnimation,
@@ -469,7 +478,7 @@ class _ScannerScreenState extends State<ScannerScreen>
   Widget _buildCorner(Alignment alignment) {
     const size = 30.0;
     const thickness = 4.0;
-    
+
     BorderRadius borderRadius;
     if (alignment == Alignment.topLeft) {
       borderRadius = const BorderRadius.only(topLeft: Radius.circular(12));
@@ -480,27 +489,46 @@ class _ScannerScreenState extends State<ScannerScreen>
     } else {
       borderRadius = const BorderRadius.only(bottomRight: Radius.circular(12));
     }
-    
+
     return Positioned(
-      top: alignment == Alignment.topLeft || alignment == Alignment.topRight ? 0 : null,
-      bottom: alignment == Alignment.bottomLeft || alignment == Alignment.bottomRight ? 0 : null,
-      left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft ? 0 : null,
-      right: alignment == Alignment.topRight || alignment == Alignment.bottomRight ? 0 : null,
+      top: alignment == Alignment.topLeft || alignment == Alignment.topRight
+          ? 0
+          : null,
+      bottom:
+          alignment == Alignment.bottomLeft ||
+              alignment == Alignment.bottomRight
+          ? 0
+          : null,
+      left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
+          ? 0
+          : null,
+      right:
+          alignment == Alignment.topRight || alignment == Alignment.bottomRight
+          ? 0
+          : null,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
           border: Border(
-            top: alignment == Alignment.topLeft || alignment == Alignment.topRight
+            top:
+                alignment == Alignment.topLeft ||
+                    alignment == Alignment.topRight
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
-            bottom: alignment == Alignment.bottomLeft || alignment == Alignment.bottomRight
+            bottom:
+                alignment == Alignment.bottomLeft ||
+                    alignment == Alignment.bottomRight
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
-            left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
+            left:
+                alignment == Alignment.topLeft ||
+                    alignment == Alignment.bottomLeft
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
-            right: alignment == Alignment.topRight || alignment == Alignment.bottomRight
+            right:
+                alignment == Alignment.topRight ||
+                    alignment == Alignment.bottomRight
                 ? const BorderSide(color: Colors.white, width: thickness)
                 : BorderSide.none,
           ),
@@ -521,10 +549,7 @@ class _ScannerScreenState extends State<ScannerScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black.withValues(alpha: 0.8),
-            ],
+            colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
           ),
         ),
         child: Column(
@@ -542,9 +567,9 @@ class _ScannerScreenState extends State<ScannerScreen>
                 size: 32,
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Titre instruction
             const Text(
               'Placez le QR code dans le cadre',
@@ -555,9 +580,9 @@ class _ScannerScreenState extends State<ScannerScreen>
               ),
               textAlign: TextAlign.center,
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // Sous-titre
             Text(
               'Le scan sera effectué automatiquement',
@@ -580,15 +605,12 @@ class ScanOverlayPainter extends CustomPainter {
   final double scanAreaSize;
   final Color overlayColor;
 
-  ScanOverlayPainter({
-    required this.scanAreaSize,
-    required this.overlayColor,
-  });
+  ScanOverlayPainter({required this.scanAreaSize, required this.overlayColor});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = overlayColor;
-    
+
     // Zone de découpe au centre (légèrement au-dessus du centre)
     final scanRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
@@ -598,13 +620,13 @@ class ScanOverlayPainter extends CustomPainter {
       ),
       const Radius.circular(16),
     );
-    
+
     // Dessiner l'overlay avec la découpe
     final path = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
       ..addRRect(scanRect)
       ..fillType = PathFillType.evenOdd;
-    
+
     canvas.drawPath(path, paint);
   }
 

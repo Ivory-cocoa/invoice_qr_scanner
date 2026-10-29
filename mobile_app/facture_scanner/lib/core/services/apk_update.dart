@@ -42,7 +42,9 @@ class ApkUpdate {
     if (raw is! Map) return null;
     final code = raw['version_code'];
     final url = '${raw['url'] ?? raw['download_url'] ?? ''}';
-    final versionCode = code is num ? code.toInt() : int.tryParse('${code ?? ''}');
+    final versionCode = code is num
+        ? code.toInt()
+        : int.tryParse('${code ?? ''}');
     if (versionCode == null || url.isEmpty) return null;
     return ApkUpdate(
       version: '${raw['version'] ?? ''}',
@@ -70,7 +72,8 @@ class ApkUpdater extends ChangeNotifier {
   double? progress;
   String? error;
 
-  bool get busy => phase == UpdatePhase.downloading || phase == UpdatePhase.verifying;
+  bool get busy =>
+      phase == UpdatePhase.downloading || phase == UpdatePhase.verifying;
 
   void _set(UpdatePhase value, {double? progress, String? error}) {
     phase = value;
@@ -82,7 +85,8 @@ class ApkUpdater extends ChangeNotifier {
   /// Ouvre le lien dans le navigateur (repli, et version web).
   Future<bool> openInBrowser(ApkUpdate update) async {
     final uri = Uri.tryParse(update.url);
-    return uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication);
+    return uri != null &&
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> start(ApkUpdate update) async {
@@ -94,11 +98,15 @@ class ApkUpdater extends ChangeNotifier {
     File? file;
     try {
       _set(UpdatePhase.downloading, progress: 0);
-      final response = await _client.send(http.Request('GET', Uri.parse(update.url)));
+      final response = await _client.send(
+        http.Request('GET', Uri.parse(update.url)),
+      );
       if (response.statusCode != 200) {
-        throw _UpdateError(response.statusCode == 403 || response.statusCode == 404
-            ? 'Lien de téléchargement expiré : rouvrez l\'application puis réessayez.'
-            : 'Téléchargement refusé par le serveur (${response.statusCode}).');
+        throw _UpdateError(
+          response.statusCode == 403 || response.statusCode == 404
+              ? 'Lien de téléchargement expiré : rouvrez l\'application puis réessayez.'
+              : 'Téléchargement refusé par le serveur (${response.statusCode}).',
+        );
       }
       final total = response.contentLength ?? update.fileSize;
       final dir = await getTemporaryDirectory();
@@ -106,7 +114,9 @@ class ApkUpdater extends ChangeNotifier {
       final sink = file.openWrite();
       var received = 0;
       var lastNotified = 0.0;
-      await for (final chunk in response.stream.timeout(const Duration(seconds: 60))) {
+      await for (final chunk in response.stream.timeout(
+        const Duration(seconds: 60),
+      )) {
         sink.add(chunk);
         received += chunk.length;
         if (total > 0) {
@@ -123,26 +133,38 @@ class ApkUpdater extends ChangeNotifier {
         _set(UpdatePhase.verifying);
         final digest = await sha256.bind(file.openRead()).first;
         if (digest.toString() != update.sha256) {
-          throw _UpdateError('Fichier altéré pendant le téléchargement : réessayez.');
+          throw _UpdateError(
+            'Fichier altéré pendant le téléchargement : réessayez.',
+          );
         }
       }
 
       _set(UpdatePhase.installing);
-      final result = await OpenFilex.open(file.path, type: 'application/vnd.android.package-archive');
+      final result = await OpenFilex.open(
+        file.path,
+        type: 'application/vnd.android.package-archive',
+      );
       if (result.type == ResultType.done) {
         _set(UpdatePhase.idle);
       } else if (result.type == ResultType.permissionDenied) {
-        throw _UpdateError('Autorisez l\'installation d\'applications pour cette '
-            'application (Paramètres Android), puis réessayez.');
+        throw _UpdateError(
+          'Autorisez l\'installation d\'applications pour cette '
+          'application (Paramètres Android), puis réessayez.',
+        );
       } else {
-        throw _UpdateError('Impossible d\'ouvrir l\'installeur : ${result.message}');
+        throw _UpdateError(
+          'Impossible d\'ouvrir l\'installeur : ${result.message}',
+        );
       }
     } on _UpdateError catch (e) {
       await _discard(file);
       _set(UpdatePhase.failed, error: e.message);
     } on TimeoutException {
       await _discard(file);
-      _set(UpdatePhase.failed, error: 'Le téléchargement s\'est interrompu (réseau trop lent).');
+      _set(
+        UpdatePhase.failed,
+        error: 'Le téléchargement s\'est interrompu (réseau trop lent).',
+      );
     } on SocketException {
       await _discard(file);
       _set(UpdatePhase.failed, error: 'Pas de connexion réseau.');
@@ -184,7 +206,9 @@ class UpdateBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final info = update;
-    if (info == null || !info.isNewerThan(currentVersionCode)) return const SizedBox.shrink();
+    if (info == null || !info.isNewerThan(currentVersionCode)) {
+      return const SizedBox.shrink();
+    }
     final scheme = Theme.of(context).colorScheme;
     return AnimatedBuilder(
       animation: updater,
@@ -196,13 +220,17 @@ class UpdateBanner extends StatelessWidget {
             ? ' · ${(info.fileSize / 1048576).toStringAsFixed(1).replaceAll('.', ',')}\u00a0Mo'
             : '';
         final subtitle = switch (phase) {
-          UpdatePhase.downloading => updater.progress == null
-              ? 'Téléchargement…'
-              : 'Téléchargement ${(100 * updater.progress!).round()} %',
+          UpdatePhase.downloading =>
+            updater.progress == null
+                ? 'Téléchargement…'
+                : 'Téléchargement ${(100 * updater.progress!).round()} %',
           UpdatePhase.verifying => 'Vérification du fichier…',
           UpdatePhase.installing => 'Ouverture de l\'installeur Android…',
           UpdatePhase.failed => updater.error ?? 'Échec de la mise à jour.',
-          UpdatePhase.idle => info.notes.isNotEmpty ? info.notes : 'Installez-la par-dessus $appName$size.',
+          UpdatePhase.idle =>
+            info.notes.isNotEmpty
+                ? info.notes
+                : 'Installez-la par-dessus $appName$size.',
         };
         return Semantics(
           container: true,
@@ -218,25 +246,40 @@ class UpdateBanner extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(failed ? Icons.error_outline : Icons.system_update,
-                          color: failed ? scheme.onErrorContainer : scheme.onPrimaryContainer),
+                      Icon(
+                        failed ? Icons.error_outline : Icons.system_update,
+                        color: failed
+                            ? scheme.onErrorContainer
+                            : scheme.onPrimaryContainer,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Nouvelle version ${info.version} disponible',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: failed ? scheme.onErrorContainer : scheme.onPrimaryContainer)),
+                            Text(
+                              'Nouvelle version ${info.version} disponible',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: failed
+                                    ? scheme.onErrorContainer
+                                    : scheme.onPrimaryContainer,
+                              ),
+                            ),
                             const SizedBox(height: 2),
-                            Text(subtitle,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: (failed ? scheme.onErrorContainer : scheme.onPrimaryContainer)
-                                        .withValues(alpha: 0.85))),
+                            Text(
+                              subtitle,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color:
+                                    (failed
+                                            ? scheme.onErrorContainer
+                                            : scheme.onPrimaryContainer)
+                                        .withValues(alpha: 0.85),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -268,7 +311,10 @@ class UpdateBanner extends StatelessWidget {
                     const SizedBox(height: 10),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(99),
-                      child: LinearProgressIndicator(value: updater.progress, minHeight: 6),
+                      child: LinearProgressIndicator(
+                        value: updater.progress,
+                        minHeight: 6,
+                      ),
                     ),
                   ],
                 ],

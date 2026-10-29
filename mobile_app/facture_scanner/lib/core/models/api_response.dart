@@ -7,7 +7,7 @@ class ApiResponse<T> {
   final String? message;
   final String? errorCode;
   final String? errorMessage;
-  
+
   ApiResponse({
     required this.success,
     this.data,
@@ -15,7 +15,7 @@ class ApiResponse<T> {
     this.errorCode,
     this.errorMessage,
   });
-  
+
   @override
   String toString() {
     if (success) {

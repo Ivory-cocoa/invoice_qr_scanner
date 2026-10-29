@@ -24,10 +24,16 @@ void main() {
       final parsed = ApiService.parseServerDate('2026-07-28T16:00:00');
 
       expect(parsed, isNotNull);
-      expect(parsed!.isUtc, isTrue,
-          reason: 'Une date naïve d\'Odoo doit être forcée en UTC');
-      expect(parsed.hour, 16,
-          reason: 'L\'heure ne doit pas être décalée par le fuseau local');
+      expect(
+        parsed!.isUtc,
+        isTrue,
+        reason: 'Une date naïve d\'Odoo doit être forcée en UTC',
+      );
+      expect(
+        parsed.hour,
+        16,
+        reason: 'L\'heure ne doit pas être décalée par le fuseau local',
+      );
     });
 
     test('les deux formats désignent le même instant', () {

@@ -27,7 +27,10 @@ void main() {
   });
 
   group('ScanRecord — nature et signe', () {
-    ScanRecord build({String documentType = 'invoice', double amount = 250000}) {
+    ScanRecord build({
+      String documentType = 'invoice',
+      double amount = 250000,
+    }) {
       return ScanRecord.fromJson({
         'id': 1,
         'reference': 'SCAN/2026/00001',

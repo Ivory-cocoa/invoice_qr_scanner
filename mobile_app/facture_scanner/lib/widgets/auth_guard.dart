@@ -15,11 +15,7 @@ import 'package:provider/provider.dart';
 import '../core/providers/auth_provider.dart';
 
 class AuthGuard extends StatefulWidget {
-  const AuthGuard({
-    super.key,
-    required this.navigatorKey,
-    required this.child,
-  });
+  const AuthGuard({super.key, required this.navigatorKey, required this.child});
 
   final GlobalKey<NavigatorState> navigatorKey;
   final Widget child;
@@ -74,8 +70,10 @@ class _AuthGuardState extends State<AuthGuard> {
     // navigation à la frame suivante.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _redirecting = false;
-      widget.navigatorKey.currentState
-          ?.pushNamedAndRemoveUntil('/login', (route) => false);
+      widget.navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/login',
+        (route) => false,
+      );
     });
   }
 

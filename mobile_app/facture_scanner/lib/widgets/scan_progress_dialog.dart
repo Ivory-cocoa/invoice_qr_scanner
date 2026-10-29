@@ -21,7 +21,7 @@ class ScanProgress {
   late final DialogRoute<void> _route;
 
   ScanProgress._(this._navigator, String message)
-      : _message = ValueNotifier<String>(message);
+    : _message = ValueNotifier<String>(message);
 
   /// Ouvre le dialogue sur le Navigator racine de [context].
   factory ScanProgress.show(BuildContext context, String message) {

@@ -11,7 +11,7 @@ import 'database_service.dart';
 class SyncService {
   final ApiService _api = ApiService();
   final DatabaseService _db = DatabaseService();
-  
+
   bool _isSyncing = false;
 
   /// Nombre maximum de tentatives par scan avant échec définitif.
@@ -30,17 +30,17 @@ class SyncService {
     'SERVER_ERROR',
     'DGI_ERROR',
   };
-  
+
   /// Optional callback for sync progress updates
   void Function(String message)? onProgress;
-  
+
   // Singleton
   static final SyncService _instance = SyncService._internal();
   factory SyncService() => _instance;
   SyncService._internal();
-  
+
   bool get isSyncing => _isSyncing;
-  
+
   /// Sync all pending scans to server (both parsed and unparsed)
   Future<SyncResult> syncPendingScans() async {
     if (_isSyncing) {
@@ -49,9 +49,9 @@ class SyncService {
         message: 'Synchronisation déjà en cours',
       );
     }
-    
+
     _isSyncing = true;
-    
+
     try {
       // Check if we have connectivity (avec retentatives : un serveur
       // momentanément surchargé ne doit pas faire échouer la sync).
@@ -63,32 +63,32 @@ class SyncService {
           message: 'Pas de connexion au serveur',
         );
       }
-      
+
       int totalSynced = 0;
       int totalDuplicates = 0;
       int totalErrors = 0;
-      
+
       // 1. Sync parsed scans (with DGI data) via enriched endpoint
       onProgress?.call('Synchronisation des scans pré-analysés...');
       final parsedResult = await _syncParsedScans();
       totalSynced += parsedResult.syncedCount;
       totalDuplicates += parsedResult.duplicateCount;
       totalErrors += parsedResult.errorCount;
-      
+
       // 2. Scans bruts : le serveur récupère lui-même les données DGI
       onProgress?.call('Synchronisation des scans en attente...');
       final unparsedResult = await _extractAndSyncUnparsedScans();
       totalSynced += unparsedResult.syncedCount;
       totalDuplicates += unparsedResult.duplicateCount;
       totalErrors += unparsedResult.errorCount;
-      
+
       // Cleanup synced and permanently failed scans
       await _db.deleteSyncedScans();
-      
+
       _isSyncing = false;
-      
+
       final totalProcessed = totalSynced + totalDuplicates + totalErrors;
-      
+
       if (totalProcessed == 0) {
         // Check if API calls failed entirely (scans exist but couldn't be sent)
         if (!parsedResult.success || !unparsedResult.success) {
@@ -97,7 +97,9 @@ class SyncService {
               : unparsedResult.message;
           return SyncResult(
             success: false,
-            message: errorMsg.isNotEmpty ? errorMsg : 'Erreur de synchronisation',
+            message: errorMsg.isNotEmpty
+                ? errorMsg
+                : 'Erreur de synchronisation',
           );
         }
         return SyncResult(
@@ -106,11 +108,11 @@ class SyncService {
           syncedCount: 0,
         );
       }
-      
+
       // Build descriptive message based on actual results
       String message;
       bool success;
-      
+
       if (totalErrors > 0 && totalSynced == 0 && totalDuplicates == 0) {
         success = false;
         message = '$totalErrors erreur(s) de synchronisation';
@@ -130,7 +132,7 @@ class SyncService {
           message = '$totalDuplicates doublon(s) détecté(s)';
         }
       }
-      
+
       return SyncResult(
         success: success,
         message: message,
@@ -138,16 +140,12 @@ class SyncService {
         duplicateCount: totalDuplicates,
         errorCount: totalErrors,
       );
-      
     } catch (e) {
       _isSyncing = false;
-      return SyncResult(
-        success: false,
-        message: 'Erreur: ${e.toString()}',
-      );
+      return SyncResult(success: false, message: 'Erreur: ${e.toString()}');
     }
   }
-  
+
   /// Vérifie la disponibilité du serveur avec retentatives (backoff simple).
   Future<bool> _healthCheckWithRetry() async {
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -161,7 +159,10 @@ class SyncService {
 
   /// Applique le résultat serveur d'un scan : synchronisé, échec définitif,
   /// ou erreur transitoire (reste en attente pour la prochaine sync).
-  Future<void> _applyServerResult(int scanDbId, Map<String, dynamic> result) async {
+  Future<void> _applyServerResult(
+    int scanDbId,
+    Map<String, dynamic> result,
+  ) async {
     if (result['success'] == true || result['error_code'] == 'DUPLICATE') {
       await _db.markScanSynced(scanDbId);
       return;
@@ -182,43 +183,47 @@ class SyncService {
     if (parsedScans.isEmpty) {
       return SyncResult(success: true, message: '', syncedCount: 0);
     }
-    
+
     // Prepare enriched scans for sync
-    final scansToSync = parsedScans.map((scan) => {
-      'qr_url': scan['qr_url'],
-      'scanned_at': scan['scanned_at'],
-      'parsed_data': {
-        'supplier_name': scan['supplier_name'],
-        'supplier_code_dgi': scan['supplier_code_dgi'],
-        'customer_name': scan['customer_name'],
-        'customer_code_dgi': scan['customer_code_dgi'],
-        'invoice_number_dgi': scan['invoice_number_dgi'],
-        'invoice_date': scan['invoice_date'],
-        'verification_id': scan['verification_id'],
-        'amount_ttc': scan['amount_ttc'],
-        // Nature du document telle que le client l'a comprise hors ligne.
-        // Le serveur ne la re-vérifie PAS auprès de la DGI sur un lot (il y
-        // tiendrait le sémaphore trop longtemps) : il la reprend en la
-        // marquant « à confirmer ». Sans ce champ, tout avoir synchronisé
-        // hors ligne redeviendrait une facture.
-        'document_type': scan['document_type'] ?? 'invoice',
-      },
-    }).toList();
-    
+    final scansToSync = parsedScans
+        .map(
+          (scan) => {
+            'qr_url': scan['qr_url'],
+            'scanned_at': scan['scanned_at'],
+            'parsed_data': {
+              'supplier_name': scan['supplier_name'],
+              'supplier_code_dgi': scan['supplier_code_dgi'],
+              'customer_name': scan['customer_name'],
+              'customer_code_dgi': scan['customer_code_dgi'],
+              'invoice_number_dgi': scan['invoice_number_dgi'],
+              'invoice_date': scan['invoice_date'],
+              'verification_id': scan['verification_id'],
+              'amount_ttc': scan['amount_ttc'],
+              // Nature du document telle que le client l'a comprise hors ligne.
+              // Le serveur ne la re-vérifie PAS auprès de la DGI sur un lot (il y
+              // tiendrait le sémaphore trop longtemps) : il la reprend en la
+              // marquant « à confirmer ». Sans ce champ, tout avoir synchronisé
+              // hors ligne redeviendrait une facture.
+              'document_type': scan['document_type'] ?? 'invoice',
+            },
+          },
+        )
+        .toList();
+
     // Try the pre-parsed endpoint first
     final response = await _api.syncParsedScans(scansToSync);
-    
+
     if (response.success && response.data != null) {
       final results = response.data!['results'] as List? ?? [];
       final summary = response.data!['summary'] as Map<String, dynamic>? ?? {};
-      
+
       // Mark scans based on results
       for (int i = 0; i < results.length && i < parsedScans.length; i++) {
         final result = results[i] as Map<String, dynamic>;
         final pendingScan = parsedScans[i];
         await _applyServerResult(pendingScan['id'] as int, result);
       }
-      
+
       return SyncResult(
         success: true,
         message: '',
@@ -227,13 +232,13 @@ class SyncService {
         errorCount: (summary['errors'] as int?) ?? 0,
       );
     }
-    
+
     return SyncResult(
       success: false,
       message: response.errorMessage ?? 'Erreur sync parsed',
     );
   }
-  
+
   /// Extract DGI data for unparsed scans, then sync via /sync-parsed endpoint.
   /// This handles the case where scans were saved offline without DGI data,
   /// and now we're online: the SERVER retrieves the DGI data from the URL.
@@ -266,10 +271,7 @@ class SyncService {
         continue;
       }
 
-      scansToSync.add({
-        'qr_url': qrUrl,
-        'scanned_at': scan['scanned_at'],
-      });
+      scansToSync.add({'qr_url': qrUrl, 'scanned_at': scan['scanned_at']});
       scanDbIds.add(scanId);
     }
 
@@ -308,7 +310,7 @@ class SyncService {
       errorCount: errors,
     );
   }
-  
+
   /// Get number of pending scans
   Future<int> getPendingCount() async {
     return await _db.getPendingScansCount();
@@ -321,7 +323,7 @@ class SyncResult {
   final int syncedCount;
   final int duplicateCount;
   final int errorCount;
-  
+
   SyncResult({
     required this.success,
     required this.message,
@@ -329,6 +331,6 @@ class SyncResult {
     this.duplicateCount = 0,
     this.errorCount = 0,
   });
-  
+
   int get totalProcessed => syncedCount + duplicateCount + errorCount;
 }
