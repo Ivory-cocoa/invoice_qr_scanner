@@ -44,6 +44,10 @@ class QueueItem {
   double verificationDuration;
   String? errorMessage;
 
+  /// Vrai si le serveur a répondu « doublon » : l'item est alors `completed`
+  /// (rien à refaire), mais ce n'est PAS une facture créée.
+  bool isDuplicate;
+
   /// Id de la ligne `pending_scans` servant de filet de sécurité : si l'app
   /// est tuée pendant le traitement, le scan sera synchronisé plus tard.
   int? pendingDbId;
@@ -61,6 +65,7 @@ class QueueItem {
     this.verificationDuration = 0,
     this.errorMessage,
     this.pendingDbId,
+    this.isDuplicate = false,
   });
 
   bool get isActive =>
@@ -149,6 +154,40 @@ class BackgroundScanQueue extends ChangeNotifier {
 
   /// Obtenir un item par ID
   QueueItem? getItem(String id) => _queue[id];
+
+  /// Attend qu'un item atteigne un état terminal (créé, doublon, erreur,
+  /// saisie manuelle requise) et le renvoie.
+  ///
+  /// Renvoie `null` si [timeout] expire avant, ou si l'item a été retiré de la
+  /// file entre-temps. Le traitement, lui, continue en arrière-plan : seule
+  /// l'attente de l'appelant s'arrête.
+  Future<QueueItem?> waitForResult(String id, {required Duration timeout}) {
+    final item = _queue[id];
+    if (item == null || item.isTerminal) return Future.value(item);
+
+    final completer = Completer<QueueItem?>();
+    late final VoidCallback listener;
+    Timer? timer;
+
+    void finish(QueueItem? result) {
+      if (completer.isCompleted) return;
+      timer?.cancel();
+      removeListener(listener);
+      completer.complete(result);
+    }
+
+    listener = () {
+      final current = _queue[id];
+      if (current == null) {
+        finish(null);
+      } else if (current.isTerminal) {
+        finish(current);
+      }
+    };
+    addListener(listener);
+    timer = Timer(timeout, () => finish(null));
+    return completer.future;
+  }
 
   /// Ajouter un scan à la file d'attente et lancer le traitement
   /// Retourne l'ID de l'élément ajouté, ou null si c'est un doublon local
@@ -251,6 +290,7 @@ class BackgroundScanQueue extends ChangeNotifier {
         item.state = QueueItemState.completed;
         item.progressMessage = null;
         item.resultMessage = 'Doublon détecté';
+        item.isDuplicate = true;
         if (response.data != null &&
             response.data!.containsKey('existing_record')) {
           item.scanRecord = ScanRecord.fromJson(response.data!['existing_record']);
@@ -321,6 +361,7 @@ class BackgroundScanQueue extends ChangeNotifier {
         item.state = QueueItemState.completed;
         item.progressMessage = null;
         item.resultMessage = 'Doublon détecté';
+        item.isDuplicate = true;
         if (response.data != null && response.data!.containsKey('existing_record')) {
           item.scanRecord = ScanRecord.fromJson(response.data!['existing_record']);
         }
@@ -393,6 +434,24 @@ class BackgroundScanQueue extends ChangeNotifier {
     await _submitToServer(item, data, true);
   }
 
+  /// Marque comme créé un item en attente de saisie manuelle dont la pièce a
+  /// finalement été créée par une nouvelle tentative DGI (l'écran de saisie
+  /// manuelle renvoie alors `true` au lieu d'un formulaire rempli).
+  Future<void> markCreatedByRetry(String itemId) async {
+    final item = _queue[itemId];
+    if (item == null) return;
+
+    item.state = QueueItemState.completed;
+    item.isDuplicate = false;
+    item.progressMessage = null;
+    item.errorMessage = null;
+    item.resultMessage = 'Facture créée avec succès';
+    _sessionSuccessCount++;
+    await _removeSafetyNet(item);
+    notifyListeners();
+    onHistoryChanged?.call();
+  }
+
   /// Réessayer un item en échec
   void retryItem(String itemId) {
     final item = _queue[itemId];
@@ -400,6 +459,7 @@ class BackgroundScanQueue extends ChangeNotifier {
 
     item.state = QueueItemState.pending;
     item.progressMessage = 'En file d\'attente (nouvelle tentative)...';
+    item.isDuplicate = false;
     item.errorMessage = null;
     item.resultMessage = null;
     notifyListeners();

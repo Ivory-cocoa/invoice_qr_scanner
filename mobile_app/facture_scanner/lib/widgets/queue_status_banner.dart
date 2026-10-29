@@ -9,9 +9,11 @@ import 'package:provider/provider.dart';
 
 import '../core/services/background_scan_queue.dart';
 import '../core/providers/auth_provider.dart';
+import '../core/providers/scan_provider.dart';
 import '../core/ot_link_flow.dart';
 import '../core/theme/app_theme.dart';
 import '../screens/manual_entry_screen.dart';
+import 'scan_result_dialog.dart';
 
 class QueueStatusBanner extends StatelessWidget {
   const QueueStatusBanner({super.key});
@@ -102,7 +104,7 @@ class QueueStatusBanner extends StatelessWidget {
                 ),
                 // Bouton saisie manuelle rapide
                 _ManualEntryShortcutButton(
-                  onTap: () => _openManualEntryForItem(context, queue, currentItem),
+                  onTap: () => openManualEntryForQueueItem(context, queue, currentItem),
                 ),
               ],
             ),
@@ -125,7 +127,7 @@ class QueueStatusBanner extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => _openManualEntryForItem(context, queue, item),
+          onTap: () => openManualEntryForQueueItem(context, queue, item),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -186,6 +188,13 @@ class QueueStatusBanner extends StatelessWidget {
     final canLinkToOt = context.read<AuthProvider>().user?.isOtManager == true &&
         record != null &&
         record.id > 0;
+    // Un doublon n'est pas une facture créée : couleur et icône d'alerte,
+    // pour qu'il ne se confonde pas avec un succès d'un simple coup d'œil.
+    final color =
+        item.isDuplicate ? AppTheme.getWarning(context) : AppTheme.successColor;
+    final background = item.isDuplicate
+        ? AppTheme.getWarningLight(context)
+        : AppTheme.getSuccessLight(context);
     return _AutoDismissCard(
       key: ValueKey(item.id),
       // Laisser plus de temps pour lier à un OT quand l'action est proposée.
@@ -193,24 +202,49 @@ class QueueStatusBanner extends StatelessWidget {
       onDismissed: () => queue.removeItem(item.id),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.getSuccessLight(context),
+          color: background,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.successColor.withAlpha(77)),
+          border: Border.all(color: color.withAlpha(77)),
         ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            // Revoir le détail d'un résultat traité en arrière-plan.
+            onTap: record == null
+                ? null
+                : () => showDialog<String>(
+                      context: context,
+                      builder: (_) => ScanResultDialog(
+                        state: item.isDuplicate
+                            ? ScanState.duplicate
+                            : ScanState.success,
+                        message: item.isDuplicate
+                            ? 'Cette facture a déjà été scannée.'
+                            : item.resultMessage,
+                        scanRecord: record,
+                        showScanAgain: false,
+                      ),
+                    ),
+            child: Padding(
+        padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            const Icon(Icons.check_circle_rounded,
-                color: AppTheme.successColor, size: 24),
+            Icon(
+                item.isDuplicate
+                    ? Icons.content_copy_rounded
+                    : Icons.check_circle_rounded,
+                color: color,
+                size: 24),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                item.resultMessage ?? 'Facture créée',
-                style: const TextStyle(
+                _completedLabel(item),
+                style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 13,
-                  color: AppTheme.successColor,
+                  color: color,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -231,11 +265,30 @@ class QueueStatusBanner extends StatelessWidget {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               color: AppTheme.getTextMuted(context),
+              tooltip: 'Masquer',
             ),
           ],
         ),
+            ),
+          ),
+        ),
       ),
     );
+  }
+
+  /// Libellé d'une carte terminée : le fournisseur et le numéro DGI disent
+  /// de QUELLE facture il s'agit quand plusieurs scans s'enchaînent.
+  static String _completedLabel(QueueItem item) {
+    final record = item.scanRecord;
+    final status = item.isDuplicate
+        ? 'Doublon'
+        : (item.resultMessage ?? 'Facture créée');
+    if (record == null) return status;
+    final what = [
+      if (record.supplierName.isNotEmpty) record.supplierName,
+      if (record.invoiceNumberDgi.isNotEmpty) record.invoiceNumberDgi,
+    ].join(' • ');
+    return what.isEmpty ? status : '$status — $what';
   }
 
   Widget _buildFailedCard(
@@ -281,6 +334,7 @@ class QueueStatusBanner extends StatelessWidget {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             color: AppTheme.getTextMuted(context),
+            tooltip: 'Masquer',
           ),
         ],
       ),
@@ -295,35 +349,6 @@ class QueueStatusBanner extends StatelessWidget {
       ),
       builder: (context) => _QueueDetailsSheet(queue: queue),
     );
-  }
-
-  Future<void> _openManualEntryForItem(
-      BuildContext context, BackgroundScanQueue queue, QueueItem item) async {
-    final result = await Navigator.of(context).push<ManualEntryResult>(
-      MaterialPageRoute(
-        builder: (context) => ManualEntryScreen(
-          qrUrl: item.qrUrl,
-          prefillData: item.extractedData,
-          verificationDuration: item.verificationDuration,
-          timedOut: true,
-        ),
-      ),
-    );
-
-    if (result != null) {
-      await queue.submitManualEntry(
-        itemId: item.id,
-        supplierName: result.supplierName,
-        supplierCodeDgi: result.supplierCodeDgi,
-        customerName: result.customerName,
-        customerCodeDgi: result.customerCodeDgi,
-        invoiceNumberDgi: result.invoiceNumberDgi,
-        invoiceDate: result.invoiceDate,
-        amountTtc: result.amountTtc,
-        documentType: result.documentType,
-        verificationDuration: result.verificationDuration,
-      );
-    }
   }
 }
 
@@ -658,7 +683,9 @@ class _QueueItemTile extends StatelessWidget {
           ),
         );
       case QueueItemState.completed:
-        return (Icons.check_circle, AppTheme.successColor, null);
+        return item.isDuplicate
+            ? (Icons.content_copy_rounded, AppTheme.warningColor, null)
+            : (Icons.check_circle, AppTheme.successColor, null);
       case QueueItemState.needsManualEntry:
         return (
           Icons.edit_note_rounded,
@@ -690,11 +717,49 @@ class _QueueItemTile extends StatelessWidget {
       case QueueItemState.submitting:
         return 'Création facture...';
       case QueueItemState.completed:
-        return 'Terminé';
+        return item.isDuplicate ? 'Doublon' : 'Terminé';
       case QueueItemState.needsManualEntry:
         return 'Saisie manuelle requise';
       case QueueItemState.failed:
         return 'Erreur';
     }
+  }
+}
+
+/// Ouvre la saisie manuelle pour un scan de la file, puis soumet le résultat.
+///
+/// [ManualEntryScreen] renvoie DEUX types de valeur : un [ManualEntryResult]
+/// si l'utilisateur a rempli le formulaire, ou `true` si sa nouvelle tentative
+/// auprès de la DGI a abouti et que la pièce est déjà créée côté serveur. La
+/// route était typée `ManualEntryResult` : ce second cas levait une erreur de
+/// type et laissait le scan bloqué en « Saisie manuelle requise ».
+Future<void> openManualEntryForQueueItem(
+    BuildContext context, BackgroundScanQueue queue, QueueItem item) async {
+  final result = await Navigator.of(context).push<Object?>(
+    MaterialPageRoute<Object?>(
+      builder: (context) => ManualEntryScreen(
+        qrUrl: item.qrUrl,
+        prefillData: item.extractedData,
+        verificationDuration: item.verificationDuration,
+        timedOut: true,
+      ),
+    ),
+  );
+
+  if (result == true) {
+    await queue.markCreatedByRetry(item.id);
+  } else if (result is ManualEntryResult) {
+    await queue.submitManualEntry(
+      itemId: item.id,
+      supplierName: result.supplierName,
+      supplierCodeDgi: result.supplierCodeDgi,
+      customerName: result.customerName,
+      customerCodeDgi: result.customerCodeDgi,
+      invoiceNumberDgi: result.invoiceNumberDgi,
+      invoiceDate: result.invoiceDate,
+      amountTtc: result.amountTtc,
+      documentType: result.documentType,
+      verificationDuration: result.verificationDuration,
+    );
   }
 }

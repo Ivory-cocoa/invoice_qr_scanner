@@ -2,17 +2,21 @@
 /// Écran d'accueil moderne avec dashboard et statistiques
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/providers/auth_provider.dart';
 import '../core/providers/scan_provider.dart';
 import '../core/providers/connectivity_provider.dart';
+import '../core/models/scan_record.dart';
 import '../core/services/background_scan_queue.dart';
 import '../core/ot_link_flow.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
 import '../widgets/queue_status_banner.dart';
+import '../widgets/scan_progress_dialog.dart';
 import '../widgets/scan_result_dialog.dart';
 import '../widgets/stats_card.dart';
 import '../widgets/history_list.dart';
@@ -29,6 +33,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  /// Attente maximale du résultat d'un scan avant de rendre la main : un peu
+  /// plus que le délai de l'appel serveur (30 s), plus une éventuelle file.
+  static const _resultWaitTimeout = Duration(seconds: 45);
+
   late TabController _tabController;
   bool _isAutoSyncing = false;
   
@@ -129,140 +137,234 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.dispose();
   }
   
+  /// Enchaîne les scans : chaque tour scanne UN QR-code et en affiche le
+  /// résultat ; le scanner ne se rouvre que si l'utilisateur choisit
+  /// « Nouveau scan ». (Auparavant, le scanner se rouvrait aussitôt la facture
+  /// mise en file, sans que le résultat de la vérification soit visible.)
   Future<void> _openScanner() async {
-    final connectivity = context.read<ConnectivityProvider>();
-    final scan = context.read<ScanProvider>();
-    
+    var scanAgain = true;
+    while (scanAgain && mounted) {
+      scanAgain = await _scanOnce();
+    }
+  }
+
+  /// Un scan complet. Renvoie `true` si l'utilisateur veut scanner à nouveau.
+  Future<bool> _scanOnce() async {
     final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         builder: (context) => const ScannerScreen(),
       ),
     );
-    
-    if (result != null && mounted) {
-      if (connectivity.isOnline) {
-        // Validate + check duplicates before enqueuing
-        final validation = await scan.validateQrForQueue(result, checkServer: true);
-        
-        if (!validation.valid) {
-          // Show error/duplicate via dialog
-          if (validation.isDuplicate) {
-            scan.resetState();
-            if (mounted) {
-              final existing = validation.existing;
-              final dialogResult = await showDialog<String>(
-                context: context,
-                builder: (context) => ScanResultDialog(
-                  state: ScanState.duplicate,
-                  message: validation.error,
-                  scanRecord: existing,
-                ),
-              );
-              // Gestionnaire OT / Responsable : lier ce doublon à un OT.
-              if (dialogResult == 'link_to_ot' &&
-                  existing != null &&
-                  existing.id > 0 &&
-                  mounted) {
-                await startOtLinkFlow(context, existing);
-              } else if (mounted) {
-                // Offer to scan again
-                _openScanner();
-              }
-            }
-          } else {
-            // Validation error
-            if (mounted) {
-              await showDialog<String>(
-                context: context,
-                builder: (context) => ScanResultDialog(
-                  state: ScanState.error,
-                  message: validation.error,
-                  scanRecord: null,
-                ),
-              );
-              if (mounted) _openScanner();
-            }
-          }
-          return;
-        }
-        
-        // Enqueue for background processing
-        if (!mounted) return;
-        final queue = context.read<BackgroundScanQueue>();
-        final itemId = await queue.enqueue(result, validation.qrUuid!);
-        
-        if (itemId == null && mounted) {
-          // Already in queue
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Text('Ce scan est déjà en cours de traitement'),
-                ],
-              ),
-              backgroundColor: AppTheme.infoColor,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        } else if (mounted) {
-          // Enqueued - show brief confirmation and offer to scan again
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.queue_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 12),
-                  Text('Scan ajouté - traitement en arrière-plan'),
-                ],
-              ),
-              backgroundColor: AppTheme.infoColor,
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-          
-          // Immediately offer to scan another
-          if (mounted) _openScanner();
-        }
-      } else {
-        // Offline: use existing local extraction flow
-        await scan.processQrCode(
-          result,
-          isOnline: false,
-          localExtraction: true,
+    if (result == null || !mounted) return false;
+
+    // Lue APRÈS le scan : la connexion a pu changer pendant que la caméra
+    // était ouverte.
+    final isOnline = context.read<ConnectivityProvider>().isOnline;
+    return isOnline ? _processOnline(result) : _processOffline(result);
+  }
+
+  /// En ligne : contrôle des doublons, puis vérification DGI + création par le
+  /// serveur via la file d'arrière-plan, dont on ATTEND le résultat pour
+  /// l'afficher.
+  Future<bool> _processOnline(String qrContent) async {
+    final scan = context.read<ScanProvider>();
+    final queue = context.read<BackgroundScanQueue>();
+    final progress = ScanProgress.show(context, 'Recherche de doublons...');
+
+    try {
+      final validation =
+          await scan.validateQrForQueue(qrContent, checkServer: true);
+      if (!mounted) return false;
+      if (!validation.valid) {
+        progress.close();
+        scan.resetState();
+        return await _showResult(
+          state:
+              validation.isDuplicate ? ScanState.duplicate : ScanState.error,
+          message: validation.error,
+          record: validation.existing,
         );
-        
-        if (scan.state != ScanState.idle && scan.state != ScanState.manualEntry && mounted) {
-          final record = scan.lastScanResult;
-          final dialogResult = await showDialog<String>(
-            context: context,
-            builder: (context) => ScanResultDialog(
-              state: scan.state,
-              message: scan.message,
-              scanRecord: record,
-            ),
-          );
-          
-          scan.resetState();
-          
-          if (dialogResult == 'link_to_ot' &&
-              record != null &&
-              record.id > 0 &&
-              mounted) {
-            await startOtLinkFlow(context, record);
-          } else if (dialogResult == 'scan_again' && mounted) {
-            _openScanner();
-          }
-        }
       }
+
+      progress.message = 'Vérification auprès de la DGI...';
+      final itemId = await queue.enqueue(qrContent, validation.qrUuid!);
+      if (!mounted) return false;
+      if (itemId == null) {
+        progress.close();
+        _showInfoSnackBar(
+            Icons.info_outline, 'Ce scan est déjà en cours de traitement');
+        return false;
+      }
+
+      // L'utilisateur peut cesser d'attendre : le traitement continue et son
+      // issue s'affichera dans la file, en haut de l'écran.
+      final stopWaiting = Completer<QueueItem?>();
+      progress.onBackground = () {
+        if (!stopWaiting.isCompleted) stopWaiting.complete(null);
+      };
+      void followProgress() {
+        final message = queue.getItem(itemId)?.progressMessage;
+        if (message != null) progress.message = message;
+      }
+
+      queue.addListener(followProgress);
+      final QueueItem? item;
+      try {
+        item = await Future.any([
+          queue.waitForResult(itemId, timeout: _resultWaitTimeout),
+          stopWaiting.future,
+        ]);
+      } finally {
+        queue.removeListener(followProgress);
+      }
+      progress.close();
+      if (!mounted) return false;
+
+      if (item == null) {
+        if (stopWaiting.isCompleted) {
+          _showInfoSnackBar(Icons.queue_rounded,
+              'Traitement en arrière-plan : le résultat s\'affichera ici');
+          return false;
+        }
+        return await _showResult(
+          state: ScanState.processing,
+          message: 'La vérification prend plus de temps que prévu. Elle se '
+              'poursuit en arrière-plan : son résultat s\'affichera en haut '
+              'de l\'écran d\'accueil.',
+        );
+      }
+      return await _showQueueItemResult(queue, item);
+    } catch (e) {
+      progress.close();
+      if (!mounted) return false;
+      return _showResult(
+        state: ScanState.error,
+        message: 'Le scan n\'a pas pu être traité. Réessayez.\n($e)',
+      );
+    } finally {
+      progress.close();
     }
+  }
+
+  /// Affiche l'issue d'un scan traité par la file. La saisie manuelle, quand
+  /// elle est proposée et choisie, aboutit à son tour à un résultat affiché.
+  Future<bool> _showQueueItemResult(
+      BackgroundScanQueue queue, QueueItem item) async {
+    switch (item.state) {
+      case QueueItemState.completed:
+        final scanAgain = await _showResult(
+          state: item.isDuplicate ? ScanState.duplicate : ScanState.success,
+          message: item.isDuplicate
+              ? 'Cette facture a déjà été scannée.'
+              : item.resultMessage,
+          record: item.scanRecord,
+        );
+        // Résultat vu : inutile de le répéter dans la bannière de la file.
+        queue.removeItem(item.id);
+        return scanAgain;
+
+      case QueueItemState.needsManualEntry:
+        final choice = await _showResultDialog(
+          state: ScanState.manualEntry,
+          message: item.resultMessage,
+        );
+        if (!mounted) return false;
+        if (choice == 'manual_entry') {
+          await openManualEntryForQueueItem(context, queue, item);
+          if (!mounted) return false;
+          final updated = queue.getItem(item.id);
+          // Formulaire abandonné : l'item reste dans la file, à reprendre.
+          if (updated == null ||
+              updated.state == QueueItemState.needsManualEntry) {
+            return false;
+          }
+          return _showQueueItemResult(queue, updated);
+        }
+        return choice == 'scan_again';
+
+      case QueueItemState.failed:
+        // L'item reste dans la file : la bannière permet de le réessayer.
+        return _showResult(
+          state: ScanState.error,
+          message: item.resultMessage,
+        );
+
+      case QueueItemState.pending:
+      case QueueItemState.extracting:
+      case QueueItemState.submitting:
+        return false;
+    }
+  }
+
+  /// Hors ligne : extraction locale, enregistrée pour synchronisation.
+  Future<bool> _processOffline(String qrContent) async {
+    final scan = context.read<ScanProvider>();
+    await scan.processQrCode(
+      qrContent,
+      isOnline: false,
+      localExtraction: true,
+    );
+    if (!mounted) return false;
+    if (scan.state == ScanState.idle || scan.state == ScanState.manualEntry) {
+      return false;
+    }
+
+    final state = scan.state;
+    final message = scan.message;
+    final record = scan.lastScanResult;
+    scan.resetState();
+    return _showResult(state: state, message: message, record: record);
+  }
+
+  /// Affiche le résultat, traite « Lier à un OT », et renvoie `true` si
+  /// l'utilisateur a demandé un nouveau scan.
+  Future<bool> _showResult({
+    required ScanState state,
+    String? message,
+    ScanRecord? record,
+  }) async {
+    final choice =
+        await _showResultDialog(state: state, message: message, record: record);
+    if (!mounted) return false;
+    if (choice == 'link_to_ot' && record != null && record.id > 0) {
+      await startOtLinkFlow(context, record);
+      return false;
+    }
+    return choice == 'scan_again';
+  }
+
+  Future<String?> _showResultDialog({
+    required ScanState state,
+    String? message,
+    ScanRecord? record,
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => ScanResultDialog(
+        state: state,
+        message: message,
+        scanRecord: record,
+      ),
+    );
+  }
+
+  void _showInfoSnackBar(IconData icon, String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text)),
+          ],
+        ),
+        backgroundColor: AppTheme.infoColor,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
   
   Future<void> _syncPendingScans() async {

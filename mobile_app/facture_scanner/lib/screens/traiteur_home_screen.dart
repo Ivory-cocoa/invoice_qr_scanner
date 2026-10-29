@@ -15,6 +15,7 @@ import '../core/theme/app_theme.dart';
 import '../core/models/scan_record.dart';
 import '../core/ot_link_flow.dart';
 import '../widgets/connectivity_banner.dart';
+import '../widgets/scan_progress_dialog.dart';
 import '../widgets/scan_result_dialog.dart';
 import 'scanner_screen.dart';
 
@@ -62,7 +63,17 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
     super.dispose();
   }
 
+  /// Enchaîne les scans : le scanner ne se rouvre que si l'utilisateur
+  /// choisit « Nouveau scan » dans le résultat du précédent.
   Future<void> _openScanner() async {
+    var scanAgain = true;
+    while (scanAgain && mounted) {
+      scanAgain = await _scanOnce();
+    }
+  }
+
+  /// Un scan complet. Renvoie `true` si l'utilisateur veut scanner à nouveau.
+  Future<bool> _scanOnce() async {
     final connectivity = context.read<ConnectivityProvider>();
     
     if (!connectivity.isOnline) {
@@ -81,7 +92,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      return;
+      return false;
     }
 
     final scan = context.read<ScanProvider>();
@@ -91,33 +102,37 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen> with SingleTick
         builder: (context) => const ScannerScreen(),
       ),
     );
+    if (result == null || !mounted) return false;
 
-    if (result != null && mounted) {
+    // Sans indicateur, l'écran d'accueil restait figé, sans retour, pendant
+    // l'appel au serveur.
+    final progress = ScanProgress.show(context, 'Recherche de la facture...');
+    try {
       await scan.processQrCodeAsTraiteur(result);
-
-      if (scan.state != ScanState.idle && mounted) {
-        final record = scan.lastScanResult;
-        final dialogResult = await showDialog<String>(
-          context: context,
-          builder: (context) => ScanResultDialog(
-            state: scan.state,
-            message: scan.message,
-            scanRecord: record,
-          ),
-        );
-
-        scan.resetState();
-
-        if (dialogResult == 'link_to_ot' &&
-            record != null &&
-            record.id > 0 &&
-            mounted) {
-          await startOtLinkFlow(context, record);
-        } else if (dialogResult == 'scan_again' && mounted) {
-          _openScanner();
-        }
-      }
+    } finally {
+      progress.close();
     }
+    if (!mounted || scan.state == ScanState.idle) return false;
+
+    final state = scan.state;
+    final record = scan.lastScanResult;
+    final dialogResult = await showDialog<String>(
+      context: context,
+      builder: (context) => ScanResultDialog(
+        state: state,
+        message: scan.message,
+        scanRecord: record,
+      ),
+    );
+
+    scan.resetState();
+    if (!mounted) return false;
+
+    if (dialogResult == 'link_to_ot' && record != null && record.id > 0) {
+      await startOtLinkFlow(context, record);
+      return false;
+    }
+    return dialogResult == 'scan_again';
   }
 
   Future<void> _logout() async {
