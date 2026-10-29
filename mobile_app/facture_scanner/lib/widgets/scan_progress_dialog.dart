@@ -55,12 +55,10 @@ class ScanProgress {
   void close() {
     if (_closed) return;
     _closed = true;
+    // Les ValueNotifier ne sont pas `dispose()` : ils ne tiennent aucune
+    // ressource, et le dialogue peut encore les écouter le temps d'être
+    // démonté. Ils disparaissent avec cet objet.
     if (_route.isActive) _navigator.removeRoute(_route);
-    // Libérés après la fin de l'animation de sortie, qui les écoute encore.
-    Future<void>.delayed(const Duration(seconds: 1), () {
-      _message.dispose();
-      _onBackground.dispose();
-    });
   }
 }
 
