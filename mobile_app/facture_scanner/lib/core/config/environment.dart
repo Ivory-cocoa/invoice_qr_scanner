@@ -120,8 +120,8 @@ class AppConfig {
   // 3.5.0 : bandeau de mise à jour (téléchargement dans l'application,
   // empreinte vérifiée, installeur Android). Version alignée sur le pubspec
   // (elle affichait encore 3.2.0) : comparée à la version publiée dans Odoo.
-  static const String appVersion = '3.5.0';
-  static const int buildNumber = 9;
+  static const String appVersion = '3.5.1';
+  static const int buildNumber = 10;
   
   // Nom de l'application
   static const String appName = 'Facture Scanner';
