@@ -120,6 +120,38 @@ class TestSupplierResolution(TransactionCase):
 
         self.assertEqual(partner.dgi_code, '8608277H')
 
+    def test_unknown_supplier_is_named_after_its_invoice(self):
+        """Plus de « Fournisseur DGI False » : 32 fiches de ce nom étaient
+        32 fournisseurs différents, impossibles à distinguer."""
+        scan = self._make_scan(invoice_number_dgi='FAC-0042')
+        partner = scan._get_or_create_supplier()
+        self.assertEqual(partner.name,
+                         'Fournisseur à identifier (facture FAC-0042)')
+
+    def test_valid_code_matches_taxpayer_account(self):
+        if 'ci_compte_contribuable' not in self.Partner._fields:
+            self.skipTest("ci_partner_info non installé")
+        partner = self.Partner.create({
+            'name': 'SOCIETE SAISIE A LA MAIN', 'is_company': True,
+            'ci_compte_contribuable': '1100565G'})
+        scan = self._make_scan(supplier_name='SOCIETE SAISIE',
+                               supplier_code_dgi='1100565G')
+        self.assertEqual(scan._get_or_create_supplier(), partner)
+        self.assertEqual(partner.dgi_code, '1100565G')
+
+    def test_same_name_up_to_punctuation_and_legal_form(self):
+        if 'dedup_key' not in self.Partner._fields:
+            self.skipTest("ci_partner_info non installé")
+        partner = self.Partner.create({'name': 'CHIMTEC S.A',
+                                       'is_company': True})
+        scan = self._make_scan(supplier_name='CHIMTEC SA')
+        self.assertEqual(scan._get_or_create_supplier(), partner)
+        # Ambigu (deux fiches) : on n'en choisit aucune
+        homonym = self.Partner.with_context(dedup_allow_duplicate=True) \
+            .create({'name': 'Chimtec', 'is_company': True})
+        other = self._make_scan(supplier_name='CHIMTEC S.A.')
+        self.assertNotIn(other._get_or_create_supplier(), partner | homonym)
+
     def test_created_partner_never_carries_an_invalid_code(self):
         scan = self._make_scan(supplier_name='NOUVEAU FOURNISSEUR',
                                supplier_code_dgi='SERVICES')
