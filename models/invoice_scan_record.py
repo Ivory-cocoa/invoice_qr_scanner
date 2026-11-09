@@ -669,6 +669,16 @@ class InvoiceScanRecord(models.Model):
             partner = Partner.search([
                 ('dgi_code', '=', self.supplier_code_dgi)
             ], limit=1)
+            # Le code DGI est le compte contribuable : une fiche saisie à la
+            # main le porte souvent là (ci_partner_info)
+            if not partner and 'ci_compte_contribuable' in Partner._fields:
+                partner = Partner.search([
+                    ('ci_compte_contribuable', '=ilike',
+                     self.supplier_code_dgi.strip()),
+                    ('parent_id', '=', False),
+                ], limit=1)
+                if partner and not partner.dgi_code:
+                    partner.write({'dgi_code': self.supplier_code_dgi})
             if partner:
                 return partner
 
@@ -685,6 +695,19 @@ class InvoiceScanRecord(models.Model):
                 ('name', '=ilike', self.supplier_name),
                 ('supplier_rank', '>', 0)
             ], limit=1)
+            # Même nom aux accents, à la ponctuation et à la forme juridique
+            # près (« CHIMTEC S.A » = « CHIMTEC SA ») : clé de doublon de
+            # ci_partner_info, comparée EN ENTIER (jamais un fragment).
+            if not partner and 'dedup_key' in Partner._fields:
+                from odoo.addons.ci_partner_info.models.partner_dedup import \
+                    dedup_key
+                key = dedup_key(self.supplier_name)
+                if key and len(key) >= 3:
+                    candidates = Partner.search([
+                        ('dedup_key', '=', key), ('parent_id', '=', False),
+                    ], limit=2)
+                    if len(candidates) == 1:    # sans ambiguïté seulement
+                        partner = candidates
             if partner:
                 # Compléter le code DGI s'il est absent ET conforme.
                 if code_is_valid and not partner.dgi_code:
@@ -707,7 +730,14 @@ class InvoiceScanRecord(models.Model):
         # conforme n'est pas recopié : il rendrait la fiche « attractive » pour
         # tous les scans portant le même fragment de nom.
         partner_vals = {
-            'name': self.supplier_name or f"Fournisseur DGI {self.supplier_code_dgi}",
+            # Sans nom ni code, on ne fabrique plus « Fournisseur DGI False » :
+            # 32 fiches portaient ce nom, autant de fournisseurs différents
+            # qu'il faut identifier (et non fusionner).
+            'name': self.supplier_name or (
+                _("Fournisseur DGI %s", self.supplier_code_dgi)
+                if self.supplier_code_dgi else
+                _("Fournisseur à identifier (facture %s)",
+                  self.invoice_number_dgi or self.reference or self.id)),
             'supplier_rank': 1,
             'is_company': True,
             'dgi_code': self.supplier_code_dgi if code_is_valid else False,
