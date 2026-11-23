@@ -305,6 +305,71 @@ class InvoiceScannerMobileAPI(http.Controller):
             _logger.error(f"Erreur vérification token: {e}")
             return False
 
+    # Groupes autorisés à voir le DÉTAIL d'un coût d'OT (type de coût, montant,
+    # état) : les mêmes que ceux qui lisent `potting.cost.line` dans Odoo.
+    # Les groupes de `potting_management` peuvent ne pas exister (module
+    # optionnel) : `has_group` répond alors simplement non.
+    _OT_COST_DETAIL_GROUPS = (
+        'invoice_qr_scanner.group_invoice_scanner_ot_manager',
+        'potting_management.group_potting_shipping',
+        'potting_management.group_potting_accountant',
+        'potting_management.group_potting_manager',
+    )
+
+    @classmethod
+    def _user_sees_ot_cost_details(cls, user):
+        """Vrai si l'utilisateur a le droit de voir le détail des coûts d'OT."""
+        return any(user.has_group(group) for group in cls._OT_COST_DETAIL_GROUPS)
+
+    @staticmethod
+    def _format_ot_links(lines, with_details):
+        """Met en forme les liens scan → OT pour l'application.
+
+        Même règle que la liste des scans dans Odoo :
+
+        - `with_details` vrai (Gestionnaire OT, Shipping, Comptable, Manager) :
+          une entrée par ligne de coût, avec type de coût, montant et état ;
+        - sinon (vérificateur, traiteur…) : la RÉFÉRENCE de l'OT seulement,
+          une entrée par OT, sans type de coût ni montant. L'application
+          affiche alors une simple puce « OT10532 », en lecture seule.
+
+        Les clés renvoyées sont identiques dans les deux cas : les anciennes
+        versions de l'application lisent la réponse sans changement.
+        """
+        links = []
+        seen_ots = set()
+        for line in lines:
+            ot = line.transit_order_id
+            reference = (ot.ot_reference or ot.name or '') if ot else ''
+            if not with_details:
+                if not ot or ot.id in seen_ots:
+                    continue
+                seen_ots.add(ot.id)
+                links.append({
+                    'cost_line_id': None,
+                    'ot_id': ot.id,
+                    'ot_reference': reference,
+                    'cost_type': '',
+                    'cost_type_code': '',
+                    'amount': 0.0,
+                    'currency': 'XOF',
+                    'state': '',
+                    'state_label': '',
+                })
+                continue
+            links.append({
+                'cost_line_id': line.id,
+                'ot_id': ot.id if ot else None,
+                'ot_reference': reference,
+                'cost_type': line.cost_type_id.name or '',
+                'cost_type_code': line.cost_type_id.code or '',
+                'amount': line.amount or 0.0,
+                'currency': line.currency_id.name if line.currency_id else 'XOF',
+                'state': line.state,
+                'state_label': dict(line._fields['state'].selection).get(line.state, ''),
+            })
+        return links
+
     def _get_scan_ot_links(self, record):
         """Retourne la liste des OT (Ordres de Transit) liés à un scan.
 
@@ -313,6 +378,11 @@ class InvoiceScannerMobileAPI(http.Controller):
         `invoice_qr_scanner`, on effectue une recherche SOUPLE : si le modèle
         n'est pas présent dans le registre, on renvoie une liste vide sans
         jamais casser l'endpoint.
+
+        La lecture se fait en sudo (un vérificateur n'a aucun droit sur les
+        coûts d'OT) ; c'est donc ICI que l'on décide de ce qui sort : tout le
+        monde voit la référence de l'OT, seuls les groupes autorisés voient le
+        type de coût et le montant.
         """
         env = request.env
         if 'potting.cost.line' not in env:
@@ -322,25 +392,12 @@ class InvoiceScannerMobileAPI(http.Controller):
                 [('scan_record_id', '=', record.id)],
                 order='date desc, id desc',
             )
+            return self._format_ot_links(
+                lines, self._user_sees_ot_cost_details(env.user))
         except Exception as e:  # pragma: no cover - robustesse défensive
             _logger.warning("Lecture des OT liés au scan %s impossible: %s",
                             record.id, e)
             return []
-        links = []
-        for line in lines:
-            ot = line.transit_order_id
-            links.append({
-                'cost_line_id': line.id,
-                'ot_id': ot.id if ot else None,
-                'ot_reference': (ot.ot_reference or ot.name or '') if ot else '',
-                'cost_type': line.cost_type_id.name or '',
-                'cost_type_code': line.cost_type_id.code or '',
-                'amount': line.amount or 0.0,
-                'currency': line.currency_id.name if line.currency_id else 'XOF',
-                'state': line.state,
-                'state_label': dict(line._fields['state'].selection).get(line.state, ''),
-            })
-        return links
 
     def _format_scan_record(self, record):
         """Formater un enregistrement de scan pour l'API."""
