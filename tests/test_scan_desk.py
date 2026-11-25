@@ -465,3 +465,89 @@ class TestScanDeskTour(HttpCase):
             self.assertEqual(
                 menu.id in Menu.with_user(user)._visible_menu_ids(), visible,
                 group)
+
+
+@tagged('post_install', '-at_install', 'invoice_qr_scanner', 'scan_rules')
+class TestScanRecordVisibility(TransactionCase):
+    """Cloisonnement des scans par profil (17.0.1.12.1).
+
+    La règle multi-société était posée sur « Utilisateur interne » : les
+    règles de groupe s'additionnant, chacun voyait tout. Elle est globale.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        ensure_xof(cls.env)
+
+        def user(login, group):
+            return new_test_user(
+                cls.env, login=login, groups='base.group_user,'
+                'invoice_qr_scanner.group_invoice_scanner_%s' % group)
+
+        cls.alice = user('rule_alice', 'verificateur')
+        cls.bob = user('rule_bob', 'verificateur')
+        cls.processor = user('rule_processor', 'traiteur')
+        cls.other_processor = user('rule_processor_2', 'traiteur')
+        cls.ot_manager = user('rule_ot', 'ot_manager')
+        cls.manager = user('rule_manager', 'manager')
+        cls.ScanRecord = cls.env['invoice.scan.record']
+
+        def scan(index, scanned_by, **values):
+            uuid = '019bd62c-467e-7000-82ac-45c8389c7f%02d' % index
+            return cls.ScanRecord.create(dict({
+                'qr_uuid': uuid,
+                'qr_url': URL.replace(UUID, uuid),
+                'supplier_name': 'FOURNISSEUR %s' % index,
+                'invoice_number_dgi': 'N%s' % index,
+                'amount_ttc': 1000, 'scanned_by': scanned_by.id,
+                'state': 'done',
+            }, **values))
+
+        cls.alice_done = scan(1, cls.alice)
+        cls.bob_done = scan(2, cls.bob)
+        cls.bob_error = scan(3, cls.bob, state='error')
+        cls.processed = scan(4, cls.bob, state='processed',
+                             processed_by=cls.processor.id)
+        cls.all = (cls.alice_done | cls.bob_done | cls.bob_error
+                   | cls.processed)
+
+    def _seen(self, user):
+        return self.ScanRecord.with_user(user).search(
+            [('id', 'in', self.all.ids)])
+
+    def test_rule_is_global(self):
+        rule = self.env.ref(
+            'invoice_qr_scanner.rule_invoice_scan_record_company')
+        self.assertFalse(rule.groups)
+
+    def test_verifier_sees_only_own_scans(self):
+        self.assertEqual(self._seen(self.alice), self.alice_done)
+        self.assertEqual(self._seen(self.bob),
+                         self.bob_done | self.bob_error | self.processed)
+
+    def test_processor_sees_pending_and_own_work(self):
+        self.assertEqual(self._seen(self.processor),
+                         self.alice_done | self.bob_done | self.processed)
+        self.assertEqual(self._seen(self.other_processor),
+                         self.alice_done | self.bob_done)
+
+    def test_managers_see_everything(self):
+        self.assertEqual(self._seen(self.manager), self.all)
+        self.assertEqual(self._seen(self.ot_manager), self.all)
+
+    def test_duplicates_are_still_caught_across_users(self):
+        """Le cloisonnement ne doit JAMAIS affaiblir le dédoublonnage : il
+        passe par sudo, au poste de scan comme dans l'API."""
+        card = self.env['invoice.scan.desk'].with_user(self.alice).desk_scan(
+            self.bob_done.qr_url)
+        self.assertEqual(card['status'], 'duplicate', card)
+        self.assertEqual(self.bob_done.duplicate_count, 1)
+        # … sans bouton vers une fiche qu'Alice ne peut pas lire
+        self.assertFalse(card['actions'])
+
+    def test_processor_marks_processed_at_the_desk(self):
+        card = self.env['invoice.scan.desk'].with_user(
+            self.other_processor).desk_scan(self.alice_done.qr_url)
+        self.assertEqual(card['status'], 'success', card)
+        self.assertEqual(self.alice_done.processed_by, self.other_processor)
