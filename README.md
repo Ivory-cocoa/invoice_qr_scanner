@@ -52,6 +52,50 @@ tant qu'il n'existe pas, `/facture` affiche un message d'explication.
 puis **Partager → « Sur l'écran d'accueil »**. iOS ne propose pas d'invite
 automatique d'installation.
 
+### Poste de scan à la douchette (sans application mobile)
+
+Menu **Scanner Factures ▸ Poste de scan (douchette)** (profils Vérificateur et
+Responsable). Une douchette USB ou Bluetooth se comporte comme un **clavier** :
+rien n'est à installer sur le poste, ni pilote ni script. On la branche, on
+ouvre l'écran, on scanne.
+
+- **Aucun champ à cliquer** : l'écran écoute le clavier de toute la page. Si la
+  fenêtre n'est pas au premier plan, un bandeau le dit.
+- **Le QR-code est reconnu seul** : facture ou avoir DGI ici ; les autres
+  modules ajoutent les leurs (`cocoa_bean_management` : connaissement CCC).
+- **Même traitement que l'application mobile** : dédoublonnage par UUID,
+  interrogation de la DGI par le serveur, création de la pièce
+  (`invoice.scan.record._process_qr_scan`, cœur commun à toutes les entrées).
+- **Fin de lecture** : suffixe Entrée ou Tabulation de la douchette, ou à
+  défaut 0,4 s de silence. Les lectures sont traitées une par une, dans
+  l'ordre ; une relecture par rebond (même QR dans les 3 s) est ignorée.
+- **Douchette en QWERTY sur poste AZERTY** : le texte déformé est corrigé et
+  signalé (`models/scanner_input.py`). Mieux vaut tout de même régler la
+  douchette en clavier français (code de configuration de sa notice).
+- **Retour immédiat** : carte verte (créé), orange (déjà scanné), rouge
+  (échec, avec la cause), bip différent pour chacun, historique de la séance.
+- **« Saisir au clavier »** : pour coller le contenu d'un QR-code lu ailleurs.
+- **Un geste par profil, comme dans l'application** : Vérificateur,
+  Responsable et Gestionnaire OT *enregistrent* la facture (le Gestionnaire OT
+  a ensuite le bouton « Rattacher à un OT », si `potting_management` est
+  installé) ; le Traiteur la *marque traitée*. Qui cumule les profils choisit
+  le mode en haut de l'écran ; le choix est mémorisé sur le poste.
+- **DGI injoignable** : la carte d'erreur porte un formulaire de saisie
+  manuelle (fournisseur, NCC, n°, date, montant, nature). Le scan est marqué
+  « saisie manuelle », sa nature « à confirmer ».
+- **« Tester la douchette »** : affiche un QR-code de contrôle. Sa relecture
+  dit si la douchette est bien réglée (clavier français, majuscules) — à faire
+  à l'installation de chaque poste.
+- **Scan pendant une saisie** : si la douchette est déclenchée alors que le
+  curseur est dans un champ d'un formulaire de carte, la rafale est reconnue à
+  sa vitesse, retirée du champ et traitée comme une lecture (suffixe Entrée
+  requis dans ce cas).
+
+Brancher un autre QR-code depuis un module : hériter `invoice.scan.desk`,
+compléter `_desk_kinds()` et `_desk_handlers()`, renvoyer une carte
+`_desk_card(...)` — avec, au besoin, un formulaire `_desk_form(...)` validé
+par `_desk_submitters()`. Aucun JavaScript à écrire.
+
 ## Installation
 
 ### 1. Module Odoo

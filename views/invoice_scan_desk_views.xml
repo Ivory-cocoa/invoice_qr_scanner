@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Poste de scan à la douchette : l'écran reconnaît seul le QR-code
+         (facture DGI ici ; les autres modules ajoutent les leurs). -->
+    <record id="action_invoice_scan_desk" model="ir.actions.client">
+        <field name="name">Poste de scan (douchette)</field>
+        <field name="tag">invoice_scan_desk</field>
+        <field name="target">main</field>
+    </record>
+
+</odoo>

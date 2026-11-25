@@ -58,6 +58,14 @@
                   sequence="3"
                   groups="group_invoice_scanner_traiteur"/>
 
+        <!-- Poste de scan à la douchette (sans application mobile) -->
+        <menuitem id="menu_invoice_scan_desk"
+                  name="Poste de scan (douchette)"
+                  parent="menu_invoice_qr_scanner_root"
+                  action="action_invoice_scan_desk"
+                  sequence="5"
+                  groups="group_invoice_scanner_verificateur,group_invoice_scanner_traiteur,group_invoice_scanner_ot_manager"/>
+
         <!-- ============================================================ -->
         <!-- SOUS-MENUS SCANS -->
         <!-- ============================================================ -->

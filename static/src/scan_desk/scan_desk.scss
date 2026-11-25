@@ -1,0 +1,18 @@
+// Poste de scan à la douchette. Couleurs : uniquement les classes Bootstrap
+// d'Odoo (elles suivent le thème, mode sombre compris).
+.o_scan_desk {
+    // Le défilement de l'écran est porté par les classes « h-100
+    // overflow-auto » du gabarit (une règle ici est écrasée par .o_action).
+    .o_scan_desk_inner {
+        max-width: 960px;
+    }
+
+    .o_scan_desk_raw {
+        max-height: 6em;
+        overflow-y: auto;
+    }
+
+    .o_scan_desk_history_row .text-truncate {
+        min-width: 0;
+    }
+}

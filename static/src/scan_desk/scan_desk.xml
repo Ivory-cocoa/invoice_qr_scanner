@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="invoice_qr_scanner.ScanDeskCard">
+        <t t-set="st" t-value="statusOf(card)"/>
+        <div t-attf-class="o_scan_desk_card card border-{{st.css}} mb-3"
+             t-att-data-status="card.status" t-att-data-kind="card.kind or ''">
+            <div t-attf-class="card-header text-bg-{{st.css}} d-flex align-items-center gap-2">
+                <i t-attf-class="fa {{st.icon}} fa-2x"/>
+                <div class="flex-grow-1">
+                    <div class="o_scan_desk_title fs-3 fw-bold" t-esc="card.title"/>
+                    <div t-if="card.kind_label" class="small" t-esc="card.kind_label"/>
+                </div>
+                <span class="small" t-esc="card.time"/>
+            </div>
+            <div class="card-body">
+                <p t-if="card.message" class="o_scan_desk_message fs-5 mb-3" t-esc="card.message"/>
+                <div t-foreach="card.warnings" t-as="warning" t-key="warning_index"
+                     class="alert alert-warning py-2 mb-2">
+                    <i class="fa fa-exclamation-triangle me-2"/><t t-esc="warning"/>
+                </div>
+                <table t-if="card.lines.length" class="table table-sm mb-3 o_scan_desk_lines">
+                    <tbody>
+                        <tr t-foreach="card.lines" t-as="line" t-key="line_index">
+                            <th class="text-muted fw-normal w-25" t-esc="line.label"/>
+                            <td class="fw-bold" t-esc="line.value"/>
+                        </tr>
+                    </tbody>
+                </table>
+                <div t-if="card.raw" class="mb-3">
+                    <div class="text-muted small">Texte reçu de la douchette</div>
+                    <code class="o_scan_desk_raw d-block text-break" t-esc="card.raw"/>
+                </div>
+                <div t-if="card.form" class="o_scan_desk_form border rounded p-3 mb-3">
+                    <p t-if="card.form.intro" class="mb-3" t-esc="card.form.intro"/>
+                    <div class="row g-3">
+                        <div t-foreach="card.form.fields" t-as="field" t-key="field.name"
+                             class="col-12 col-md-6">
+                            <label class="form-label fw-bold mb-1">
+                                <t t-esc="field.label"/>
+                                <span t-if="field.required" class="text-danger"> *</span>
+                            </label>
+                            <select t-if="field.type === 'selection'"
+                                    class="form-select form-select-lg"
+                                    t-att-data-field="field.name" t-model="field.value">
+                                <option t-if="!field.required or !field.value" value=""/>
+                                <option t-foreach="field.options" t-as="option" t-key="option[0]"
+                                        t-att-value="option[0]" t-esc="option[1]"/>
+                            </select>
+                            <input t-else=""
+                                   t-att-type="field.type === 'date' ? 'date' : 'text'"
+                                   t-att-inputmode="field.type === 'integer' ? 'numeric' : (field.type === 'float' ? 'decimal' : null)"
+                                   class="form-control form-control-lg" autocomplete="off"
+                                   t-att-data-field="field.name" t-model="field.value"
+                                   t-on-keydown="onFormKeydown"/>
+                            <div t-if="field.help" class="form-text" t-esc="field.help"/>
+                        </div>
+                    </div>
+                    <div t-if="card.form.error" class="alert alert-danger py-2 mt-3 mb-0 o_scan_desk_form_error">
+                        <i class="fa fa-exclamation-circle me-2"/><t t-esc="card.form.error"/>
+                    </div>
+                    <div t-if="state.formBlocked" class="alert alert-warning py-2 mt-3 mb-0 o_scan_desk_form_blocked">
+                        <i class="fa fa-hand-paper-o me-2"/>
+                        Un QR-code vient d'être scanné, mais ce formulaire attend :
+                        validez-le ou abandonnez-le, puis scannez à nouveau.
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button type="button" class="btn btn-primary btn-lg o_scan_desk_form_submit"
+                                t-att-disabled="state.submitting"
+                                t-on-click="() => this.submitForm(card)">
+                            <i t-if="state.submitting" class="fa fa-spinner fa-spin me-2"/>
+                            <t t-esc="card.form.submit_label"/>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg o_scan_desk_form_abandon"
+                                t-att-disabled="state.submitting"
+                                t-on-click="() => this.abandonForm(card)">
+                            Abandonner
+                        </button>
+                    </div>
+                </div>
+                <div t-if="card.actions.length" class="d-flex flex-wrap gap-2">
+                    <button t-foreach="card.actions" t-as="item" t-key="item_index"
+                            type="button"
+                            t-attf-class="btn btn-lg o_scan_desk_action {{item.primary ? 'btn-primary' : 'btn-secondary'}}"
+                            t-on-click="() => this.openAction(item)">
+                        <t t-esc="item.label"/>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="invoice_qr_scanner.ScanDesk">
+        <div class="o_action o_scan_desk h-100 overflow-auto">
+            <div class="o_scan_desk_inner container py-3">
+                <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+                    <h2 class="mb-0 flex-grow-1">
+                        <i class="fa fa-barcode me-2"/>Poste de scan (douchette)
+                    </h2>
+                    <button type="button" class="btn btn-light o_scan_desk_sound"
+                            t-on-click="toggleSound"
+                            t-att-title="state.sound ? 'Couper le son' : 'Remettre le son'">
+                        <i t-attf-class="fa {{state.sound ? 'fa-volume-up' : 'fa-volume-off'}}"/>
+                    </button>
+                    <button type="button" class="btn btn-light o_scan_desk_test_toggle"
+                            t-on-click="toggleTest">
+                        <i class="fa fa-qrcode me-1"/>Tester la douchette
+                    </button>
+                    <button type="button" class="btn btn-light o_scan_desk_manual_toggle"
+                            t-on-click="toggleManual">
+                        <i class="fa fa-keyboard-o me-1"/>Saisir au clavier
+                    </button>
+                </div>
+
+                <t t-if="state.ready and !state.canScan">
+                    <div class="alert alert-danger o_scan_desk_denied">
+                        Votre profil ne permet de scanner aucun QR-code depuis ce poste.
+                        Demandez à l'administrateur le profil adapté
+                        (Vérificateur pour les factures DGI, Pont-bascule pour les connaissements).
+                    </div>
+                </t>
+                <t t-elif="state.ready">
+                    <!-- État du poste : prêt, en cours, ou clavier ailleurs -->
+                    <div t-if="!state.focused"
+                         class="alert alert-warning fs-5 o_scan_desk_unfocused">
+                        <i class="fa fa-mouse-pointer me-2"/>
+                        Cette fenêtre n'est pas au premier plan : cliquez n'importe où
+                        sur cette page avant de scanner.
+                    </div>
+                    <div t-elif="state.busy" class="alert alert-info fs-5 o_scan_desk_busy">
+                        <i class="fa fa-spinner fa-spin me-2"/>Traitement en cours…
+                        <span t-if="state.queued" class="ms-2">
+                            (<t t-esc="state.queued"/> lecture(s) en attente)
+                        </span>
+                    </div>
+                    <div t-else="" class="alert alert-success fs-5 o_scan_desk_ready">
+                        <i class="fa fa-check me-2"/>Prêt : scannez un QR-code avec la douchette.
+                    </div>
+
+                    <!-- Un même QR-code, plusieurs gestes : le choix reste affiché -->
+                    <div t-foreach="modeChoices" t-as="kind" t-key="kind.key"
+                         class="o_scan_desk_modes d-flex align-items-center flex-wrap gap-2 mb-3"
+                         t-att-data-kind="kind.key">
+                        <span class="fw-bold"><t t-esc="kind.label"/> :</span>
+                        <div class="btn-group" role="group">
+                            <button t-foreach="kind.modes" t-as="mode" t-key="mode.key"
+                                    type="button" t-att-data-mode="mode.key"
+                                    t-attf-class="btn btn-lg {{state.modes[kind.key] === mode.key ? 'btn-primary' : 'btn-outline-primary'}}"
+                                    t-att-title="mode.hint"
+                                    t-on-click="() => this.setMode(kind.key, mode.key)">
+                                <t t-esc="mode.label"/>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div t-if="state.showTest" class="card mb-3 o_scan_desk_test">
+                        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                            <img t-att-src="testQrUrl" alt="QR-code de contrôle"
+                                 class="bg-white p-2 rounded" width="260" height="260"/>
+                            <div class="flex-grow-1" style="min-width: 16rem;">
+                                <div class="fs-5 fw-bold mb-2">Scannez ce QR-code avec la douchette</div>
+                                <p class="mb-2">
+                                    Odoo compare ce que la douchette tape avec le contenu attendu
+                                    et dit si elle est bien réglée pour ce poste
+                                    (clavier français, majuscules).
+                                </p>
+                                <div class="text-muted small">Contenu attendu</div>
+                                <code class="d-block text-break" t-esc="state.testText"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div t-if="state.showManual" class="input-group input-group-lg mb-3">
+                        <input type="text" class="form-control o_scan_desk_manual"
+                               t-ref="manualInput" t-model="state.manual"
+                               t-on-keydown="onManualKeydown" autocomplete="off"
+                               placeholder="Collez ou tapez ici le contenu du QR-code, puis Entrée"/>
+                        <button type="button" class="btn btn-primary o_scan_desk_manual_submit"
+                                t-on-click="submitManual">Valider</button>
+                    </div>
+
+                    <t t-if="state.current">
+                        <t t-call="invoice_qr_scanner.ScanDeskCard">
+                            <t t-set="card" t-value="state.current"/>
+                        </t>
+                    </t>
+                    <div t-else="" class="card mb-3 o_scan_desk_help">
+                        <div class="card-body">
+                            <div class="fw-bold mb-2">Ce poste reconnaît seul le QR-code scanné :</div>
+                            <ul class="list-unstyled mb-0">
+                                <li t-foreach="state.kinds" t-as="kind" t-key="kind.key"
+                                    t-attf-class="mb-2 {{kind.allowed ? '' : 'text-muted'}}">
+                                    <i t-attf-class="fa {{kind.icon}} fa-fw me-2"/>
+                                    <b t-esc="kind.label"/> —
+                                    <t t-if="kind.allowed" t-esc="kind.hint"/>
+                                    <t t-else="">non autorisé pour votre profil.</t>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div t-if="state.history.length" class="o_scan_desk_history">
+                        <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                            <h4 class="mb-0 flex-grow-1">Lectures de la séance</h4>
+                            <span class="badge text-bg-success o_scan_desk_count_success">
+                                <t t-esc="counters.success"/> réussie(s)
+                            </span>
+                            <span class="badge text-bg-warning">
+                                <t t-esc="counters.duplicate"/> doublon(s)
+                            </span>
+                            <span class="badge text-bg-danger">
+                                <t t-esc="counters.error"/> en échec
+                            </span>
+                            <button type="button" class="btn btn-sm btn-link" t-on-click="clearHistory">
+                                Effacer
+                            </button>
+                        </div>
+                        <div class="list-group">
+                            <div t-foreach="state.history" t-as="card" t-key="card_index"
+                                 class="list-group-item d-flex align-items-center gap-2 o_scan_desk_history_row">
+                                <t t-set="st" t-value="statusOf(card)"/>
+                                <i t-attf-class="fa {{st.icon}} text-{{st.css}}"/>
+                                <span class="text-muted small" t-esc="card.time"/>
+                                <span class="fw-bold" t-esc="card.title"/>
+                                <span class="text-truncate flex-grow-1">
+                                    <t t-if="card.lines.length"
+                                       t-esc="card.lines.slice(0, 4).map((l) => l.value).join(' · ')"/>
+                                    <t t-else="" t-esc="card.raw"/>
+                                </span>
+                                <button t-if="card.actions.length" type="button"
+                                        class="btn btn-sm btn-light"
+                                        t-on-click="() => this.openAction(card.actions[0])">
+                                    <t t-esc="card.actions[0].label"/>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </div>
+        </div>
+    </t>
+
+</templates>
