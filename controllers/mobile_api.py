@@ -936,85 +936,13 @@ class InvoiceScannerMobileAPI(http.Controller):
             `/sync` puisse enchaîner un lot d'items sur la même logique.
         """
         ScanRecord = request.env['invoice.scan.record'].sudo()
+        # Le travail est fait par le modèle, que le poste de scan à la
+        # douchette appelle aussi ; ici, seule la mise en forme pour l'API.
+        outcome = ScanRecord._process_qr_scan(
+            user, qr_url, qr_uuid, values, origin=origin)
 
-        # Vérifier les doublons
-        existing = ScanRecord.check_duplicate(qr_uuid)
-        if existing:
-            existing.write({
-                'duplicate_count': existing.duplicate_count + 1,
-                'last_duplicate_attempt': fields.Datetime.now(),
-                'last_duplicate_user_id': user.id,
-            })
-            existing.message_post(
-                body=f"Tentative de scan doublon #{existing.duplicate_count} par {user.name} ({origin})",
-                message_type='notification'
-            )
-            return {
-                'ok': False,
-                'error_code': 'DUPLICATE',
-                'message': 'Cette facture a déjà été scannée',
-                'status': 400,
-                'data': {
-                    # Enregistrement COMPLET : le client doit pouvoir afficher
-                    # la nature du document (facture ou avoir) même sur un
-                    # doublon, sinon l'écran ment sur ce qu'il montre.
-                    'existing_record': self._format_scan_record(existing),
-                    'duplicate_count': existing.duplicate_count,
-                },
-            }
-
-        # Extraction DGI côté serveur, seulement maintenant : inutile d'appeler
-        # la DGI pour une facture déjà enregistrée.
-        if callable(values):
-            try:
-                values = values()
-            except FneApiError as exc:
-                return {
-                    'ok': False,
-                    'error_code': exc.code,
-                    'message': exc.message,
-                    'status': FNE_ERROR_STATUS.get(exc.code, 502),
-                    # L'application bascule alors sur la saisie manuelle, qui
-                    # reste le filet de sécurité si la DGI change ou tombe.
-                    'data': {'manual_entry_suggested': True},
-                }
-
-        # Vérifier s'il existe un enregistrement en erreur
-        existing_error = ScanRecord.search([
-            ('qr_uuid', '=', qr_uuid),
-            ('state', '=', 'error'),
-            ('company_id', '=', request.env.company.id)
-        ], limit=1)
-
-        record_vals = dict(values)
-        record_vals.update({
-            'qr_url': qr_url,
-            'scanned_by': user.id,
-            'state': 'draft',
-            'error_message': False,
-        })
-
-        if existing_error:
-            existing_error.write(record_vals)
-            record = existing_error
-        else:
-            record_vals['qr_uuid'] = qr_uuid
-            record = ScanRecord.create(record_vals)
-
-        # Acquérir un slot du sémaphore pour la création de facture
-        if not acquire_scan_slot():
-            _logger.warning("%s rejeté (serveur occupé) pour user=%s", origin, user.id)
-            return {
-                'ok': False,
-                'error_code': 'SERVER_BUSY',
-                'message': 'Le serveur traite actuellement plusieurs requêtes. Veuillez réessayer dans quelques secondes.',
-                'status': 503,
-                'details': get_semaphore_status(),
-            }
-
-        # Créer la facture
-        try:
-            invoice = record._create_invoice()
+        if outcome['ok']:
+            record, invoice = outcome['record'], outcome['invoice']
             is_refund = record.document_type == 'refund'
             return {
                 'ok': True,
@@ -1037,20 +965,36 @@ class InvoiceScannerMobileAPI(http.Controller):
                     },
                 },
             }
-        except Exception as e:
-            _logger.error("Erreur création facture (%s): %s", origin, e)
-            record.write({
-                'state': 'error',
-                'error_message': str(e),
+
+        code = outcome['error_code']
+        result = {
+            'ok': False,
+            'error_code': code,
+            'message': outcome['message'],
+        }
+        if code == 'DUPLICATE':
+            existing = outcome['existing']
+            result.update(status=400, data={
+                # Enregistrement COMPLET : le client doit pouvoir afficher
+                # la nature du document (facture ou avoir) même sur un
+                # doublon, sinon l'écran ment sur ce qu'il montre.
+                'existing_record': self._format_scan_record(existing),
+                'duplicate_count': existing.duplicate_count,
             })
-            return {
-                'ok': False,
-                'error_code': 'INVOICE_ERROR',
-                'message': f'Erreur lors de la création de la facture: {safe_error_message(e)}',
-                'status': 500,
-            }
-        finally:
-            release_scan_slot()
+        elif code == 'SERVER_BUSY':
+            result.update(status=503, details=outcome['details'])
+        elif code == 'INVOICE_ERROR':
+            result.update(
+                status=500,
+                message='Erreur lors de la création de la facture: %s'
+                        % safe_error_message(outcome['exception']))
+        else:
+            # Échec d'interrogation de la DGI : l'application bascule alors
+            # sur la saisie manuelle.
+            result.update(
+                status=FNE_ERROR_STATUS.get(code, 502),
+                data={'manual_entry_suggested': True})
+        return result
 
     @http.route('/api/v1/invoice-scanner/scan', type='http', auth='none',
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
