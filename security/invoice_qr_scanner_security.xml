@@ -49,12 +49,17 @@
             <field name="comment">Accès complet : configuration, historique complet, suppression</field>
         </record>
 
-        <!-- Règle d'accès multi-société pour les scans -->
+        <!-- Règle d'accès multi-société pour les scans.
+             GLOBALE (sans groupe), et c'est essentiel : les règles de groupe
+             s'ADDITIONNENT entre elles. Posée sur « Utilisateur interne »,
+             elle donnait à chacun tous les scans de sa société et rendait
+             sans effet les règles « ses propres scans » ci-dessous. Une règle
+             globale, elle, se COMBINE (ET) avec les règles de groupe.
+             Bases existantes : migrations/17.0.1.12.1 (fichier noupdate). -->
         <record id="rule_invoice_scan_record_company" model="ir.rule">
             <field name="name">Invoice Scan Record: Multi-company</field>
             <field name="model_id" ref="model_invoice_scan_record"/>
             <field name="domain_force">[('company_id', 'in', company_ids)]</field>
-            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
         </record>
 
         <!-- Règle : Vérificateurs voient leurs propres scans -->
