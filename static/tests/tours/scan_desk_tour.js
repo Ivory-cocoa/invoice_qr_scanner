@@ -90,3 +90,109 @@ registry.category("web_tour.tours").add("invoice_scan_desk_tour", {
         },
     ],
 });
+
+/** Même rafale, mais le curseur est dans un champ (douchette déclenchée trop tôt). */
+function typeInto(selector, text) {
+    const el = document.querySelector(selector);
+    for (const key of [...text, "Enter"]) {
+        el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    }
+}
+
+const FORM = ".o_scan_desk_form";
+
+/**
+ * DGI injoignable : saisie manuelle sur la carte, scan refusé tant que le
+ * formulaire attend, puis mode Traiteur et test de la douchette.
+ * Lancé par tests/test_scan_desk.py (profil Responsable : les deux modes).
+ */
+registry.category("web_tour.tours").add("invoice_scan_desk_manual_tour", {
+    test: true,
+    steps: () => [
+        {
+            content: "Le Responsable a le choix du geste, « Enregistrer » par défaut",
+            trigger: ".o_scan_desk_modes[data-kind=dgi] button[data-mode=create].btn-primary",
+            run: () => type(URL, "Enter"),
+        },
+        {
+            content: "La DGI ne répond pas : la carte propose la saisie manuelle",
+            trigger: `.o_scan_desk_card[data-status=error] ${FORM} input[data-field=supplier_name]`,
+            run: () => typeInto(`${FORM} input[data-field=supplier_name]`, URL),
+        },
+        {
+            content: "Scan pendant la saisie : refusé et signalé, le champ reste vide",
+            trigger: ".o_scan_desk_form_blocked",
+            run: () => {
+                const value = document.querySelector(`${FORM} input[data-field=supplier_name]`).value;
+                if (value) {
+                    throw new Error("Le QR-code scanné est resté dans le champ : " + value);
+                }
+            },
+        },
+        {
+            content: "Valider sans rien remplir : le champ manquant est nommé",
+            trigger: ".o_scan_desk_form_submit",
+            run: "click",
+        },
+        {
+            content: "Erreur affichée, formulaire conservé",
+            trigger: ".o_scan_desk_form_error:contains('Fournisseur')",
+            run: () => {},
+        },
+        {
+            content: "Fournisseur",
+            trigger: `${FORM} input[data-field=supplier_name]`,
+            run: "text TRANSPORT DU SUD",
+        },
+        {
+            content: "N° de facture",
+            trigger: `${FORM} input[data-field=invoice_number_dgi]`,
+            run: "text 2502298K26000000777",
+        },
+        {
+            content: "Montant",
+            trigger: `${FORM} input[data-field=amount_ttc]`,
+            run: "text 125 000",
+        },
+        {
+            content: "Enregistrer la saisie manuelle",
+            trigger: ".o_scan_desk_form_submit",
+            run: "click",
+        },
+        {
+            content: "Facture créée, formulaire refermé",
+            trigger: ".o_scan_desk_card[data-status=success]:contains('TRANSPORT DU SUD'):not(:has(.o_scan_desk_form))",
+            run: () => {},
+        },
+        {
+            content: "Passer en mode Traiteur",
+            trigger: ".o_scan_desk_modes[data-kind=dgi] button[data-mode=process]",
+            run: "click",
+        },
+        {
+            content: "Mode retenu : le même QR-code marque la facture traitée",
+            trigger: ".o_scan_desk_modes button[data-mode=process].btn-primary",
+            run: () => type(URL, "Enter"),
+        },
+        {
+            content: "Facture marquée traitée",
+            trigger: ".o_scan_desk_card[data-status=success]:contains('Facture marquée traitée')",
+            run: () => {},
+        },
+        {
+            content: "Ouvrir le test de la douchette",
+            trigger: ".o_scan_desk_test_toggle",
+            run: "click",
+        },
+        {
+            content: "Le QR-code de contrôle s'affiche",
+            trigger: ".o_scan_desk_test img[src*='barcode_type=QR']",
+            run: () => type("ICP-TEST-DOUCHETTE/0123456789/azqwm/AZQWM/:.,;-_", "Enter"),
+        },
+        {
+            content: "Verdict du test",
+            trigger: ".o_scan_desk_card[data-status=success]:contains('Douchette bien réglée')",
+            run: () => {},
+        },
+    ],
+});

@@ -64,7 +64,7 @@
                   parent="menu_invoice_qr_scanner_root"
                   action="action_invoice_scan_desk"
                   sequence="5"
-                  groups="group_invoice_scanner_verificateur"/>
+                  groups="group_invoice_scanner_verificateur,group_invoice_scanner_traiteur,group_invoice_scanner_ot_manager"/>
 
         <!-- ============================================================ -->
         <!-- SOUS-MENUS SCANS -->

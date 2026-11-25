@@ -31,6 +31,53 @@
                     <div class="text-muted small">Texte reçu de la douchette</div>
                     <code class="o_scan_desk_raw d-block text-break" t-esc="card.raw"/>
                 </div>
+                <div t-if="card.form" class="o_scan_desk_form border rounded p-3 mb-3">
+                    <p t-if="card.form.intro" class="mb-3" t-esc="card.form.intro"/>
+                    <div class="row g-3">
+                        <div t-foreach="card.form.fields" t-as="field" t-key="field.name"
+                             class="col-12 col-md-6">
+                            <label class="form-label fw-bold mb-1">
+                                <t t-esc="field.label"/>
+                                <span t-if="field.required" class="text-danger"> *</span>
+                            </label>
+                            <select t-if="field.type === 'selection'"
+                                    class="form-select form-select-lg"
+                                    t-att-data-field="field.name" t-model="field.value">
+                                <option t-if="!field.required or !field.value" value=""/>
+                                <option t-foreach="field.options" t-as="option" t-key="option[0]"
+                                        t-att-value="option[0]" t-esc="option[1]"/>
+                            </select>
+                            <input t-else=""
+                                   t-att-type="field.type === 'date' ? 'date' : 'text'"
+                                   t-att-inputmode="field.type === 'integer' ? 'numeric' : (field.type === 'float' ? 'decimal' : null)"
+                                   class="form-control form-control-lg" autocomplete="off"
+                                   t-att-data-field="field.name" t-model="field.value"
+                                   t-on-keydown="onFormKeydown"/>
+                            <div t-if="field.help" class="form-text" t-esc="field.help"/>
+                        </div>
+                    </div>
+                    <div t-if="card.form.error" class="alert alert-danger py-2 mt-3 mb-0 o_scan_desk_form_error">
+                        <i class="fa fa-exclamation-circle me-2"/><t t-esc="card.form.error"/>
+                    </div>
+                    <div t-if="state.formBlocked" class="alert alert-warning py-2 mt-3 mb-0 o_scan_desk_form_blocked">
+                        <i class="fa fa-hand-paper-o me-2"/>
+                        Un QR-code vient d'être scanné, mais ce formulaire attend :
+                        validez-le ou abandonnez-le, puis scannez à nouveau.
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button type="button" class="btn btn-primary btn-lg o_scan_desk_form_submit"
+                                t-att-disabled="state.submitting"
+                                t-on-click="() => this.submitForm(card)">
+                            <i t-if="state.submitting" class="fa fa-spinner fa-spin me-2"/>
+                            <t t-esc="card.form.submit_label"/>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-lg o_scan_desk_form_abandon"
+                                t-att-disabled="state.submitting"
+                                t-on-click="() => this.abandonForm(card)">
+                            Abandonner
+                        </button>
+                    </div>
+                </div>
                 <div t-if="card.actions.length" class="d-flex flex-wrap gap-2">
                     <button t-foreach="card.actions" t-as="item" t-key="item_index"
                             type="button"
@@ -54,6 +101,10 @@
                             t-on-click="toggleSound"
                             t-att-title="state.sound ? 'Couper le son' : 'Remettre le son'">
                         <i t-attf-class="fa {{state.sound ? 'fa-volume-up' : 'fa-volume-off'}}"/>
+                    </button>
+                    <button type="button" class="btn btn-light o_scan_desk_test_toggle"
+                            t-on-click="toggleTest">
+                        <i class="fa fa-qrcode me-1"/>Tester la douchette
                     </button>
                     <button type="button" class="btn btn-light o_scan_desk_manual_toggle"
                             t-on-click="toggleManual">
@@ -84,6 +135,39 @@
                     </div>
                     <div t-else="" class="alert alert-success fs-5 o_scan_desk_ready">
                         <i class="fa fa-check me-2"/>Prêt : scannez un QR-code avec la douchette.
+                    </div>
+
+                    <!-- Un même QR-code, plusieurs gestes : le choix reste affiché -->
+                    <div t-foreach="modeChoices" t-as="kind" t-key="kind.key"
+                         class="o_scan_desk_modes d-flex align-items-center flex-wrap gap-2 mb-3"
+                         t-att-data-kind="kind.key">
+                        <span class="fw-bold"><t t-esc="kind.label"/> :</span>
+                        <div class="btn-group" role="group">
+                            <button t-foreach="kind.modes" t-as="mode" t-key="mode.key"
+                                    type="button" t-att-data-mode="mode.key"
+                                    t-attf-class="btn btn-lg {{state.modes[kind.key] === mode.key ? 'btn-primary' : 'btn-outline-primary'}}"
+                                    t-att-title="mode.hint"
+                                    t-on-click="() => this.setMode(kind.key, mode.key)">
+                                <t t-esc="mode.label"/>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div t-if="state.showTest" class="card mb-3 o_scan_desk_test">
+                        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                            <img t-att-src="testQrUrl" alt="QR-code de contrôle"
+                                 class="bg-white p-2 rounded" width="260" height="260"/>
+                            <div class="flex-grow-1" style="min-width: 16rem;">
+                                <div class="fs-5 fw-bold mb-2">Scannez ce QR-code avec la douchette</div>
+                                <p class="mb-2">
+                                    Odoo compare ce que la douchette tape avec le contenu attendu
+                                    et dit si elle est bien réglée pour ce poste
+                                    (clavier français, majuscules).
+                                </p>
+                                <div class="text-muted small">Contenu attendu</div>
+                                <code class="d-block text-break" t-esc="state.testText"/>
+                            </div>
+                        </div>
                     </div>
 
                     <div t-if="state.showManual" class="input-group input-group-lg mb-3">

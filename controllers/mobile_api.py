@@ -1190,34 +1190,20 @@ class InvoiceScannerMobileAPI(http.Controller):
         if not qr_uuid:
             return api_error('INVALID_URL', 'URL invalide - UUID non trouvé', status=400)
         
-        # Chercher l'enregistrement existant
-        existing = ScanRecord.search([
-            ('qr_uuid', '=', qr_uuid),
-            ('state', 'in', ['done', 'processed']),
-            ('company_id', '=', request.env.company.id)
-        ], limit=1)
-        
-        if not existing:
+        # Le travail est fait par le modèle, partagé avec le poste de scan à
+        # la douchette ; ici, seule la mise en forme pour l'API.
+        outcome = ScanRecord._process_qr_treatment(
+            user, qr_uuid, "depuis l'application mobile")
+        existing = outcome['record']
+
+        if not outcome['ok'] and outcome['error_code'] == 'NOT_FOUND':
             return api_error(
                 'NOT_FOUND',
                 'Aucune facture trouvée pour ce QR-code. Le vérificateur doit d\'abord scanner cette facture.',
                 status=404
             )
-        
-        if existing.state == 'processed':
-            # Incrémenter le compteur de tentatives de retraitement
-            existing.write({
-                'reprocess_attempt_count': existing.reprocess_attempt_count + 1,
-                'last_reprocess_attempt': fields.Datetime.now(),
-                'last_reprocess_user_id': user.id,
-            })
-            
-            existing.message_post(
-                body=f"Tentative de retraitement #{existing.reprocess_attempt_count} par {user.name} "
-                     f"(facture déjà traitée par {existing.processed_by.name or 'N/A'})",
-                message_type='notification'
-            )
-            
+
+        if not outcome['ok']:
             return api_error(
                 'ALREADY_PROCESSED',
                 f'Cette facture a déjà été traitée par {existing.processed_by.name or "un utilisateur"} '
@@ -1226,19 +1212,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 data={'record': self._format_scan_record(existing)},
                 status=409
             )
-        
-        # Marquer comme traité
-        existing.write({
-            'state': 'processed',
-            'processed_by': user.id,
-            'processed_date': fields.Datetime.now(),
-        })
-        
-        existing.message_post(
-            body=f"Facture traitée par {user.name} (profil Traiteur, depuis l'application mobile)",
-            message_type='notification'
-        )
-        
+
         return api_response({
             'already_processed': False,
             'message': 'Facture marquée comme traitée avec succès',

@@ -104,3 +104,33 @@ def parse_dgi_qr(raw):
         if uuid:
             return {'qr_uuid': uuid, 'qr_url': fixed, 'layout_fixed': True}
     return None
+
+
+# ----------------------------------------------------------------------
+# QR-code de contrôle : « Tester la douchette »
+# ----------------------------------------------------------------------
+
+# Affiché à l'écran par le poste de scan. Il contient les caractères que les
+# dispositions de clavier déplacent (chiffres, a/q, z/w, m, ponctuation) et
+# les deux casses : sa relecture dit si la douchette est bien réglée.
+SCANNER_TEST_TEXT = 'ICP-TEST-DOUCHETTE/0123456789/azqwm/AZQWM/:.,;-_'
+
+
+def check_scanner_test(raw):
+    """Diagnostic de la relecture du QR-code de contrôle.
+
+    Renvoie ``None`` si le texte n'est pas ce QR-code, sinon ``'ok'``,
+    ``'qwerty'`` (douchette en clavier anglais sur poste français) ou
+    ``'caps'`` (verrouillage des majuscules actif sur le poste).
+    """
+    text = clean_scan(raw)
+    if not text:
+        return None
+    if text == SCANNER_TEST_TEXT:
+        return 'ok'
+    if text.swapcase() == SCANNER_TEST_TEXT:
+        return 'caps'
+    for table in _LAYOUT_TABLES:
+        if text.translate(table) == SCANNER_TEST_TEXT:
+            return 'qwerty'
+    return None

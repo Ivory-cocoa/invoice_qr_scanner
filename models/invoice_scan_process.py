@@ -132,3 +132,50 @@ class InvoiceScanRecordProcess(models.Model):
             }
         finally:
             release_scan_slot()
+
+    @api.model
+    def _process_qr_treatment(self, user, qr_uuid, origin_label):
+        """Marquer « traitée » la facture d'un QR-code (profil Traiteur).
+
+        Cœur commun à l'application mobile (`scan-to-process`) et au poste de
+        scan à la douchette. À appeler en ``sudo()``, droit déjà vérifié.
+
+        Returns:
+            dict: ``{'ok': True, 'record': …}`` ou ``{'ok': False,
+            'error_code': 'NOT_FOUND' | 'ALREADY_PROCESSED', 'record': …}``.
+        """
+        existing = self.search([
+            ('qr_uuid', '=', self._normalize_qr_uuid(qr_uuid)),
+            ('state', 'in', ['done', 'processed']),
+            ('company_id', '=', self.env.company.id)
+        ], limit=1)
+
+        if not existing:
+            return {'ok': False, 'error_code': 'NOT_FOUND', 'record': existing}
+
+        if existing.state == 'processed':
+            # Incrémenter le compteur de tentatives de retraitement
+            existing.write({
+                'reprocess_attempt_count': existing.reprocess_attempt_count + 1,
+                'last_reprocess_attempt': fields.Datetime.now(),
+                'last_reprocess_user_id': user.id,
+            })
+            existing.message_post(
+                body=f"Tentative de retraitement #{existing.reprocess_attempt_count} par {user.name} "
+                     f"(facture déjà traitée par {existing.processed_by.name or 'N/A'})",
+                message_type='notification'
+            )
+            return {'ok': False, 'error_code': 'ALREADY_PROCESSED',
+                    'record': existing}
+
+        # Marquer comme traité
+        existing.write({
+            'state': 'processed',
+            'processed_by': user.id,
+            'processed_date': fields.Datetime.now(),
+        })
+        existing.message_post(
+            body=f"Facture traitée par {user.name} (profil Traiteur, {origin_label})",
+            message_type='notification'
+        )
+        return {'ok': True, 'record': existing}
