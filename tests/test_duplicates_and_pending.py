@@ -162,6 +162,143 @@ class TestSameInvoiceNumber(TransactionCase):
 
 
 @tagged('post_install', '-at_install', 'invoice_qr_scanner')
+class TestSameNumberProcessingConfirmation(TransactionCase):
+    """Marquer « traitée » une facture dont le numéro est déjà enregistré :
+    jamais sans confirmation, quel que soit le chemin."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        ensure_xof(cls.env)
+        cls.Scan = cls.env['invoice.scan.record']
+        cls.first = make_scan(cls.env, 31, '2603236T26000000300')
+        cls.twin = make_scan(cls.env, 32, '2603236T26000000300')
+        cls.alone = make_scan(cls.env, 33, '2603236T26000000301')
+        cls.secretary = new_test_user(
+            cls.env, login='confirm_secretary', groups='base.group_user,'
+            'invoice_qr_scanner.group_invoice_scanner_verificateur,'
+            'invoice_qr_scanner.group_invoice_scanner_traiteur')
+
+    # -- moteur ----------------------------------------------------------
+
+    def test_engine_leaves_the_twin_untouched_without_confirmation(self):
+        entries = (self.twin | self.alone)._bulk_mark_processed()
+        by_id = {entry['scan_id']: entry for entry in entries}
+        self.assertEqual(self.twin.state, 'done')
+        self.assertFalse(self.twin.processed_by)
+        self.assertTrue(by_id[self.twin.id]['needs_confirmation'])
+        self.assertEqual(by_id[self.twin.id]['status'], 'skipped')
+        self.assertIn(self.first.reference, by_id[self.twin.id]['message'])
+        self.assertEqual(self.alone.state, 'processed')
+        self.assertFalse(by_id[self.alone.id]['needs_confirmation'])
+
+    def test_engine_processes_the_twin_when_confirmed(self):
+        entries = self.twin._bulk_mark_processed(confirm_same_number=True)
+        self.assertEqual(self.twin.state, 'processed')
+        self.assertFalse(entries[0]['needs_confirmation'])
+        note = self.twin.message_ids[0].body
+        self.assertIn('MALGRÉ', note)
+        self.assertIn(self.first.reference, note)
+
+    def test_once_the_other_is_gone_no_confirmation_is_needed(self):
+        self.first.state = 'error'
+        self.twin.invalidate_recordset(['same_number_count', 'same_number_refs'])
+        self.twin._bulk_mark_processed()
+        self.assertEqual(self.twin.state, 'processed')
+
+    # -- boutons d'Odoo --------------------------------------------------
+
+    def test_button_opens_the_confirmation(self):
+        action = (self.twin | self.alone).action_mark_processed()
+        self.assertEqual(action['res_model'], 'invoice.scan.same.number.confirm')
+        self.assertEqual(action['target'], 'new')
+        wizard = self.env[action['res_model']].browse(action['res_id'])
+        self.assertEqual(wizard.twin_ids, self.twin)
+        self.assertEqual(wizard.scan_ids, self.twin | self.alone)
+        self.assertEqual((wizard.twin_count, wizard.other_count), (1, 1))
+        # Tant que rien n'est confirmé, rien n'a bougé.
+        self.assertEqual(self.twin.state, 'done')
+        self.assertEqual(self.alone.state, 'done')
+
+    def test_confirmation_transmits_everything(self):
+        action = (self.twin | self.alone).action_mark_processed()
+        wizard = self.env[action['res_model']].browse(action['res_id'])
+        wizard.action_confirm_all()
+        self.assertEqual(self.twin.state, 'processed')
+        self.assertEqual(self.alone.state, 'processed')
+
+    def test_only_the_others(self):
+        action = (self.twin | self.alone).action_mark_processed()
+        wizard = self.env[action['res_model']].browse(action['res_id'])
+        wizard.action_only_others()
+        self.assertEqual(self.twin.state, 'done')
+        self.assertEqual(self.alone.state, 'processed')
+
+    def test_only_the_others_with_nothing_else_closes(self):
+        action = self.twin.action_mark_processed()
+        wizard = self.env[action['res_model']].browse(action['res_id'])
+        result = wizard.action_only_others()
+        self.assertEqual(result['type'], 'ir.actions.act_window_close')
+        self.assertEqual(self.twin.state, 'done')
+
+    def test_no_confirmation_without_a_twin(self):
+        action = self.alone.action_mark_processed()
+        self.assertNotEqual(
+            action.get('res_model'), 'invoice.scan.same.number.confirm')
+        self.assertEqual(self.alone.state, 'processed')
+
+    def test_secretary_goes_through_the_confirmation(self):
+        (self.twin | self.first).write({'scanned_by': self.secretary.id})
+        twin = self.twin.with_user(self.secretary)
+        action = twin.action_mark_processed()
+        wizard = self.env[action['res_model']].with_user(
+            self.secretary).browse(action['res_id'])
+        wizard.action_confirm_all()
+        self.assertEqual(self.twin.state, 'processed')
+        self.assertEqual(self.twin.processed_by, self.secretary)
+
+    # -- assistant de traitement groupé ----------------------------------
+
+    def _bulk_wizard(self, **values):
+        return self.env['invoice.scan.bulk.process'].create(dict({
+            'scan_ids': [(6, 0, (self.twin | self.alone).ids)],
+            'operation': 'mark_processed',
+        }, **values))
+
+    def test_bulk_wizard_skips_the_twin_by_default(self):
+        wizard = self._bulk_wizard()
+        self.assertEqual(wizard.count_same_number, 1)
+        wizard.action_apply()
+        self.assertEqual(self.twin.state, 'done')
+        self.assertEqual(self.alone.state, 'processed')
+        line = wizard.line_ids.filtered(lambda l: l.scan_id == self.twin)
+        self.assertIn('Confirmation requise', line.message)
+
+    def test_bulk_wizard_with_the_box_ticked(self):
+        wizard = self._bulk_wizard(confirm_same_number=True)
+        wizard.action_apply()
+        self.assertEqual(self.twin.state, 'processed')
+
+    # -- traitement par QR-code (application, poste de scan) --------------
+
+    def test_qr_treatment_asks_first(self):
+        outcome = self.Scan._process_qr_treatment(
+            self.secretary, self.twin.qr_uuid, 'test')
+        self.assertFalse(outcome['ok'])
+        self.assertEqual(outcome['error_code'], 'SAME_NUMBER_CONFIRMATION')
+        self.assertEqual(outcome['record'], self.twin)
+        self.assertEqual(self.twin.state, 'done')
+        self.assertEqual(self.twin.reprocess_attempt_count, 0)
+
+        outcome = self.Scan._process_qr_treatment(
+            self.secretary, self.twin.qr_uuid, 'test', confirm_same_number=True)
+        self.assertTrue(outcome['ok'])
+        self.assertEqual(self.twin.state, 'processed')
+        self.assertEqual(self.twin.processed_by, self.secretary)
+        self.assertIn('MALGRÉ', self.twin.message_ids[0].body)
+
+
+@tagged('post_install', '-at_install', 'invoice_qr_scanner')
 class TestPendingInvoice(TransactionCase):
 
     @classmethod

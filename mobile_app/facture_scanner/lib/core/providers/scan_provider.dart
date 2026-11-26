@@ -11,6 +11,7 @@ import '../services/api_service.dart';
 import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../services/dgi_parser_service.dart';
+import '../models/api_response.dart';
 import '../models/scan_record.dart';
 import 'auth_provider.dart';
 
@@ -788,10 +789,44 @@ class ScanProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Avertissement en attente de confirmation : le serveur a refusé de
+  /// marquer « traitée » une facture dont le numéro est déjà porté par une
+  /// autre facture enregistrée. Rien n'a été modifié ; l'écran demande à
+  /// l'utilisateur, puis rappelle avec `confirmSameNumber: true`.
+  String? _sameNumberConfirmation;
+  String? get sameNumberConfirmation => _sameNumberConfirmation;
+
+  /// Code d'erreur du serveur pour cette demande de confirmation.
+  static const String sameNumberConfirmationCode = 'SAME_NUMBER_CONFIRMATION';
+
+  static String _confirmationText(ApiResponse<Map<String, dynamic>> response) {
+    final record = response.data?['record'];
+    final warning = record is Map<String, dynamic>
+        ? (record['same_number_warning'] as String? ?? '').trim()
+        : '';
+    if (warning.isNotEmpty) return warning;
+    return response.errorMessage ??
+        'Une autre facture enregistrée porte le même numéro.';
+  }
+
   /// Mark a scan record as processed (traité)
-  Future<bool> markAsProcessed(int recordId) async {
+  ///
+  /// Renvoie `false` sans rien modifier si une confirmation est requise :
+  /// [sameNumberConfirmation] porte alors l'avertissement à afficher.
+  Future<bool> markAsProcessed(
+    int recordId, {
+    bool confirmSameNumber = false,
+  }) async {
+    _sameNumberConfirmation = null;
     try {
-      final response = await _api.markProcessed(recordId);
+      final response = await _api.markProcessed(
+        recordId,
+        confirmSameNumber: confirmSameNumber,
+      );
+      if (response.errorCode == sameNumberConfirmationCode) {
+        _sameNumberConfirmation = _confirmationText(response);
+        return false;
+      }
       if (response.success && response.data != null) {
         // Update the record in local history
         final recordData = response.data!['record'];
@@ -871,10 +906,19 @@ class ScanProvider extends ChangeNotifier {
   bool get isLoadingPending => _isLoadingPending;
 
   /// Process QR code as Traiteur (find existing invoice → mark as processed)
-  Future<void> processQrCodeAsTraiteur(String qrContent) async {
+  ///
+  /// Si le serveur demande une confirmation (même numéro de facture déjà
+  /// enregistré), rien n'est modifié : l'état revient à `idle` et
+  /// [sameNumberConfirmation] porte l'avertissement. L'écran rappelle alors
+  /// avec `confirmSameNumber: true` si l'utilisateur confirme.
+  Future<void> processQrCodeAsTraiteur(
+    String qrContent, {
+    bool confirmSameNumber = false,
+  }) async {
     _state = ScanState.processing;
     _message = null;
     _lastScanResult = null;
+    _sameNumberConfirmation = null;
     notifyListeners();
 
     // Validate URL
@@ -886,7 +930,17 @@ class ScanProvider extends ChangeNotifier {
     }
 
     try {
-      final response = await _api.scanToProcess(qrContent);
+      final response = await _api.scanToProcess(
+        qrContent,
+        confirmSameNumber: confirmSameNumber,
+      );
+
+      if (response.errorCode == sameNumberConfirmationCode) {
+        _sameNumberConfirmation = _confirmationText(response);
+        _state = ScanState.idle;
+        notifyListeners();
+        return;
+      }
 
       if (response.success && response.data != null) {
         _state = ScanState.success;

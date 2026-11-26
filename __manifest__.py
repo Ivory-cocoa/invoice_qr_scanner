@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Scanner QR Factures Fournisseur',
-    'version': '17.0.1.15.0',
+    'version': '17.0.1.16.0',
     'category': 'Accounting/Invoicing',
     'summary': 'Création de factures fournisseur par scan QR-code DGI',
     'description': """
@@ -55,6 +55,7 @@ Source des données : services.fne.dgi.gouv.ci (DGI Côte d'Ivoire)
         'data/res_users_data.xml',
         # Wizards
         'wizards/invoice_scan_bulk_process_views.xml',
+        'wizards/invoice_scan_same_number_confirm_views.xml',
         # Views
         'views/invoice_scan_record_views.xml',
         'views/invoice_scan_pending_invoice_views.xml',

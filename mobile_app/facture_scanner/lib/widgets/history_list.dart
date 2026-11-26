@@ -2,6 +2,7 @@
 /// Affiche l'historique des factures scannées
 library;
 
+import 'same_number_confirm_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -1033,7 +1034,12 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
     bool success;
 
     if (widget.record.state == 'done') {
-      success = await scan.markAsProcessed(widget.record.id);
+      // Demande une confirmation si une autre facture enregistrée porte le
+      // même numéro.
+      success = await markProcessedAskingIfSameNumber(
+        context,
+        widget.record.id,
+      );
     } else {
       success = await scan.markAsUnprocessed(widget.record.id);
     }
@@ -1073,7 +1079,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
             duration: const Duration(seconds: 2),
           ),
         );
-      } else {
+      } else if (scan.sameNumberConfirmation == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(

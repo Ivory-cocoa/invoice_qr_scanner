@@ -386,10 +386,26 @@ class InvoiceScanDesk(models.AbstractModel):
     # -- Mode Traiteur --------------------------------------------------
 
     @api.model
-    def _desk_dgi_process(self, parsed, warnings):
+    def _desk_dgi_process(self, parsed, warnings, confirm_same_number=False):
         outcome = self.env['invoice.scan.record'].sudo()._process_qr_treatment(
-            self.env.user, parsed['qr_uuid'], _("depuis le poste de scan"))
+            self.env.user, parsed['qr_uuid'], _("depuis le poste de scan"),
+            confirm_same_number=confirm_same_number)
         record = outcome['record']
+        if not outcome['ok'] \
+                and outcome['error_code'] == 'SAME_NUMBER_CONFIRMATION':
+            # Rien n'est modifié : la carte attend la décision. Tant qu'elle
+            # attend, l'écran refuse un autre scan.
+            return self._desk_card(
+                'dgi', 'pending', _("Confirmation requise"),
+                message=_("Cette facture n'a PAS été marquée traitée."),
+                lines=self._desk_dgi_lines(record),
+                warnings=self._desk_same_number(record) + warnings,
+                form=self._desk_form(
+                    {'qr_url': parsed['qr_url'],
+                     'confirm': 'same_number'},
+                    [], _("Transmettre quand même à la comptabilité"),
+                    intro=_("Vérifiez qu'il ne s'agit pas de la même "
+                            "facture. Pour renoncer, fermez ce formulaire.")))
         if outcome['ok']:
             return self._desk_card(
                 'dgi', 'success', _("Facture marquée traitée"),
@@ -503,6 +519,13 @@ class InvoiceScanDesk(models.AbstractModel):
         parsed = parse_dgi_qr(payload.get('qr_url') or '')
         if not parsed:
             raise UserError(_("QR-code illisible : scannez à nouveau."))
+        if payload.get('confirm') == 'same_number':
+            # Confirmation d'un traitement malgré un même numéro de facture.
+            if 'process' not in [m['key'] for m in self._desk_dgi_modes()]:
+                raise UserError(_(
+                    "Votre profil ne permet pas de traiter une facture."))
+            return self._desk_dgi_process(
+                parsed, [], confirm_same_number=True)
         if 'create' not in [m['key'] for m in self._desk_dgi_modes()]:
             raise UserError(_(
                 "Votre profil ne permet pas d'enregistrer une facture."))

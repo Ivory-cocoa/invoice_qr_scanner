@@ -435,6 +435,25 @@ class InvoiceScannerMobileAPI(http.Controller):
                             record.id, e)
             return []
 
+    def _same_number_confirmation_error(self, record):
+        """Réponse « confirmation requise » : rien n'a été modifié.
+
+        L'application affiche l'avertissement et, si l'utilisateur confirme,
+        rappelle la même route avec ``confirm_same_number: true``. Un APK qui
+        ne connaît pas ce code affiche le message : il dit quoi faire.
+        """
+        warning = record._same_number_warning() or ''
+        return api_error(
+            'SAME_NUMBER_CONFIRMATION',
+            warning + " Rien n'a été modifié : confirmez pour la transmettre "
+            "quand même (application à jour, ou depuis Odoo).",
+            data={
+                'confirmation_required': True,
+                'record': self._format_scan_record(record),
+            },
+            status=409,
+        )
+
     def _format_scan_record(self, record):
         """Formater un enregistrement de scan pour l'API."""
         return {
@@ -1308,6 +1327,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         
         Body JSON:
         - qr_url: URL extraite du QR-code
+        - confirm_same_number: true pour traiter malgré un même numéro de
+          facture déjà enregistré (sinon erreur SAME_NUMBER_CONFIRMATION,
+          rien n'est modifié)
         
         Returns:
         - record: Enregistrement trouvé avec ses détails
@@ -1331,8 +1353,12 @@ class InvoiceScannerMobileAPI(http.Controller):
         # Le travail est fait par le modèle, partagé avec le poste de scan à
         # la douchette ; ici, seule la mise en forme pour l'API.
         outcome = ScanRecord._process_qr_treatment(
-            user, qr_uuid, "depuis l'application mobile")
+            user, qr_uuid, "depuis l'application mobile",
+            confirm_same_number=data.get('confirm_same_number') is True)
         existing = outcome['record']
+
+        if not outcome['ok'] and outcome['error_code'] == 'SAME_NUMBER_CONFIRMATION':
+            return self._same_number_confirmation_error(existing)
 
         if not outcome['ok'] and outcome['error_code'] == 'NOT_FOUND':
             return api_error(
@@ -1491,17 +1517,24 @@ class InvoiceScannerMobileAPI(http.Controller):
                 status=400
             )
         
+        # Second filet avant le paiement : même numéro déjà enregistré.
+        same_number = bool(record.same_number_count)
+        if same_number and get_json_body().get('confirm_same_number') is not True:
+            return self._same_number_confirmation_error(record)
+
         record.write({
             'state': 'processed',
             'processed_by': user.id,
             'processed_date': fields.Datetime.now(),
         })
-        
-        record.message_post(
-            body=f"Scan marqué comme traité par {user.name} (depuis l'application mobile)",
-            message_type='notification'
-        )
-        
+
+        body = f"Scan marqué comme traité par {user.name} (depuis l'application mobile)"
+        if same_number:
+            body += (f". Traité MALGRÉ un même numéro de facture déjà "
+                     f"enregistré ({record.same_number_refs or '?'}) : "
+                     f"confirmé par {user.name}.")
+        record.message_post(body=body, message_type='notification')
+
         return api_response({
             'success': True,
             'message': 'Scan marqué comme traité',
@@ -1607,18 +1640,22 @@ class InvoiceScannerMobileAPI(http.Controller):
         records = ScanRecord.search(domain, limit=max_records, order='scan_date asc')
 
         entries = records._bulk_mark_processed(
-            user=user, origin="application mobile")
+            user=user, origin="application mobile",
+            confirm_same_number=data.get('confirm_same_number') is True)
 
         results = [
             {
                 'record_id': entry['scan_id'],
                 'reference': entry['reference'],
                 'success': entry['status'] == 'done',
+                # Même numéro déjà enregistré : laissé tel quel, à confirmer.
+                'needs_confirmation': bool(entry.get('needs_confirmation')),
                 **({} if entry['status'] == 'done' else {'error': entry['message']}),
             }
             for entry in entries
         ]
         successful = sum(1 for r in results if r.get('success'))
+        needs_confirmation = sum(1 for r in results if r['needs_confirmation'])
 
         return api_response({
             'results': results,
@@ -1626,6 +1663,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'total_processed': len(results),
                 'successful': successful,
                 'failed': len(results) - successful,
+                'needs_confirmation': needs_confirmation,
                 'eligible_total': eligible_count,
                 'truncated': eligible_count > len(records),
                 'limit': max_records,
