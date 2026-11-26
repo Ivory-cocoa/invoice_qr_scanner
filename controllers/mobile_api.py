@@ -1134,6 +1134,10 @@ class InvoiceScannerMobileAPI(http.Controller):
         la DGI n'est pas interrogée, le compteur de doublons ne bouge pas, et
         la réponse ne dit rien des doublons.
 
+        Une facture inconnue n'est JAMAIS créée ici : la réponse dit qu'elle
+        n'existe pas encore et renvoie vers le secrétariat, seul à vérifier
+        les factures (création, ou signalement du doublon).
+
         Body JSON:
         - qr_url: contenu du QR-code (ou l'identifiant de vérification seul)
 
@@ -1169,9 +1173,15 @@ class InvoiceScannerMobileAPI(http.Controller):
                 'qr_uuid': qr_uuid,
                 'reason': 'not_ready' if records else 'not_scanned',
             }, message=(
-                "Cette facture a été scannée mais n'est pas encore validée "
-                "(scan en erreur ou en attente)." if records else
-                "Cette facture n'a pas encore été scannée par un Vérificateur."
+                # Dans les deux cas, la suite appartient au secrétariat, qui
+                # vérifie toutes les factures FNE reçues : sa vérification
+                # crée la facture, ou la signale comme doublon.
+                "Cette facture a été présentée au secrétariat mais son "
+                "enregistrement n'est pas terminé. Transmettez-la au "
+                "secrétariat pour qu'il termine sa vérification." if records else
+                "Cette facture n'existe pas encore dans Odoo. Transmettez-la "
+                "au secrétariat pour vérification : elle y sera créée, ou "
+                "signalée comme doublon si elle existe déjà."
             ))
 
         values = self._format_scan_record(record)

@@ -5,8 +5,9 @@
 ///
 /// Le Gestionnaire OT ne vérifie PAS les factures (pas de création de scan,
 /// pas de contrôle de doublon) et ne les traite pas. Il peut :
-///   1. "Vérifier une facture" — scanner une facture DÉJÀ scannée par un
-///      Vérificateur pour savoir si elle est liée à un OT, puis la lier ;
+///   1. "Vérifier une facture" — scanner une facture pour savoir si elle
+///      est liée à un OT, puis la lier. Si elle n'existe pas encore dans
+///      Odoo, rien n'est créé : elle est à transmettre au secrétariat ;
 ///   2. "Rechercher une facture" — par numéro, fournisseur ou OT ;
 ///   3. "Factures liées à des OT" — consulter la liste ;
 ///   4. "Rechercher un OT" — voir ses coûts et paiements.
@@ -77,7 +78,8 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
   ///
   /// Lecture seule : le Gestionnaire OT ne vérifie pas les factures. Rien
   /// n'est créé, la DGI n'est pas interrogée et aucun doublon n'est compté.
-  /// La facture doit avoir été scannée auparavant par un Vérificateur.
+  /// Une facture inconnue n'est pas créée : l'application dit qu'elle
+  /// n'existe pas encore et renvoie vers le secrétariat.
   Future<void> _scanAndCheck() async {
     final connectivity = context.read<ConnectivityProvider>();
     if (!connectivity.isOnline) {
@@ -125,6 +127,10 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
     await _showNotScannedDialog(notReady: data['reason'] == 'not_ready');
   }
 
+  /// La facture scannée n'existe pas (encore) dans Odoo. Le Gestionnaire OT
+  /// ne la crée pas : il la transmet au secrétariat, qui vérifie toutes les
+  /// factures FNE reçues. Cette vérification crée la facture, ou la signale
+  /// comme doublon au secrétariat si elle existait déjà.
   Future<void> _showNotScannedDialog({required bool notReady}) {
     return showDialog<void>(
       context: context,
@@ -134,21 +140,28 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
           color: AppTheme.warningColor,
           size: 40,
         ),
-        title: const Text('Facture introuvable'),
+        title: Text(
+          notReady
+              ? 'Vérification non terminée'
+              : 'Cette facture n\'existe pas encore',
+        ),
         content: Text(
           notReady
-              ? 'Cette facture a été scannée mais son enregistrement n\'est '
-                    'pas terminé (scan en erreur ou en attente). Elle ne '
-                    'peut pas encore être liée à un OT.\n\n'
-                    'Signalez-la à un Vérificateur.'
-              : 'Cette facture n\'a pas encore été scannée par un '
-                    'Vérificateur : elle n\'est donc liée à aucun OT et ne '
-                    'peut pas encore l\'être.\n\n'
-                    'Remettez-la à un Vérificateur, puis scannez-la de '
-                    'nouveau.',
+              ? 'Cette facture a été présentée au secrétariat, mais son '
+                    'enregistrement n\'est pas terminé. Elle ne peut pas '
+                    'encore être liée à un OT.\n\n'
+                    'Transmettez-la au secrétariat pour qu\'il termine sa '
+                    'vérification, puis scannez-la de nouveau.'
+              : 'Elle n\'est pas enregistrée dans Odoo : elle n\'est donc '
+                    'liée à aucun OT. Rien n\'a été créé par ce scan.\n\n'
+                    'Transmettez-la au secrétariat pour vérification. Le '
+                    'secrétariat la créera, ou la signalera comme doublon si '
+                    'elle existe déjà.\n\n'
+                    'Une fois vérifiée, scannez-la de nouveau pour la lier à '
+                    'un OT.',
         ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Compris'),
           ),
