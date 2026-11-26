@@ -138,9 +138,9 @@ class TestScanDesk(TransactionCase):
     def test_modes_follow_the_profile(self):
         """Même geste que dans l'application, profil par profil."""
         self.assertEqual(self._modes(self.verifier), ['create'])
-        self.assertEqual(self._modes(self.ot_manager), ['create'])
+        self.assertEqual(self._modes(self.ot_manager), ['lookup'])
         self.assertEqual(self._modes(self.processor), ['process'])
-        self.assertEqual(self._modes(self.manager), ['create', 'process'])
+        self.assertEqual(self._modes(self.manager), ['create', 'process', 'lookup'])
         self.assertEqual(self._modes(self.reader), [])
         self.assertFalse(self.Desk.with_user(self.reader).desk_init()['can_scan'])
 
@@ -235,18 +235,52 @@ class TestScanDesk(TransactionCase):
 
     # -- Gestionnaire OT, Traiteur, cumul --------------------------------
 
-    def test_ot_manager_records_the_invoice(self):
-        card, _get = self._scan(URL, user=self.ot_manager)
-        self.assertEqual(card['status'], 'success', card)
+    def test_ot_manager_never_creates_an_invoice(self):
+        """Facture inconnue : rien n'est créé, renvoi vers le secrétariat,
+        qui la trouve dans « Factures à vérifier »."""
+        Pending = self.env['invoice.scan.pending.invoice']
+        card, get = self._scan(URL, user=self.ot_manager)
+        self.assertEqual(card['status'], 'pending', card)
+        self.assertEqual(card['title'], "Cette facture n'existe pas encore")
+        self.assertIn('secrétariat', card['message'])
+        self.assertEqual(get.call_count, 0)
+        self.assertFalse(self._records())
+        pending = Pending.search([('qr_uuid', '=', UUID)])
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending.state, 'pending')
+        self.assertEqual(pending.requested_by, self.ot_manager)
+        self.assertEqual(pending.origin, 'douchette')
+
+        # Présentée une seconde fois : toujours une seule ligne.
+        self._scan(URL, user=self.ot_manager)
+        self.assertEqual(Pending.search_count([('qr_uuid', '=', UUID)]), 1)
+        self.assertEqual(pending.request_count, 2)
+
+        # Le secrétariat la vérifie : la demande se referme seule.
+        self._scan(URL)
         record = self._records()
-        self.assertEqual(record.scanned_by, self.ot_manager)
-        self.assertTrue(record.invoice_id)
-        # « Rattacher à un OT » n'existe que si potting_management l'apporte
+        self.assertEqual(pending.state, 'done')
+        self.assertEqual(pending.scan_record_id, record)
+
+        # Le Gestionnaire OT la retrouve, sans doublon compté.
+        card, get = self._scan(URL, user=self.ot_manager)
+        self.assertEqual(card['status'], 'success', card)
+        self.assertEqual(get.call_count, 0)
+        self.assertEqual(record.duplicate_count, 0)
         Wizard = self.env['invoice.scan.bulk.process']
         labels = [action['label'] for action in card['actions']]
         self.assertEqual(
             "Rattacher à un OT" in labels,
             'link_ot' in dict(Wizard._selection_operation()))
+
+    def test_ot_manager_cannot_submit_a_manual_entry(self):
+        from odoo.exceptions import UserError
+        with self.assertRaises(UserError):
+            self.Desk.with_user(self.ot_manager)._desk_submit_dgi(
+                {'qr_url': URL},
+                {'supplier_name': 'X', 'invoice_number_dgi': 'N1',
+                 'amount_ttc': 1000})
+        self.assertFalse(self._records())
 
     def test_processor_marks_the_invoice_processed(self):
         # Pas encore scannée : rien à traiter, et surtout rien de créé

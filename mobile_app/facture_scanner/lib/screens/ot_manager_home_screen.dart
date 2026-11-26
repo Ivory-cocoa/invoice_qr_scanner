@@ -124,14 +124,20 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
       return;
     }
 
-    await _showNotScannedDialog(notReady: data['reason'] == 'not_ready');
+    await _showNotScannedDialog(
+      notReady: data['reason'] == 'not_ready',
+      secretariatNotified: data['secretariat_notified'] == true,
+    );
   }
 
   /// La facture scannée n'existe pas (encore) dans Odoo. Le Gestionnaire OT
   /// ne la crée pas : il la transmet au secrétariat, qui vérifie toutes les
   /// factures FNE reçues. Cette vérification crée la facture, ou la signale
   /// comme doublon au secrétariat si elle existait déjà.
-  Future<void> _showNotScannedDialog({required bool notReady}) {
+  Future<void> _showNotScannedDialog({
+    required bool notReady,
+    bool secretariatNotified = false,
+  }) {
     return showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -157,6 +163,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                     'Transmettez-la au secrétariat pour vérification. Le '
                     'secrétariat la créera, ou la signalera comme doublon si '
                     'elle existe déjà.\n\n'
+                    '${secretariatNotified ? 'Le secrétariat est prévenu qu\'elle est attendue.\n\n' : ''}'
                     'Une fois vérifiée, scannez-la de nouveau pour la lier à '
                     'un OT.',
         ),

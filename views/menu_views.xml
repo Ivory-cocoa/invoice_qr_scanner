@@ -83,6 +83,14 @@
                   action="action_invoice_scan_record"
                   sequence="10"/>
 
+        <!-- Factures attendues par les Gestionnaires OT -->
+        <menuitem id="menu_invoice_scan_pending_invoice"
+                  name="Factures à vérifier"
+                  parent="menu_invoice_qr_scanner_scans"
+                  action="action_invoice_scan_pending_invoice"
+                  sequence="15"
+                  groups="group_invoice_scanner_verificateur"/>
+
         <!-- Action Scans réussis -->
         <record id="action_invoice_scan_record_done" model="ir.actions.act_window">
             <field name="name">Factures créées</field>

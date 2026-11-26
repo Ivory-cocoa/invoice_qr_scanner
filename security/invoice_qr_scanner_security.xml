@@ -62,6 +62,12 @@
             <field name="domain_force">[('company_id', 'in', company_ids)]</field>
         </record>
 
+        <record id="rule_invoice_scan_pending_invoice_company" model="ir.rule">
+            <field name="name">Factures à vérifier : multi-société</field>
+            <field name="model_id" ref="model_invoice_scan_pending_invoice"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+        </record>
+
         <!-- Règle : Vérificateurs voient leurs propres scans -->
         <record id="rule_invoice_scan_record_verificateur" model="ir.rule">
             <field name="name">Invoice Scan Record: Own records (Vérificateur)</field>

@@ -563,8 +563,23 @@ class InvoiceScannerMobileAPI(http.Controller):
         else:
             user_role = 'user'
 
+        # Libellé affiché par l'application. Le rôle « manager » couvre deux
+        # réalités : le Responsable Scanner, et la personne qui vérifie ET
+        # traite les factures sans être responsable — le secrétariat.
+        if is_manager:
+            role_label = "Responsable"
+        elif is_verificateur and is_traiteur:
+            role_label = "Secrétariat"
+        else:
+            role_label = {
+                'verificateur': "Vérificateur",
+                'traiteur': "Traiteur",
+                'ot_manager': "Gestionnaire OT",
+            }.get(user_role, "Utilisateur")
+
         return {
             'role': user_role,
+            'role_label': role_label,
             'is_ot_manager': is_ot_manager,
             'is_manager': is_manager,
             'is_verificateur': is_verificateur,
@@ -1130,9 +1145,9 @@ class InvoiceScannerMobileAPI(http.Controller):
         """Retrouver une facture DÉJÀ scannée à partir de son QR-code.
 
         Geste du Gestionnaire OT : il présente une facture pour savoir si elle
-        est rattachée à un OT. Lecture seule, strictement : rien n'est créé,
-        la DGI n'est pas interrogée, le compteur de doublons ne bouge pas, et
-        la réponse ne dit rien des doublons.
+        est rattachée à un OT. Aucun scan ni facture n'est créé, la DGI n'est
+        pas interrogée, le compteur de doublons ne bouge pas, et la réponse ne
+        dit rien des doublons.
 
         Une facture inconnue n'est JAMAIS créée ici : la réponse dit qu'elle
         n'existe pas encore et renvoie vers le secrétariat, seul à vérifier
@@ -1168,10 +1183,18 @@ class InvoiceScannerMobileAPI(http.Controller):
         ], order='id desc')
         record = records.filtered(lambda r: r.state in ('done', 'processed'))[:1]
         if not record:
+            # Facture inconnue : le secrétariat est prévenu qu'elle est
+            # attendue (liste « Factures à vérifier »). Ce n'est ni un scan ni
+            # une facture, et la consultation n'échoue jamais pour cela.
+            notified = False
+            if not records:
+                notified = request.env['invoice.scan.pending.invoice']._register_request(
+                    user, qr_uuid, origin='app')
             return api_response({
                 'found': False,
                 'qr_uuid': qr_uuid,
                 'reason': 'not_ready' if records else 'not_scanned',
+                'secretariat_notified': bool(notified),
             }, message=(
                 # Dans les deux cas, la suite appartient au secrétariat, qui
                 # vérifie toutes les factures FNE reçues : sa vérification

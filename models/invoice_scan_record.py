@@ -329,6 +329,32 @@ class InvoiceScanRecord(models.Model):
              "peuvent être séparés par une virgule ou un espace."
     )
 
+    # ------------------------------------------------------------------
+    # Doublon de NUMÉRO : une autre facture enregistrée porte le même numéro
+    # ------------------------------------------------------------------
+    # `duplicate_count` compte les nouvelles présentations du MÊME QR-code.
+    # Il ne voit pas deux scans différents (deux QR-codes, ou une saisie
+    # manuelle) qui portent le même numéro de facture du même fournisseur :
+    # c'est ce cas, le plus dangereux (deux pièces comptables), que ces
+    # champs signalent. Calculés à la lecture : toujours justes, y compris
+    # pour un scan plus ancien quand son double arrive.
+    same_number_count = fields.Integer(
+        string="Même n° de facture",
+        compute='_compute_same_number',
+        search='_search_same_number_count',
+        compute_sudo=True,
+        help="Nombre d'AUTRES factures enregistrées qui portent le même "
+             "numéro de facture, pour le même fournisseur."
+    )
+
+    same_number_refs = fields.Char(
+        string="Scans du même numéro",
+        compute='_compute_same_number',
+        compute_sudo=True,
+        help="Références des autres scans qui portent le même numéro de "
+             "facture pour le même fournisseur."
+    )
+
     dgi_preview_url = fields.Char(
         string="Page de vérification DGI",
         compute='_compute_dgi_preview_url',
@@ -435,6 +461,7 @@ class InvoiceScanRecord(models.Model):
                 vals['qr_uuid'] = self._normalize_qr_uuid(vals['qr_uuid'])
         records = super().create(vals_list)
         records._link_refunds_to_origin()
+        self.env['invoice.scan.pending.invoice']._close_for_scans(records)
         return records
 
     def write(self, vals):
@@ -444,6 +471,9 @@ class InvoiceScanRecord(models.Model):
         result = super().write(vals)
         if 'origin_invoice_number_dgi' in vals or 'document_type' in vals:
             self._link_refunds_to_origin()
+        if vals.get('state') in ('done', 'processed'):
+            # La facture attendue par un Gestionnaire OT vient d'être vérifiée.
+            self.env['invoice.scan.pending.invoice']._close_for_scans(self)
         return result
 
     def _check_document_type_change(self, vals):
@@ -1035,6 +1065,119 @@ class InvoiceScanRecord(models.Model):
             # du résultat. On exclut donc les scans trouvés.
             return [('id', 'not in', self._search(domain))]
         return domain
+
+    # ------------------------------------------------------------------
+    # Doublon de numéro de facture
+    # ------------------------------------------------------------------
+    _ALNUM = re.compile(r'[^0-9A-Z]+')
+
+    @api.model
+    def _same_number_key(self, number):
+        """Numéro comparable : majuscules, sans espace ni ponctuation."""
+        return self._ALNUM.sub('', (number or '').upper())
+
+    def _same_supplier(self, other):
+        """Deux scans visent-ils le même fournisseur ?
+
+        Les codes DGI font foi quand les deux sont connus. Sinon (saisie
+        manuelle sans code), on compare les noms, ponctuation et casse à part.
+        """
+        code, other_code = (
+            self._same_number_key(self.supplier_code_dgi),
+            self._same_number_key(other.supplier_code_dgi))
+        if code and other_code:
+            return code == other_code
+        name, other_name = (
+            self._same_number_key(self.supplier_name),
+            self._same_number_key(other.supplier_name))
+        return bool(name) and name == other_name
+
+    def _same_number_twins(self):
+        """Pour chaque scan, les AUTRES scans du même numéro (même fournisseur,
+        même société) dont la facture est enregistrée.
+
+        Returns:
+            dict: ``{id: recordset}`` (en sudo : un double créé par un autre
+            utilisateur est justement celui qu'il faut voir).
+        """
+        Scan = self.sudo()
+        result = {record.id: Scan.browse() for record in self}
+        keyed = {}
+        for record in Scan.browse(self.ids):
+            key = self._same_number_key(record.invoice_number_dgi)
+            if key:
+                keyed.setdefault((record.company_id.id, key), Scan.browse())
+                keyed[(record.company_id.id, key)] |= record
+        if not keyed:
+            return result
+        # Comparaison sur le numéro NORMALISÉ, côté base : « FAC-12 » et
+        # « fac 12 » sont le même numéro.
+        self.env['invoice.scan.record'].flush_model(
+            ['invoice_number_dgi', 'state', 'company_id'])
+        self.env.cr.execute("""
+            SELECT id
+              FROM invoice_scan_record
+             WHERE state IN ('done', 'processed')
+               AND company_id IN %s
+               AND regexp_replace(upper(COALESCE(invoice_number_dgi, '')),
+                                  '[^0-9A-Z]+', '', 'g') IN %s
+        """, (tuple({key[0] for key in keyed}), tuple({key[1] for key in keyed})))
+        candidates = Scan.browse([row[0] for row in self.env.cr.fetchall()])
+        by_key = {}
+        for candidate in candidates:
+            key = (candidate.company_id.id,
+                   self._same_number_key(candidate.invoice_number_dgi))
+            by_key.setdefault(key, Scan.browse())
+            by_key[key] |= candidate
+        for key, records in keyed.items():
+            for record in records:
+                result[record.id] = by_key.get(key, Scan.browse()).filtered(
+                    lambda other, record=record: other.id != record.id
+                    and record._same_supplier(other))
+        return result
+
+    @api.depends('invoice_number_dgi', 'supplier_code_dgi', 'supplier_name', 'state')
+    def _compute_same_number(self):
+        twins = self._same_number_twins()
+        for record in self:
+            others = twins.get(record.id) or self.browse()
+            record.same_number_count = len(others)
+            refs = others.sorted('id').mapped('reference')
+            shown = ', '.join(refs[:5])
+            if len(refs) > 5:
+                shown += '…'
+            record.same_number_refs = shown or False
+
+    @api.model
+    def _search_same_number_count(self, operator, value):
+        """Filtre « même numéro de facture » : ``> 0`` / ``= 0`` et voisins."""
+        try:
+            value = int(value or 0)
+        except (TypeError, ValueError):
+            value = 0
+        # Seule la question « a-t-il un double ? » a un sens ici.
+        if (operator, value) in (('>', 0), ('>=', 1), ('!=', 0)):
+            wants_twins = True
+        elif (operator, value) in (('=', 0), ('<=', 0), ('<', 1)):
+            wants_twins = False
+        else:
+            raise UserError(_(
+                "Le filtre « même numéro de facture » ne sait répondre qu'à "
+                "« avec » ou « sans » double."))
+        # Numéros portés par au moins deux scans : seuls candidats possibles.
+        self.flush_model(['invoice_number_dgi', 'state', 'company_id'])
+        self.env.cr.execute("""
+            SELECT array_agg(id)
+              FROM invoice_scan_record
+             WHERE COALESCE(invoice_number_dgi, '') != ''
+          GROUP BY company_id,
+                   regexp_replace(upper(invoice_number_dgi), '[^0-9A-Z]+', '', 'g')
+            HAVING count(*) > 1
+        """)
+        candidate_ids = [i for (ids,) in self.env.cr.fetchall() for i in ids]
+        twins = self.sudo().browse(candidate_ids)._same_number_twins()
+        ids = [record_id for record_id, others in twins.items() if others]
+        return [('id', 'in' if wants_twins else 'not in', ids)]
 
     # ------------------------------------------------------------------
     # Aperçu de la facture scannée
