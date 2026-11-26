@@ -474,6 +474,11 @@ class InvoiceScannerMobileAPI(http.Controller):
             # Mention libre du fournisseur : porte souvent la référence de l'OT
             'commercial_message': record.commercial_message or '',
             # Champs pour le suivi des doublons
+            # Autre facture enregistrée avec le même numéro (même fournisseur) :
+            # l'application avertit dès le résultat du scan.
+            'same_number_count': record.same_number_count,
+            'same_number_refs': record.same_number_refs or '',
+            'same_number_warning': record._same_number_warning() or '',
             'duplicate_count': record.duplicate_count,
             'last_duplicate_attempt': record.last_duplicate_attempt.isoformat() if record.last_duplicate_attempt else None,
             'last_duplicate_user': record.last_duplicate_user_id.name if record.last_duplicate_user_id else '',
@@ -1209,7 +1214,8 @@ class InvoiceScannerMobileAPI(http.Controller):
 
         values = self._format_scan_record(record)
         # Le Gestionnaire OT ne contrôle pas les doublons : rien n'en sort.
-        for key in [k for k in values if 'duplicate' in k or 'reprocess' in k]:
+        for key in [k for k in values if 'duplicate' in k
+                    or 'reprocess' in k or 'same_number' in k]:
             values.pop(key)
         return api_response({'found': True, 'qr_uuid': qr_uuid, 'record': values})
 

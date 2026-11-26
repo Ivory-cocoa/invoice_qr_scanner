@@ -173,6 +173,12 @@ class ScanRecord {
   final DateTime? lastDuplicateAttempt;
   final String? lastDuplicateUser;
 
+  /// Avertissement du serveur : une AUTRE facture enregistrée porte le même
+  /// numéro pour le même fournisseur (vide sinon). Il vient de la réponse du
+  /// serveur et n'est pas gardé dans l'historique hors ligne : il sert au
+  /// moment du scan, là où le secrétariat doit le voir.
+  final String sameNumberWarning;
+
   // Champs pour le suivi des tentatives de retraitement
   final int reprocessAttemptCount;
   final DateTime? lastReprocessAttempt;
@@ -217,6 +223,7 @@ class ScanRecord {
     this.duplicateCount = 0,
     this.lastDuplicateAttempt,
     this.lastDuplicateUser,
+    this.sameNumberWarning = '',
     this.reprocessAttemptCount = 0,
     this.lastReprocessAttempt,
     this.lastReprocessUser,
@@ -266,6 +273,7 @@ class ScanRecord {
           ? DateTime.tryParse(json['last_duplicate_attempt'])
           : null,
       lastDuplicateUser: json['last_duplicate_user'] as String?,
+      sameNumberWarning: (json['same_number_warning'] as String? ?? '').trim(),
       reprocessAttemptCount: json['reprocess_attempt_count'] as int? ?? 0,
       lastReprocessAttempt: json['last_reprocess_attempt'] != null
           ? DateTime.tryParse(json['last_reprocess_attempt'])
@@ -383,6 +391,9 @@ class ScanRecord {
   bool get isSuccess => state == 'done' || state == 'processed';
   bool get isError => state == 'error';
   bool get hasDuplicates => duplicateCount > 0;
+
+  /// Une autre facture enregistrée porte ce numéro (même fournisseur).
+  bool get hasSameNumberWarning => sameNumberWarning.isNotEmpty;
   bool get hasReprocessAttempts => reprocessAttemptCount > 0;
 
   /// Ce scan est-il un avoir ?

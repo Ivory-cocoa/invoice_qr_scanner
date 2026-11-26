@@ -124,6 +124,29 @@ class TestSameInvoiceNumber(TransactionCase):
         with self.assertRaises(AccessError):
             self.twin.with_user(user).read(['supplier_name'])
 
+    def test_warning_text(self):
+        warning = self.twin._same_number_warning()
+        self.assertIn('même numéro', warning)
+        self.assertIn('2603236T26000000174', warning)
+        self.assertIn(self.first.reference, warning)
+        self.assertIn('comptabilité', warning)
+        self.assertFalse(self.alone._same_number_warning())
+
+    def test_warning_is_logged_when_the_invoice_is_recorded(self):
+        late = make_scan(self.env, 20, '2603236T26000000175', state='draft')
+        self.assertFalse(late.message_ids.filtered(
+            lambda m: 'même numéro' in (m.body or '')))
+        late.state = 'done'
+        notes = late.message_ids.filtered(
+            lambda m: 'même numéro' in (m.body or ''))
+        self.assertEqual(len(notes), 1)
+        self.assertIn(self.alone.reference, notes.body)
+        # Rien dans le fil d'une facture sans double.
+        single = make_scan(self.env, 21, '2603236T26000000999', state='draft')
+        single.state = 'done'
+        self.assertFalse(single.message_ids.filtered(
+            lambda m: 'même numéro' in (m.body or '')))
+
     def test_list_view(self):
         tree = etree.fromstring(self.Scan.get_view(False, 'tree')['arch'])
         for name in ('same_number_count', 'duplicate_count', 'invoice_number_dgi'):

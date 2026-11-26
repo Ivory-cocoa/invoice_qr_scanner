@@ -124,6 +124,7 @@ class TestOtManagerProfile(HttpCase):
             self.assertEqual(data['record']['invoice_number_dgi'], '2603236T26000000174')
             # Rien sur les doublons ne sort de cette route.
             self.assertFalse([k for k in data['record'] if 'duplicate' in k])
+            self.assertFalse([k for k in data['record'] if 'same_number' in k])
         self.scan.invalidate_recordset()
         self.assertEqual(self.scan.duplicate_count, 2)
         self.assertFalse(self.scan.last_duplicate_attempt)
@@ -210,3 +211,23 @@ class TestOtManagerProfile(HttpCase):
         boss = self._user('boss', 'group_invoice_scanner_manager')
         _token, data = self._token(boss)
         self.assertEqual(data['user']['role_label'], 'Responsable')
+
+    def test_verifier_is_warned_about_the_same_number(self):
+        """Dès la réponse du serveur : une autre facture porte ce numéro."""
+        twin_uuid = '01a1fd85-6adb-7dd8-b0ee-55c5d0739999'
+        self.env['invoice.scan.record'].create({
+            'qr_uuid': twin_uuid,
+            'qr_url': 'https://www.services.fne.dgi.gouv.ci/fr/verification/' + twin_uuid,
+            'supplier_name': 'QUINCAILLERIE EXEMPLE',
+            'invoice_number_dgi': '2603236T26000000174',
+            'invoice_date': fields.Date.today(),
+            'amount_ttc': 2183000, 'state': 'done',
+            'scanned_by': self.verificateur.id,
+        })
+        token, _data = self._token(self.verificateur)
+        status, payload = self._post(token, '/check', {'qr_url': URL})
+        self.assertEqual(status, 200)
+        record = payload['data']['scan_record']
+        self.assertEqual(record['same_number_count'], 1)
+        self.assertIn('même numéro', record['same_number_warning'])
+        self.assertTrue(record['same_number_refs'])

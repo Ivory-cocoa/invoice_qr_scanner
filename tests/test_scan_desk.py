@@ -273,6 +273,26 @@ class TestScanDesk(TransactionCase):
             "Rattacher à un OT" in labels,
             'link_ot' in dict(Wizard._selection_operation()))
 
+    def test_secretariat_is_warned_at_scan_time(self):
+        """Une autre facture enregistrée porte ce numéro : la carte du scan
+        le dit tout de suite, et la facture reste enregistrée."""
+        other = self.ScanRecord.create({
+            'qr_uuid': '019bd62c-467e-7000-82ac-45c8389c0001',
+            'qr_url': URL[:-4] + '0001',
+            'supplier_name': 'TRANSITAIRE EXEMPLE',
+            'supplier_code_dgi': FNE_PAYLOAD['company']['ncc'],
+            'invoice_number_dgi': '2502298K26000000003',
+            'amount_ttc': 1000, 'state': 'done',
+        })
+        card, _get = self._scan(URL)
+        self.assertEqual(card['status'], 'success', card)
+        self.assertTrue(card['warnings'])
+        self.assertIn('même numéro', card['warnings'][0])
+        self.assertIn(other.reference, card['warnings'][0])
+        record = self.ScanRecord.search([('qr_uuid', '=', UUID)])
+        self.assertEqual(record.state, 'done')
+        self.assertTrue(record.invoice_id)
+
     def test_ot_manager_cannot_submit_a_manual_entry(self):
         from odoo.exceptions import UserError
         with self.assertRaises(UserError):
