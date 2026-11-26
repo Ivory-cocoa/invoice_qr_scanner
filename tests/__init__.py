@@ -13,3 +13,4 @@ from . import test_otp_delivery
 from . import test_bulk_process
 from . import test_scan_desk
 from . import test_scan_list
+from . import test_ot_manager_profile

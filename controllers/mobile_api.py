@@ -234,6 +234,42 @@ def require_role(*group_xmlids):
     return decorator
 
 
+def forbid_ot_manager_only(func):
+    """Refuser un endpoint au profil « Gestionnaire OT » seul.
+
+    Le Gestionnaire OT consulte les factures déjà scannées et les rattache à
+    des OT. Il ne vérifie pas les factures (création du scan, contrôle de
+    doublon) et ne les traite pas : ces gestes restent ceux du Vérificateur et
+    du Traiteur. Un utilisateur qui CUMULE un de ces profils les garde.
+
+    À appliquer SOUS ``@require_auth``. La règle vit ici, côté serveur : un
+    ancien APK ou un appel direct à l'API est refusé de la même façon.
+    """
+    @wraps(func)
+    def wrapper(self, *args, user=None, **kwargs):
+        if user is not None and is_ot_manager_only(user):
+            return api_error(
+                'ACCESS_DENIED',
+                "Le profil Gestionnaire OT ne vérifie pas et ne traite pas "
+                "les factures : il consulte celles déjà scannées et les "
+                "rattache aux OT.",
+                status=403,
+            )
+        return func(self, *args, user=user, **kwargs)
+    return wrapper
+
+
+def is_ot_manager_only(user):
+    """Vrai si l'utilisateur est Gestionnaire OT sans profil de scan."""
+    if not user.has_group('invoice_qr_scanner.group_invoice_scanner_ot_manager'):
+        return False
+    return not any(user.has_group(group) for group in (
+        'invoice_qr_scanner.group_invoice_scanner_manager',
+        'invoice_qr_scanner.group_invoice_scanner_verificateur',
+        'invoice_qr_scanner.group_invoice_scanner_traiteur',
+    ))
+
+
 def validate_date_param(value):
     """Valide une date de filtre (YYYY-MM-DD). Retourne la chaîne validée ou None."""
     if not value:
@@ -736,6 +772,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def scan_with_data(self, user=None, **kw):
         """Scanner un QR-code avec données pré-extraites côté client.
         
@@ -1000,6 +1037,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def scan(self, user=None, **kw):
         """Scanner un QR-code : le SERVEUR interroge la DGI.
 
@@ -1044,6 +1082,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def check_qr_code(self, user=None, **kw):
         """Vérifier si un QR-code a déjà été scanné (sans créer de facture).
         
@@ -1082,10 +1121,70 @@ class InvoiceScannerMobileAPI(http.Controller):
             'qr_uuid': qr_uuid
         })
 
+    @http.route('/api/v1/invoice-scanner/scan/lookup', type='http', auth='none',
+                methods=['POST', 'OPTIONS'], csrf=False, cors='*')
+    @api_exception_handler
+    @require_auth
+    @require_role('invoice_qr_scanner.group_invoice_scanner_ot_manager')
+    def lookup_scan(self, user=None, **kw):
+        """Retrouver une facture DÉJÀ scannée à partir de son QR-code.
+
+        Geste du Gestionnaire OT : il présente une facture pour savoir si elle
+        est rattachée à un OT. Lecture seule, strictement : rien n'est créé,
+        la DGI n'est pas interrogée, le compteur de doublons ne bouge pas, et
+        la réponse ne dit rien des doublons.
+
+        Body JSON:
+        - qr_url: contenu du QR-code (ou l'identifiant de vérification seul)
+
+        Returns:
+        - found: Boolean
+        - record: la facture scannée, si elle existe et a été créée
+        - reason: 'not_scanned' | 'not_ready' quand found est faux
+        """
+        if request.httprequest.method == 'OPTIONS':
+            return Response(status=200)
+
+        data = get_json_body()
+        qr_url = str(data.get('qr_url') or '').strip()
+        if not qr_url:
+            return api_error('VALIDATION_ERROR', 'URL du QR-code requise', status=400)
+
+        ScanRecord = request.env['invoice.scan.record'].sudo()
+        qr_uuid = ScanRecord.extract_uuid_from_url(qr_url)
+        if not qr_uuid:
+            return api_error(
+                'INVALID_URL',
+                "Ce QR-code n'est pas celui d'une facture certifiée DGI.",
+                status=400)
+
+        records = ScanRecord.search([
+            ('qr_uuid', '=', qr_uuid),
+            ('company_id', 'in', request.env.companies.ids),
+        ], order='id desc')
+        record = records.filtered(lambda r: r.state in ('done', 'processed'))[:1]
+        if not record:
+            return api_response({
+                'found': False,
+                'qr_uuid': qr_uuid,
+                'reason': 'not_ready' if records else 'not_scanned',
+            }, message=(
+                "Cette facture a été scannée mais n'est pas encore validée "
+                "(scan en erreur ou en attente)." if records else
+                "Cette facture n'a pas encore été scannée par un Vérificateur."
+            ))
+
+        values = self._format_scan_record(record)
+        # Le Gestionnaire OT ne contrôle pas les doublons : rien n'en sort.
+        for key in [k for k in values if 'duplicate' in k or 'reprocess' in k]:
+            values.pop(key)
+        return api_response({'found': True, 'qr_uuid': qr_uuid, 'record': values})
+
     @http.route('/api/v1/invoice-scanner/report-duplicate', type='http', auth='none',
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def report_duplicate(self, user=None, **kw):
         """Signaler une tentative de scan doublon détectée côté client.
         
@@ -1726,6 +1825,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def sync_offline_scans(self, user=None, **kw):
         """Synchroniser les scans effectués hors ligne.
         
@@ -1829,6 +1929,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def sync_parsed_scans(self, user=None, **kw):
         """Synchroniser les scans avec données DGI pré-extraites côté mobile.
         
@@ -2189,6 +2290,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def retry_error(self, record_id, user=None, **kw):
         """Réessayer la création de facture pour un scan en erreur.
         
@@ -2246,6 +2348,7 @@ class InvoiceScannerMobileAPI(http.Controller):
                 methods=['POST', 'OPTIONS'], csrf=False, cors='*')
     @api_exception_handler
     @require_auth
+    @forbid_ot_manager_only
     def bulk_retry_errors(self, user=None, **kw):
         """Réessayer en masse les scans en erreur.
 

@@ -1,6 +1,7 @@
 /// Invoice Picker Screen — Gestionnaire OT
-/// Liste paginée des factures déjà scannées, sélectionnables pour
-/// être liées à un ou plusieurs OTs.
+/// Liste paginée des factures déjà scannées : recherche d'une facture,
+/// filtre « liées à un OT / non liées », et ouverture d'une facture pour
+/// voir ses OT et la lier à un ou plusieurs OTs.
 library;
 
 import 'dart:async';
@@ -12,8 +13,33 @@ import '../core/theme/app_theme.dart';
 import '../widgets/invoice_status_sheet.dart';
 import 'link_to_ot_screen.dart';
 
+/// Filtre de la liste selon le lien aux OT.
+enum InvoiceLinkFilter {
+  all('all', 'Toutes'),
+  linked('linked', 'Liées à un OT'),
+  unlinked('unlinked', 'Non liées');
+
+  const InvoiceLinkFilter(this.apiValue, this.label);
+  final String apiValue;
+  final String label;
+
+  /// Garde une facture selon son nombre d'OT liés. Sert de filet quand le
+  /// serveur (ancienne version) ignore le filtre demandé.
+  bool keeps(int linkedOtCount) => switch (this) {
+    InvoiceLinkFilter.all => true,
+    InvoiceLinkFilter.linked => linkedOtCount > 0,
+    InvoiceLinkFilter.unlinked => linkedOtCount == 0,
+  };
+}
+
 class InvoicePickerScreen extends StatefulWidget {
-  const InvoicePickerScreen({super.key});
+  const InvoicePickerScreen({
+    super.key,
+    this.initialFilter = InvoiceLinkFilter.all,
+  });
+
+  /// Filtre affiché à l'ouverture (l'utilisateur peut en changer).
+  final InvoiceLinkFilter initialFilter;
 
   @override
   State<InvoicePickerScreen> createState() => _InvoicePickerScreenState();
@@ -32,6 +58,12 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
   bool _hasNext = true;
   String? _error;
   String _search = '';
+  late InvoiceLinkFilter _filter = widget.initialFilter;
+  // Chaque chargement porte un numéro : une réponse arrivée après un
+  // changement de recherche ou de filtre est ignorée.
+  int _generation = 0;
+  int _autoLoads = 0;
+  static const int _maxAutoLoads = 5;
 
   @override
   void initState() {
@@ -57,7 +89,10 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
   }
 
   Future<void> _load({bool reset = false}) async {
-    if (_loading) return;
+    if (_loading && !reset) return;
+    if (reset) _generation++;
+    final generation = _generation;
+    final filter = _filter;
     setState(() {
       _loading = true;
       if (reset) {
@@ -71,8 +106,9 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
       search: _search,
       page: _page,
       limit: _limit,
+      linkState: filter.apiValue,
     );
-    if (!mounted) return;
+    if (!mounted || generation != _generation) return;
     setState(() {
       _loading = false;
       if (resp.success && resp.data != null) {
@@ -80,7 +116,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
         final records = List<Map<String, dynamic>>.from(
           data['records'] ?? const [],
         );
-        _items.addAll(records);
+        _items.addAll(records.where((r) => filter.keeps(_linkedCount(r))));
         final pag = data['pagination'] as Map<String, dynamic>?;
         _hasNext = pag?['has_next'] == true;
         if (_hasNext) _page += 1;
@@ -88,6 +124,26 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
         _error = resp.errorMessage ?? 'Erreur de chargement';
       }
     });
+    // Filet pour un serveur ancien qui ignore le filtre : la page reçue peut
+    // être presque vide une fois filtrée, donc impossible à faire défiler.
+    // On enchaîne alors quelques pages, sans jamais boucler sans fin.
+    if (reset) _autoLoads = 0;
+    if (_error == null &&
+        _hasNext &&
+        _items.length < _limit &&
+        _autoLoads < _maxAutoLoads) {
+      _autoLoads++;
+      await _load();
+    }
+  }
+
+  static int _linkedCount(Map<String, dynamic> scan) =>
+      (scan['linked_ot_count'] as num?)?.toInt() ?? 0;
+
+  void _onFilterChanged(InvoiceLinkFilter filter) {
+    if (filter == _filter) return;
+    setState(() => _filter = filter);
+    _load(reset: true);
   }
 
   void _onSearchChanged(String v) {
@@ -174,7 +230,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
   Widget build(BuildContext context) {
     final primary = AppTheme.getPrimary(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Sélectionner une facture')),
+      appBar: AppBar(title: const Text('Factures scannées')),
       body: SafeArea(
         child: Column(
           children: [
@@ -184,7 +240,7 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                 controller: _searchCtrl,
                 onChanged: _onSearchChanged,
                 decoration: InputDecoration(
-                  hintText: 'Rechercher (fournisseur, n° facture, ref)',
+                  hintText: 'N° de facture, fournisseur, OT…',
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: _searchCtrl.text.isEmpty
                       ? null
@@ -207,6 +263,25 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                 ),
               ),
             ),
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  for (final filter in InvoiceLinkFilter.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(filter.label),
+                        selected: _filter == filter,
+                        onSelected: (_) => _onFilterChanged(filter),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () => _load(reset: true),
@@ -255,11 +330,22 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
     if (_items.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 80),
-          Icon(Icons.inbox_rounded, size: 64, color: Colors.grey),
-          SizedBox(height: 12),
-          Center(child: Text('Aucune facture scannée trouvée.')),
+        children: [
+          const SizedBox(height: 80),
+          const Icon(Icons.inbox_rounded, size: 64, color: Colors.grey),
+          const SizedBox(height: 12),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(switch (_filter) {
+                InvoiceLinkFilter.linked =>
+                  'Aucune facture liée à un OT ne correspond.',
+                InvoiceLinkFilter.unlinked =>
+                  'Aucune facture non liée ne correspond.',
+                InvoiceLinkFilter.all => 'Aucune facture scannée trouvée.',
+              }, textAlign: TextAlign.center),
+            ),
+          ),
         ],
       );
     }
@@ -282,7 +368,11 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
         final currency = (s['currency'] ?? 'XOF').toString();
         final date = _formatDate(s['invoice_date']?.toString());
         final ref = (s['reference'] ?? '').toString();
-        final linkedCount = (s['linked_ot_count'] ?? 0) as int;
+        final linkedCount = _linkedCount(s);
+        final otRefs = (s['linked_ot_refs'] ?? '').toString();
+        final linkColor = linkedCount > 0
+            ? AppTheme.successColor
+            : AppTheme.warningColor;
 
         return Material(
           color: Theme.of(context).cardColor,
@@ -350,23 +440,37 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                                 color: AppTheme.getTextMuted(context),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            if (linkedCount > 0) ...[
-                              Icon(
-                                Icons.link_rounded,
-                                size: 13,
-                                color: primary,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '$linkedCount OT(s) lié(s)',
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // Liée ou non : l'information que le Gestionnaire OT
+                        // vient chercher, toujours affichée.
+                        Row(
+                          children: [
+                            Icon(
+                              linkedCount > 0
+                                  ? Icons.link_rounded
+                                  : Icons.link_off_rounded,
+                              size: 14,
+                              color: linkColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                linkedCount == 0
+                                    ? 'Non liée à un OT'
+                                    : otRefs.isNotEmpty
+                                    ? 'Liée : $otRefs'
+                                    : '$linkedCount OT(s) lié(s)',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: primary,
+                                  fontWeight: FontWeight.w700,
+                                  color: linkColor,
                                 ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       ],
