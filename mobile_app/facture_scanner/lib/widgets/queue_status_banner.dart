@@ -201,16 +201,26 @@ class QueueStatusBanner extends StatelessWidget {
         record.id > 0;
     // Un doublon n'est pas une facture créée : couleur et icône d'alerte,
     // pour qu'il ne se confonde pas avec un succès d'un simple coup d'œil.
-    final color = item.isDuplicate
+    // Une autre facture enregistrée porte le même numéro : la carte passe en
+    // alerte et ne s'efface PAS toute seule — le secrétariat doit la voir
+    // avant de transmettre la facture à la comptabilité.
+    final sameNumber = record?.hasSameNumberWarning ?? false;
+    final color = sameNumber
+        ? AppTheme.getError(context)
+        : item.isDuplicate
         ? AppTheme.getWarning(context)
         : AppTheme.successColor;
-    final background = item.isDuplicate
+    final background = sameNumber
+        ? AppTheme.getErrorLight(context)
+        : item.isDuplicate
         ? AppTheme.getWarningLight(context)
         : AppTheme.getSuccessLight(context);
     return _AutoDismissCard(
       key: ValueKey(item.id),
       // Laisser plus de temps pour lier à un OT quand l'action est proposée.
-      dismissDelay: Duration(seconds: canLinkToOt ? 12 : 5),
+      dismissDelay: sameNumber
+          ? const Duration(hours: 12)
+          : Duration(seconds: canLinkToOt ? 12 : 5),
       onDismissed: () => queue.removeItem(item.id),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -244,7 +254,9 @@ class QueueStatusBanner extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    item.isDuplicate
+                    sameNumber
+                        ? Icons.warning_amber_rounded
+                        : item.isDuplicate
                         ? Icons.content_copy_rounded
                         : Icons.check_circle_rounded,
                     color: color,
@@ -259,7 +271,7 @@ class QueueStatusBanner extends StatelessWidget {
                         fontSize: 13,
                         color: color,
                       ),
-                      maxLines: 1,
+                      maxLines: sameNumber ? 3 : 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -297,6 +309,11 @@ class QueueStatusBanner extends StatelessWidget {
         ? 'Doublon'
         : (item.resultMessage ?? 'Facture créée');
     if (record == null) return status;
+    if (record.hasSameNumberWarning) {
+      return 'MÊME NUMÉRO déjà enregistré — '
+          '${record.invoiceNumberDgi} • ${record.supplierName}. '
+          'Touchez pour le détail.';
+    }
     final what = [
       if (record.supplierName.isNotEmpty) record.supplierName,
       if (record.invoiceNumberDgi.isNotEmpty) record.invoiceNumberDgi,

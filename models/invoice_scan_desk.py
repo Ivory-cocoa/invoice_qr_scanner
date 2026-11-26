@@ -331,7 +331,8 @@ class InvoiceScanDesk(models.AbstractModel):
             return self._desk_card(
                 'dgi', 'success',
                 _("Avoir enregistré") if is_refund else _("Facture créée"),
-                lines=self._desk_dgi_lines(record), warnings=warnings,
+                lines=self._desk_dgi_lines(record),
+                warnings=self._desk_same_number(record) + warnings,
                 actions=self._desk_dgi_actions(record))
 
         code = outcome['error_code']
@@ -392,7 +393,8 @@ class InvoiceScanDesk(models.AbstractModel):
         if outcome['ok']:
             return self._desk_card(
                 'dgi', 'success', _("Facture marquée traitée"),
-                lines=self._desk_dgi_lines(record), warnings=warnings,
+                lines=self._desk_dgi_lines(record),
+                warnings=self._desk_same_number(record) + warnings,
                 actions=self._desk_dgi_actions(record))
         if outcome['error_code'] == 'NOT_FOUND':
             return self._desk_card(
@@ -411,6 +413,12 @@ class InvoiceScanDesk(models.AbstractModel):
                 count=record.reprocess_attempt_count),
             lines=self._desk_dgi_lines(record), warnings=warnings,
             actions=self._desk_dgi_actions(record))
+
+    @api.model
+    def _desk_same_number(self, record):
+        """Avertissement « même numéro de facture », en tête des autres."""
+        warning = record._same_number_warning()
+        return [warning] if warning else []
 
     @api.model
     def _desk_dgi_lookup(self, parsed, warnings):

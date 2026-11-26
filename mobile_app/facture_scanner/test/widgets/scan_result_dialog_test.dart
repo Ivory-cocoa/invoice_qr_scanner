@@ -172,4 +172,39 @@ void main() {
     expect(find.text('QR-code illisible'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('même numéro déjà enregistré : bandeau et en-tête d\'alerte', (
+    tester,
+  ) async {
+    const warning =
+        'ATTENTION — même numéro de facture. La facture n° 2600123456 de ce '
+        'fournisseur est déjà enregistré(e) dans Odoo (SCAN/2026/0007).';
+    final record = ScanRecord.fromJson({
+      'id': 12,
+      'reference': 'SCAN/2026/0042',
+      'supplier_name': 'TERMINAL DE SAN-PEDRO',
+      'invoice_number_dgi': '2600123456',
+      'amount_ttc': 1250000,
+      'state': 'done',
+      'same_number_count': 1,
+      'same_number_warning': warning,
+    });
+    expect(record.hasSameNumberWarning, isTrue);
+
+    await _open(tester, ScanState.success, record: record);
+    expect(find.byKey(const ValueKey('same-number-banner')), findsOneWidget);
+    expect(find.text(warning), findsOneWidget);
+    expect(
+      find.text('Attention : même numéro déjà enregistré'),
+      findsOneWidget,
+    );
+    // La facture reste enregistrée : c'est un avertissement, pas un refus.
+    expect(find.text('Facture enregistrée'), findsOneWidget);
+  });
+
+  testWidgets('sans double : aucun bandeau', (tester) async {
+    await _open(tester, ScanState.success, record: _record());
+    expect(find.byKey(const ValueKey('same-number-banner')), findsNothing);
+    expect(_record().hasSameNumberWarning, isFalse);
+  });
 }

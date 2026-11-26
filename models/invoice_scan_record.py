@@ -474,6 +474,10 @@ class InvoiceScanRecord(models.Model):
         if vals.get('state') in ('done', 'processed'):
             # La facture attendue par un Gestionnaire OT vient d'être vérifiée.
             self.env['invoice.scan.pending.invoice']._close_for_scans(self)
+        if vals.get('state') == 'done':
+            # Facture enregistrée : si une autre porte le même numéro, le
+            # fil du scan en garde la trace.
+            self._log_same_number_warning()
         return result
 
     def _check_document_type_change(self, vals):
@@ -1147,6 +1151,32 @@ class InvoiceScanRecord(models.Model):
             if len(refs) > 5:
                 shown += '…'
             record.same_number_refs = shown or False
+
+    def _same_number_warning(self):
+        """Avertissement à montrer dès le scan, ou ``False``.
+
+        Un avertissement, pas un blocage : la facture vient d'être certifiée
+        par la DGI et reste enregistrée. C'est au secrétariat de décider, en
+        connaissance de cause, avant de la transmettre à la comptabilité.
+        """
+        self.ensure_one()
+        if not self.same_number_count:
+            return False
+        kind = _("L'avoir") if self.document_type == 'refund' else _("La facture")
+        return _(
+            "ATTENTION — même numéro de facture. %(kind)s n° %(number)s de ce "
+            "fournisseur est déjà enregistré(e) dans Odoo (%(refs)s). "
+            "Vérifiez qu'il ne s'agit pas de la même facture avant de la "
+            "transmettre à la comptabilité.",
+            kind=kind, number=self.invoice_number_dgi or '?',
+            refs=self.same_number_refs or '')
+
+    def _log_same_number_warning(self):
+        """Tracer l'avertissement dans le fil du scan, une fois enregistré."""
+        for record in self.sudo():
+            warning = record._same_number_warning()
+            if warning:
+                record.message_post(body=warning, message_type='notification')
 
     @api.model
     def _search_same_number_count(self, operator, value):

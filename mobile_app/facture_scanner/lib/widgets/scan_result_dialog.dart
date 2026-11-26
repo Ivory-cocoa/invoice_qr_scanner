@@ -84,6 +84,11 @@ class ScanResultDialog extends StatelessWidget {
                         ),
                       ),
 
+                    // Même numéro de facture déjà enregistré : avant tout
+                    // le reste, quel que soit l'état affiché.
+                    if (scanRecord != null && scanRecord!.hasSameNumberWarning)
+                      _buildSameNumberBanner(context),
+
                     if (scanRecord != null && scanRecord!.isRefund)
                       _buildRefundBanner(context),
 
@@ -143,6 +148,13 @@ class ScanResultDialog extends StatelessWidget {
         subtitle = isRefund
             ? 'Avoir fournisseur — créance, pas une dette'
             : 'Facture créée avec succès';
+        // Enregistrée, mais une autre porte le même numéro : l'en-tête ne
+        // doit pas ressembler à un succès ordinaire.
+        if (scanRecord?.hasSameNumberWarning ?? false) {
+          color = AppTheme.getError(context);
+          icon = Icons.warning_amber_rounded;
+          subtitle = 'Attention : même numéro déjà enregistré';
+        }
         break;
       case ScanState.duplicate:
         color = AppTheme.getWarning(context);
@@ -249,6 +261,39 @@ class ScanResultDialog extends StatelessWidget {
   /// Sans lui, l'écran de succès d'un avoir est visuellement indiscernable de
   /// celui d'une facture — et c'est cette indiscernabilité qui a permis à des
   /// avoirs d'être traités comme des factures pendant des mois.
+  Widget _buildSameNumberBanner(BuildContext context) {
+    final errorColor = AppTheme.getError(context);
+    return Container(
+      key: const ValueKey('same-number-banner'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.getErrorLight(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: errorColor, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.file_copy_rounded, color: errorColor, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              scanRecord!.sameNumberWarning,
+              style: TextStyle(
+                color: errorColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRefundBanner(BuildContext context) {
     final errorColor = AppTheme.getError(context);
 
