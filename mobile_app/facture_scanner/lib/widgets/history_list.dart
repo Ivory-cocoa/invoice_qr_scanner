@@ -55,7 +55,9 @@ class HistoryList extends StatelessWidget {
           color: AppTheme.getPrimary(context),
           backgroundColor: AppTheme.getSurfaceElevated(context),
           child: ListView.builder(
-            padding: const EdgeInsets.all(16),
+            // Marge basse : la dernière carte reste lisible au-dessus du
+            // bouton flottant « Scanner ».
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
             itemCount: scan.history.length,
             itemBuilder: (context, index) {
               return _buildHistoryItem(context, scan.history[index], index);
@@ -107,15 +109,22 @@ class HistoryList extends StatelessWidget {
                                   _buildRefundChip(context),
                                   const SizedBox(width: 6),
                                 ],
+                                // La référence rétrécit sur un petit écran
+                                // au lieu d'être coupée.
                                 Flexible(
-                                  child: Text(
-                                    record.reference,
-                                    style: TextStyle(
-                                      color: AppTheme.getTextPrimary(context),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 17,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      record.reference,
+                                      style: TextStyle(
+                                        color: AppTheme.getTextPrimary(context),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 17,
+                                      ),
+                                      maxLines: 1,
+                                      softWrap: false,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
@@ -130,7 +139,7 @@ class HistoryList extends StatelessWidget {
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
                                   ),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -157,35 +166,27 @@ class HistoryList extends StatelessWidget {
 
                   const SizedBox(height: 14),
 
-                  // Details row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDetailColumn(
-                          context,
-                          'N° Facture DGI',
-                          record.invoiceNumberDgi.isNotEmpty
-                              ? record.invoiceNumberDgi
-                              : '-',
-                          Icons.receipt_long_rounded,
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: AppTheme.getDivider(context),
-                      ),
-                      Expanded(
-                        child: _buildDetailColumn(
-                          context,
-                          record.isRefund ? 'Montant (avoir)' : 'Montant',
-                          record.formattedAmount,
-                          Icons.payments_rounded,
-                          isAmount: true,
-                          isNegative: record.isRefund,
-                        ),
-                      ),
-                    ],
+                  // Numéro de facture DGI : c'est par lui que l'on cherche une
+                  // facture. Il a toute la largeur de la carte et n'est jamais
+                  // coupé (il rétrécit légèrement s'il le faut).
+                  _buildDetailColumn(
+                    context,
+                    'N° Facture DGI',
+                    record.invoiceNumberDgi.isNotEmpty
+                        ? record.invoiceNumberDgi
+                        : '-',
+                    Icons.receipt_long_rounded,
+                    neverCut: true,
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailColumn(
+                    context,
+                    record.isRefund ? 'Montant (avoir)' : 'Montant',
+                    record.formattedAmount,
+                    Icons.payments_rounded,
+                    isAmount: true,
+                    isNegative: record.isRefund,
+                    neverCut: true,
                   ),
 
                   const SizedBox(height: 12),
@@ -200,63 +201,33 @@ class HistoryList extends StatelessWidget {
                       color: AppTheme.getSurfaceLight(context),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Row(
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 6,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Icon(
-                          Icons.schedule_rounded,
-                          size: 16,
-                          color: AppTheme.getTextMuted(context),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          record.scanDate != null
-                              ? dateFormat.format(record.scanDate!)
-                              : '-',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.getTextMuted(context),
-                          ),
-                        ),
-                        const Spacer(),
-                        if (record.isProcessed)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 16,
+                              color: AppTheme.getTextSecondary(context),
                             ),
-                            margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(
-                              color: AppTheme.getPrimary(
-                                context,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: AppTheme.getPrimary(
-                                  context,
-                                ).withValues(alpha: 0.3),
+                            const SizedBox(width: 6),
+                            Text(
+                              record.scanDate != null
+                                  ? dateFormat.format(record.scanDate!)
+                                  : '-',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.getTextSecondary(context),
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.verified_rounded,
-                                  size: 12,
-                                  color: AppTheme.getPrimary(context),
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  'Traité',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.getPrimary(context),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
+                        ),
                         if (record.invoiceName != null)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -266,7 +237,7 @@ class HistoryList extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: AppTheme.getPrimary(
                                 context,
-                              ).withValues(alpha: 0.1),
+                              ).withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -278,12 +249,15 @@ class HistoryList extends StatelessWidget {
                                   color: AppTheme.getPrimary(context),
                                 ),
                                 const SizedBox(width: 4),
-                                Text(
-                                  record.invoiceName!,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.getPrimary(context),
-                                    fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Text(
+                                    record.invoiceName!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.getPrimary(context),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
@@ -477,7 +451,24 @@ class HistoryList extends StatelessWidget {
     IconData icon, {
     bool isAmount = false,
     bool isNegative = false,
+    bool neverCut = false,
   }) {
+    final valueText = Text(
+      value,
+      style: TextStyle(
+        color: isNegative
+            ? AppTheme.getError(context)
+            : (isAmount
+                  ? AppTheme.getSuccess(context)
+                  : AppTheme.getTextPrimary(context)),
+        fontWeight: FontWeight.w700,
+        fontSize: neverCut ? 16 : 15,
+        letterSpacing: neverCut && !isAmount ? 0.3 : null,
+      ),
+      maxLines: 1,
+      overflow: neverCut ? TextOverflow.visible : TextOverflow.ellipsis,
+      softWrap: false,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
@@ -498,20 +489,14 @@ class HistoryList extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              color: isNegative
-                  ? AppTheme.getError(context)
-                  : (isAmount
-                        ? AppTheme.getSuccess(context)
-                        : AppTheme.getTextPrimary(context)),
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          // Un long numéro rétrécit pour tenir sur la ligne, sans être coupé.
+          neverCut
+              ? FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: valueText,
+                )
+              : valueText,
         ],
       ),
     );
@@ -693,6 +678,10 @@ class _RecordDetailsSheet extends StatelessWidget {
     final dateFormat = DateFormat('dd/MM/yyyy à HH:mm');
 
     return Container(
+      // Jamais plus haute que l'écran : le contenu défile à l'intérieur.
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceElevated(context),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -754,100 +743,103 @@ class _RecordDetailsSheet extends StatelessWidget {
 
           const Divider(height: 1),
 
-          // Content
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                _buildDetailRow(
-                  context,
-                  'Référence',
-                  record.reference,
-                  Icons.tag_rounded,
-                ),
-                if (record.supplierName.isNotEmpty)
+          // Content (défile si la fiche est plus longue que l'écran)
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
                   _buildDetailRow(
                     context,
-                    'Fournisseur',
-                    record.supplierName,
-                    Icons.business_rounded,
+                    'Référence',
+                    record.reference,
+                    Icons.tag_rounded,
                   ),
-                if (record.invoiceNumberDgi.isNotEmpty)
-                  _buildDetailRow(
-                    context,
-                    'N° Facture DGI',
-                    record.invoiceNumberDgi,
-                    Icons.receipt_long_rounded,
-                  ),
-                _buildDetailRow(
-                  context,
-                  record.isRefund ? 'Nature' : 'Nature',
-                  record.isRefund ? 'AVOIR fournisseur' : 'Facture',
-                  record.isRefund
-                      ? Icons.undo_rounded
-                      : Icons.receipt_long_rounded,
-                ),
-                _buildDetailRow(
-                  context,
-                  record.isRefund ? 'Montant de l\'avoir' : 'Montant',
-                  record.formattedAmount,
-                  Icons.payments_rounded,
-                  highlight: true,
-                ),
-                if (record.isRefund && record.originInvoiceNumberDgi.isNotEmpty)
-                  _buildDetailRow(
-                    context,
-                    'Facture d\'origine',
-                    record.originScanReference.isNotEmpty
-                        ? '${record.originInvoiceNumberDgi} (${record.originScanReference})'
-                        : record.originInvoiceNumberDgi,
-                    Icons.call_split_rounded,
-                  ),
-                if (record.invoiceName != null)
-                  _buildDetailRow(
-                    context,
-                    record.isRefund ? 'Avoir Odoo' : 'Facture Odoo',
-                    record.invoiceName!,
-                    Icons.link_rounded,
-                  ),
-                if (record.scanDate != null)
-                  _buildDetailRow(
-                    context,
-                    'Date du scan',
-                    dateFormat.format(record.scanDate!),
-                    Icons.schedule_rounded,
-                  ),
-                if (record.isProcessed && record.processedBy != null)
-                  _buildDetailRow(
-                    context,
-                    'Traité par',
-                    record.processedBy!,
-                    Icons.verified_rounded,
-                  ),
-                if (record.isProcessed && record.processedDate != null)
-                  _buildDetailRow(
-                    context,
-                    'Date de traitement',
-                    dateFormat.format(record.processedDate!),
-                    Icons.event_available_rounded,
-                  ),
-                if (record.hasOtLinks)
-                  ...record.otLinks.map((link) {
-                    final ref = link.otReference.isNotEmpty
-                        ? link.otReference
-                        : 'OT #${link.otId ?? '?'}';
-                    final detail = [
-                      if (link.costType.isNotEmpty) link.costType,
-                      if (link.amount > 0) link.formattedAmount,
-                    ].join(' • ');
-                    return _buildDetailRow(
+                  if (record.supplierName.isNotEmpty)
+                    _buildDetailRow(
                       context,
-                      'Ordre de Transit',
-                      detail.isEmpty ? ref : '$ref  ($detail)',
-                      Icons.local_shipping_rounded,
-                    );
-                  }),
-              ],
+                      'Fournisseur',
+                      record.supplierName,
+                      Icons.business_rounded,
+                    ),
+                  if (record.invoiceNumberDgi.isNotEmpty)
+                    _buildDetailRow(
+                      context,
+                      'N° Facture DGI',
+                      record.invoiceNumberDgi,
+                      Icons.receipt_long_rounded,
+                    ),
+                  _buildDetailRow(
+                    context,
+                    record.isRefund ? 'Nature' : 'Nature',
+                    record.isRefund ? 'AVOIR fournisseur' : 'Facture',
+                    record.isRefund
+                        ? Icons.undo_rounded
+                        : Icons.receipt_long_rounded,
+                  ),
+                  _buildDetailRow(
+                    context,
+                    record.isRefund ? 'Montant de l\'avoir' : 'Montant',
+                    record.formattedAmount,
+                    Icons.payments_rounded,
+                    highlight: true,
+                  ),
+                  if (record.isRefund &&
+                      record.originInvoiceNumberDgi.isNotEmpty)
+                    _buildDetailRow(
+                      context,
+                      'Facture d\'origine',
+                      record.originScanReference.isNotEmpty
+                          ? '${record.originInvoiceNumberDgi} (${record.originScanReference})'
+                          : record.originInvoiceNumberDgi,
+                      Icons.call_split_rounded,
+                    ),
+                  if (record.invoiceName != null)
+                    _buildDetailRow(
+                      context,
+                      record.isRefund ? 'Avoir Odoo' : 'Facture Odoo',
+                      record.invoiceName!,
+                      Icons.link_rounded,
+                    ),
+                  if (record.scanDate != null)
+                    _buildDetailRow(
+                      context,
+                      'Date du scan',
+                      dateFormat.format(record.scanDate!),
+                      Icons.schedule_rounded,
+                    ),
+                  if (record.isProcessed && record.processedBy != null)
+                    _buildDetailRow(
+                      context,
+                      'Traité par',
+                      record.processedBy!,
+                      Icons.verified_rounded,
+                    ),
+                  if (record.isProcessed && record.processedDate != null)
+                    _buildDetailRow(
+                      context,
+                      'Date de traitement',
+                      dateFormat.format(record.processedDate!),
+                      Icons.event_available_rounded,
+                    ),
+                  if (record.hasOtLinks)
+                    ...record.otLinks.map((link) {
+                      final ref = link.otReference.isNotEmpty
+                          ? link.otReference
+                          : 'OT #${link.otId ?? '?'}';
+                      final detail = [
+                        if (link.costType.isNotEmpty) link.costType,
+                        if (link.amount > 0) link.formattedAmount,
+                      ].join(' • ');
+                      return _buildDetailRow(
+                        context,
+                        'Ordre de Transit',
+                        detail.isEmpty ? ref : '$ref  ($detail)',
+                        Icons.local_shipping_rounded,
+                      );
+                    }),
+                ],
+              ),
             ),
           ),
 
@@ -871,7 +863,9 @@ class _RecordDetailsSheet extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.getPrimary(context),
-                      foregroundColor: Colors.white,
+                      foregroundColor: AppTheme.onColor(
+                        AppTheme.getPrimary(context),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -1082,9 +1076,13 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
       } else if (scan.sameNumberConfirmation == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Row(
+            content: Row(
               children: [
-                Icon(Icons.error_rounded, color: Colors.white, size: 20),
+                Icon(
+                  Icons.error_rounded,
+                  color: AppTheme.onColor(AppTheme.getError(context)),
+                  size: 20,
+                ),
                 SizedBox(width: 12),
                 Text('Erreur lors du changement de statut'),
               ],
@@ -1109,10 +1107,10 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
       onPressed: _isLoading ? null : _toggleProcessed,
       style: ElevatedButton.styleFrom(
         backgroundColor: isProcessed
-            ? Colors.orange.shade50
+            ? AppTheme.getWarning(context).withValues(alpha: 0.14)
             : AppTheme.getPrimary(context).withValues(alpha: 0.1),
         foregroundColor: isProcessed
-            ? Colors.orange.shade700
+            ? AppTheme.getWarning(context)
             : AppTheme.getPrimary(context),
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1120,7 +1118,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
             color: isProcessed
-                ? Colors.orange.shade300
+                ? AppTheme.getWarning(context).withValues(alpha: 0.45)
                 : AppTheme.getPrimary(context).withValues(alpha: 0.3),
           ),
         ),
@@ -1132,7 +1130,7 @@ class _ProcessToggleButtonState extends State<_ProcessToggleButton> {
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: isProcessed
-                    ? Colors.orange.shade700
+                    ? AppTheme.getWarning(context)
                     : AppTheme.getPrimary(context),
               ),
             )

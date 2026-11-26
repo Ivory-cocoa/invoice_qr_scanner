@@ -280,7 +280,7 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
         icon = Icons.error_rounded;
         break;
       default:
-        color = AppTheme.infoColor;
+        color = AppTheme.getInfo(context);
         icon = Icons.pending_rounded;
     }
 
@@ -314,8 +314,8 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
         textColor = AppTheme.getError(context);
         break;
       default:
-        bgColor = AppTheme.infoLight;
-        textColor = AppTheme.infoColor;
+        bgColor = AppTheme.getInfoLight(context);
+        textColor = AppTheme.getInfo(context);
     }
 
     return Container(
@@ -521,13 +521,17 @@ class _ScanHistoryCardState extends State<ScanHistoryCard>
               Icon(
                 icon,
                 size: 18,
-                color: isPrimary ? Colors.white : AppTheme.textSecondary,
+                color: isPrimary
+                    ? Colors.white
+                    : AppTheme.getTextSecondary(context),
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color: isPrimary ? Colors.white : AppTheme.textSecondary,
+                  color: isPrimary
+                      ? Colors.white
+                      : AppTheme.getTextSecondary(context),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),

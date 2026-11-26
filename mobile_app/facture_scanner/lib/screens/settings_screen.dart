@@ -229,7 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 : 'Synchronisation manuelle uniquement',
                           ),
                           value: _autoSyncEnabled,
-                          activeThumbColor: AppTheme.primaryColor,
+                          activeThumbColor: AppTheme.getPrimary(context),
                           onChanged: (value) {
                             setState(() => _autoSyncEnabled = value);
                           },
@@ -247,7 +247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                               child: Icon(
                                 Icons.access_time,
-                                color: AppTheme.primaryColor,
+                                color: AppTheme.getPrimary(context),
                               ),
                             ),
                             title: const Text('Heure de synchronisation'),
@@ -341,7 +341,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                                 child: Icon(
                                   Icons.timer_rounded,
-                                  color: AppTheme.primaryColor,
+                                  color: AppTheme.getPrimary(context),
                                 ),
                               ),
                               title: const Text(
@@ -368,7 +368,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           max: 30,
                                           divisions: 29,
                                           label: '${scan.verificationTimeout}s',
-                                          activeColor: AppTheme.primaryColor,
+                                          activeColor: AppTheme.getPrimary(
+                                            context,
+                                          ),
                                           onChanged: (value) {
                                             scan.setVerificationTimeout(
                                               value.round(),
@@ -384,7 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       '${scan.verificationTimeout} secondes',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: AppTheme.primaryColor,
+                                        color: AppTheme.getPrimary(context),
                                         fontSize: 16,
                                       ),
                                     ),
@@ -459,7 +461,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSectionHeader({required IconData icon, required String title}) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: AppTheme.primaryColor),
+        Icon(icon, size: 20, color: AppTheme.getPrimary(context)),
         const SizedBox(width: 8),
         Text(
           title,

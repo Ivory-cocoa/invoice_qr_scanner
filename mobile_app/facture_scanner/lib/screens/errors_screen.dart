@@ -256,7 +256,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
     final isDark = AppTheme.isDark(context);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.surfaceLight,
+      backgroundColor: isDark
+          ? AppTheme.darkSurface
+          : AppTheme.getSurfaceLight(context),
       appBar: AppBar(
         title: const Text('Gestion des erreurs'),
         backgroundColor: isDark
@@ -294,7 +296,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: isDark
                   ? AppTheme.darkSurfaceElevated
-                  : AppTheme.surfaceLight,
+                  : AppTheme.getSurfaceLight(context),
               child: Row(
                 children: [
                   FilterChip(
@@ -382,10 +384,10 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.check_circle_outline,
               size: 64,
-              color: AppTheme.successColor,
+              color: AppTheme.getSuccess(context),
             ),
             const SizedBox(height: 16),
             Text(
@@ -453,7 +455,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: isSelected
-            ? const BorderSide(color: AppTheme.primaryColor, width: 2)
+            ? BorderSide(color: AppTheme.getPrimary(context), width: 2)
             : BorderSide.none,
       ),
       elevation: 2,
@@ -478,7 +480,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       child: Checkbox(
                         value: isSelected,
                         onChanged: (_) => _toggleSelection(error.id),
-                        activeColor: AppTheme.primaryColor,
+                        activeColor: AppTheme.getPrimary(context),
                       ),
                     ),
                   Expanded(
@@ -517,9 +519,9 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                               height: 24,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(
+                          : Icon(
                               Icons.replay,
-                              color: AppTheme.primaryColor,
+                              color: AppTheme.getPrimary(context),
                             ),
                       tooltip: 'Relancer',
                       onPressed: _isRetrying ? null : () => _retryError(error),
@@ -562,7 +564,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                   icon: const Icon(Icons.info_outline, size: 18),
                   label: const Text('Voir les détails'),
                   style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.primaryColor,
+                    foregroundColor: AppTheme.getPrimary(context),
                   ),
                 ),
               ),
@@ -603,9 +605,11 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppTheme.errorLight,
+        color: AppTheme.getErrorLight(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.errorColor.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: AppTheme.getError(context).withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -613,12 +617,12 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.errorColor.withValues(alpha: 0.15),
+              color: AppTheme.getError(context).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.report_problem_rounded,
-              color: AppTheme.errorColor,
+              color: AppTheme.getError(context),
               size: 20,
             ),
           ),
@@ -627,10 +631,10 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Message d\'erreur',
                   style: TextStyle(
-                    color: AppTheme.errorColor,
+                    color: AppTheme.getError(context),
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),
@@ -639,7 +643,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                 Text(
                   errorMessage,
                   style: AppTheme.bodyMedium.copyWith(
-                    color: AppTheme.textDark,
+                    color: AppTheme.getTextPrimary(context),
                     height: 1.4,
                   ),
                   maxLines: 3,
@@ -755,7 +759,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       _buildDetailSection(
                         'Message d\'erreur',
                         Icons.report_problem_rounded,
-                        AppTheme.errorColor,
+                        AppTheme.getError(context),
                         error.errorMessage ?? 'Erreur inconnue',
                         isError: true,
                       ),
@@ -766,7 +770,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       _buildDetailSection(
                         'Informations fournisseur',
                         Icons.business_rounded,
-                        AppTheme.primaryColor,
+                        AppTheme.getPrimary(context),
                         null,
                         children: [
                           _buildDetailItem('Nom', error.supplierName),
@@ -785,7 +789,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                       _buildDetailSection(
                         'Informations du scan',
                         Icons.qr_code_scanner_rounded,
-                        AppTheme.accentColor,
+                        AppTheme.getAccent(context),
                         null,
                         children: [
                           _buildDetailItem(
@@ -863,7 +867,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isError
-              ? AppTheme.errorColor.withValues(alpha: 0.3)
+              ? AppTheme.getError(context).withValues(alpha: 0.3)
               : AppTheme.getDivider(context),
         ),
       ),
@@ -885,7 +889,7 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
                 title,
                 style: TextStyle(
                   color: isError
-                      ? AppTheme.errorColor
+                      ? AppTheme.getError(context)
                       : AppTheme.getTextPrimary(context),
                   fontWeight: FontWeight.w700,
                   fontSize: 15,
@@ -977,6 +981,8 @@ class _ErrorsScreenState extends State<ErrorsScreen> {
         chipColor = Colors.grey;
         break;
     }
+    // Violet, rouge ou sarcelle foncés : illisibles tels quels sur fond sombre
+    chipColor = AppTheme.readable(context, chipColor);
 
     return Chip(
       avatar: Icon(_getCategoryIcon(category), size: 16, color: chipColor),

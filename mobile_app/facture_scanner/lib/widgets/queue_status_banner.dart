@@ -57,7 +57,7 @@ class QueueStatusBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.getInfoLight(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.infoColor.withAlpha(77)),
+        border: Border.all(color: AppTheme.getInfo(context).withAlpha(77)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -68,12 +68,12 @@ class QueueStatusBanner extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: AppTheme.infoColor,
+                    color: AppTheme.getInfo(context),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -85,10 +85,10 @@ class QueueStatusBanner extends StatelessWidget {
                         remaining > 0
                             ? '${activeItems.length} scan(s) en traitement...'
                             : 'Traitement en cours...',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
-                          color: AppTheme.infoColor,
+                          color: AppTheme.getInfo(context),
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -125,7 +125,7 @@ class QueueStatusBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.getWarningLight(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.warningColor.withAlpha(77)),
+        border: Border.all(color: AppTheme.getWarning(context).withAlpha(77)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -139,12 +139,12 @@ class QueueStatusBanner extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppTheme.warningColor.withAlpha(26),
+                    color: AppTheme.getWarning(context).withAlpha(26),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.edit_note_rounded,
-                    color: AppTheme.warningColor,
+                    color: AppTheme.getWarning(context),
                     size: 20,
                   ),
                 ),
@@ -153,12 +153,12 @@ class QueueStatusBanner extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Saisie manuelle requise',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
-                          color: AppTheme.warningColor,
+                          color: AppTheme.getWarning(context),
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -174,10 +174,10 @@ class QueueStatusBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.arrow_forward_ios_rounded,
                   size: 16,
-                  color: AppTheme.warningColor,
+                  color: AppTheme.getWarning(context),
                 ),
               ],
             ),
@@ -209,7 +209,7 @@ class QueueStatusBanner extends StatelessWidget {
         ? AppTheme.getError(context)
         : item.isDuplicate
         ? AppTheme.getWarning(context)
-        : AppTheme.successColor;
+        : AppTheme.getSuccess(context);
     final background = sameNumber
         ? AppTheme.getErrorLight(context)
         : item.isDuplicate
@@ -332,23 +332,23 @@ class QueueStatusBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.getErrorLight(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.errorColor.withAlpha(77)),
+        border: Border.all(color: AppTheme.getError(context).withAlpha(77)),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline_rounded,
-            color: AppTheme.errorColor,
+            color: AppTheme.getError(context),
             size: 24,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               item.resultMessage ?? 'Erreur',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w500,
                 fontSize: 13,
-                color: AppTheme.errorColor,
+                color: AppTheme.getError(context),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -360,7 +360,7 @@ class QueueStatusBanner extends StatelessWidget {
             onPressed: () => queue.retryItem(item.id),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            color: AppTheme.errorColor,
+            color: AppTheme.getError(context),
             tooltip: 'Réessayer',
           ),
           const SizedBox(width: 8),
@@ -529,9 +529,9 @@ class _QueueDetailsSheet extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.queue_rounded,
-                      color: AppTheme.primaryColor,
+                      color: AppTheme.getPrimary(context),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -562,25 +562,25 @@ class _QueueDetailsSheet extends StatelessWidget {
                     _StatChip(
                       icon: Icons.hourglass_top,
                       label: '${queue.activeCount}',
-                      color: AppTheme.infoColor,
+                      color: AppTheme.getInfo(context),
                     ),
                     const SizedBox(width: 8),
                     _StatChip(
                       icon: Icons.check_circle,
                       label: '${queue.sessionSuccessCount}',
-                      color: AppTheme.successColor,
+                      color: AppTheme.getSuccess(context),
                     ),
                     const SizedBox(width: 8),
                     _StatChip(
                       icon: Icons.edit_note,
                       label: '${queue.needsManualEntryCount}',
-                      color: AppTheme.warningColor,
+                      color: AppTheme.getWarning(context),
                     ),
                     const SizedBox(width: 8),
                     _StatChip(
                       icon: Icons.error,
                       label: '${queue.sessionErrorCount}',
-                      color: AppTheme.errorColor,
+                      color: AppTheme.getError(context),
                     ),
                   ],
                 ),
@@ -662,7 +662,7 @@ class _QueueItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (icon, color, trailing) = _getItemVisuals();
+    final (icon, color, trailing) = _getItemVisuals(context);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -705,14 +705,14 @@ class _QueueItemTile extends StatelessWidget {
     );
   }
 
-  (IconData, Color, Widget?) _getItemVisuals() {
+  (IconData, Color, Widget?) _getItemVisuals(BuildContext context) {
     switch (item.state) {
       case QueueItemState.pending:
         return (Icons.hourglass_empty, Colors.grey, null);
       case QueueItemState.extracting:
         return (
           Icons.sync_rounded,
-          AppTheme.infoColor,
+          AppTheme.getInfo(context),
           const SizedBox(
             width: 18,
             height: 18,
@@ -722,7 +722,7 @@ class _QueueItemTile extends StatelessWidget {
       case QueueItemState.submitting:
         return (
           Icons.cloud_upload_rounded,
-          AppTheme.primaryColor,
+          AppTheme.getPrimary(context),
           const SizedBox(
             width: 18,
             height: 18,
@@ -731,28 +731,28 @@ class _QueueItemTile extends StatelessWidget {
         );
       case QueueItemState.completed:
         return item.isDuplicate
-            ? (Icons.content_copy_rounded, AppTheme.warningColor, null)
-            : (Icons.check_circle, AppTheme.successColor, null);
+            ? (Icons.content_copy_rounded, AppTheme.getWarning(context), null)
+            : (Icons.check_circle, AppTheme.getSuccess(context), null);
       case QueueItemState.needsManualEntry:
         return (
           Icons.edit_note_rounded,
-          AppTheme.warningColor,
-          const Icon(
+          AppTheme.getWarning(context),
+          Icon(
             Icons.arrow_forward_ios,
             size: 14,
-            color: AppTheme.warningColor,
+            color: AppTheme.getWarning(context),
           ),
         );
       case QueueItemState.failed:
         return (
           Icons.error_outline,
-          AppTheme.errorColor,
+          AppTheme.getError(context),
           IconButton(
             icon: const Icon(Icons.refresh, size: 18),
             onPressed: () => queue.retryItem(item.id),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            color: AppTheme.errorColor,
+            color: AppTheme.getError(context),
           ),
         );
     }

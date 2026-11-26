@@ -155,7 +155,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
     return Scaffold(
       backgroundColor: AppTheme.isDark(context)
           ? AppTheme.darkSurface
-          : AppTheme.primarySurface,
+          : AppTheme.getPrimarySurface(context),
       appBar: AppBar(
         title: const Text('Consulter un OT'),
         backgroundColor: AppTheme.primaryColor,
@@ -212,60 +212,64 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
                     : null),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
-          fillColor: AppTheme.primarySurface,
+          fillColor: AppTheme.getPrimarySurface(context),
         ),
       ),
     );
   }
 
   Widget _buildSuggestions() {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 240),
+    // `Material` (et non un fond de `Container`) : l'effet d'appui des lignes
+    // se peint dessus, il resterait caché sous un simple fond de couleur.
+    return Material(
       color: AppTheme.getSurfaceElevated(context),
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: _suggestions.length,
-        separatorBuilder: (_, _) => const Divider(height: 1),
-        itemBuilder: (_, i) {
-          final ot = _suggestions[i];
-          final cnt = ot['cost_count'] ?? 0;
-          return ListTile(
-            dense: true,
-            leading: const Icon(
-              Icons.local_shipping,
-              color: AppTheme.primaryColor,
-            ),
-            title: Text(
-              ot['ot_reference'] ?? ot['name'] ?? '—',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              [
-                if ((ot['vessel_name'] ?? '').toString().isNotEmpty)
-                  'Navire: ${ot['vessel_name']}',
-                if ((ot['state_label'] ?? '').toString().isNotEmpty)
-                  ot['state_label'],
-              ].join(' • '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Chip(
-              label: Text(
-                '$cnt coût${cnt == 1 ? '' : 's'}',
-                style: const TextStyle(fontSize: 11),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 240),
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: _suggestions.length,
+          separatorBuilder: (_, _) => const Divider(height: 1),
+          itemBuilder: (_, i) {
+            final ot = _suggestions[i];
+            final cnt = ot['cost_count'] ?? 0;
+            return ListTile(
+              dense: true,
+              leading: Icon(
+                Icons.local_shipping,
+                color: AppTheme.getPrimary(context),
               ),
-              backgroundColor: AppTheme.primarySurface,
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onTap: () {
-              FocusScope.of(context).unfocus();
-              _searchCtrl.text = (ot['ot_reference'] ?? '').toString();
-              setState(() => _suggestions = []);
-              _loadById(ot['id']);
-            },
-          );
-        },
+              title: Text(
+                ot['ot_reference'] ?? ot['name'] ?? '—',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                [
+                  if ((ot['vessel_name'] ?? '').toString().isNotEmpty)
+                    'Navire: ${ot['vessel_name']}',
+                  if ((ot['state_label'] ?? '').toString().isNotEmpty)
+                    ot['state_label'],
+                ].join(' • '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Chip(
+                label: Text(
+                  '$cnt coût${cnt == 1 ? '' : 's'}',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                backgroundColor: AppTheme.getPrimarySurface(context),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onTap: () {
+                FocusScope.of(context).unfocus();
+                _searchCtrl.text = (ot['ot_reference'] ?? '').toString();
+                setState(() => _suggestions = []);
+                _loadById(ot['id']);
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -308,7 +312,11 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: AppTheme.errorColor),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: AppTheme.getError(context),
+            ),
             const SizedBox(height: 12),
             Text(
               msg,
@@ -337,13 +345,16 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
             Icon(
               Icons.qr_code_2,
               size: 96,
-              color: AppTheme.primaryColor.withValues(alpha: 0.4),
+              color: AppTheme.getPrimary(context).withValues(alpha: 0.4),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Scannez le QR-code d\'un OT ou recherchez-le par référence pour afficher ses coûts opérationnels.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 15,
+                color: AppTheme.getTextSecondary(context),
+              ),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -367,19 +378,23 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
 
   Widget _buildNoCostsState(String msg) {
     return Card(
-      color: AppTheme.warningLight,
+      color: AppTheme.getWarningLight(context),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(
           children: [
-            Icon(Icons.info_outline, color: AppTheme.warningColor, size: 32),
+            Icon(
+              Icons.info_outline,
+              color: AppTheme.getWarning(context),
+              size: 32,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 msg.isNotEmpty ? msg : 'Aucun coût opérationnel sur cet OT.',
                 style: TextStyle(
                   fontSize: 15,
-                  color: AppTheme.warningColor,
+                  color: AppTheme.getWarning(context),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -403,12 +418,12 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: AppTheme.primarySurface,
+                    color: AppTheme.getPrimarySurface(context),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     Icons.local_shipping,
-                    color: AppTheme.primaryColor,
+                    color: AppTheme.getPrimary(context),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -427,7 +442,9 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
                           ot['name'] != ot['ot_reference'])
                         Text(
                           ot['name'],
-                          style: const TextStyle(color: Colors.black54),
+                          style: TextStyle(
+                            color: AppTheme.getTextSecondary(context),
+                          ),
                         ),
                     ],
                   ),
@@ -458,11 +475,14 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.black54),
+          Icon(icon, size: 16, color: AppTheme.getTextSecondary(context)),
           const SizedBox(width: 6),
           Text(
             '$label: ',
-            style: const TextStyle(color: Colors.black54, fontSize: 13),
+            style: TextStyle(
+              color: AppTheme.getTextSecondary(context),
+              fontSize: 13,
+            ),
           ),
           Expanded(
             child: Text(
@@ -494,7 +514,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
                     'Coûts',
                     '$count',
                     Icons.list_alt,
-                    AppTheme.primaryColor,
+                    AppTheme.getPrimary(context),
                   ),
                 ),
                 Expanded(
@@ -502,15 +522,21 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
                     'Scans',
                     '$scans',
                     Icons.qr_code,
-                    AppTheme.infoColor,
+                    AppTheme.getInfo(context),
                   ),
                 ),
               ],
             ),
             const Divider(height: 16),
-            _amountRow('Total', total, cur, AppTheme.primaryColor, bold: true),
-            _amountRow('Payé', paid, cur, AppTheme.successColor),
-            _amountRow('À payer', pending, cur, AppTheme.warningColor),
+            _amountRow(
+              'Total',
+              total,
+              cur,
+              AppTheme.getPrimary(context),
+              bold: true,
+            ),
+            _amountRow('Payé', paid, cur, AppTheme.getSuccess(context)),
+            _amountRow('À payer', pending, cur, AppTheme.getWarning(context)),
           ],
         ),
       ),
@@ -532,7 +558,10 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: Colors.black54),
+          style: TextStyle(
+            fontSize: 11,
+            color: AppTheme.getTextSecondary(context),
+          ),
         ),
       ],
     );
@@ -578,7 +607,7 @@ class _OtCostScansScreenState extends State<OtCostScansScreen> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.bold,
-            color: Colors.black54,
+            color: AppTheme.getTextSecondary(context),
             letterSpacing: 1.2,
           ),
         ),
@@ -599,18 +628,18 @@ class _CostLineCard extends StatelessWidget {
   final NumberFormat money;
   const _CostLineCard({required this.line, required this.money});
 
-  Color _stateColor(String state) {
+  Color _stateColor(BuildContext context, String state) {
     switch (state) {
       case 'paid':
-        return AppTheme.successColor;
+        return AppTheme.getSuccess(context);
       case 'pending':
-        return AppTheme.warningColor;
+        return AppTheme.getWarning(context);
       case 'confirmed':
-        return AppTheme.infoColor;
+        return AppTheme.getInfo(context);
       case 'estimated':
         return Colors.grey;
       default:
-        return Colors.black54;
+        return AppTheme.getTextSecondary(context);
     }
   }
 
@@ -632,7 +661,7 @@ class _CostLineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = (line['state'] ?? '').toString();
-    final color = _stateColor(state);
+    final color = _stateColor(context, state);
     final scan = line['scan'] as Map<String, dynamic>?;
     final payment = line['payment'] as Map<String, dynamic>?;
     final cur = line['currency'] ?? 'XOF';
@@ -665,9 +694,9 @@ class _CostLineCard extends StatelessWidget {
                       ),
                       Text(
                         '${line['reference'] ?? ''} • ${line['cost_type_label'] ?? ''}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Colors.black54,
+                          color: AppTheme.getTextSecondary(context),
                         ),
                       ),
                     ],
@@ -739,7 +768,7 @@ class _CostLineCard extends StatelessWidget {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: amount < 0 ? AppTheme.errorColor : null,
+                        color: amount < 0 ? AppTheme.getError(context) : null,
                       ),
                     ),
                   ],
@@ -753,7 +782,10 @@ class _CostLineCard extends StatelessWidget {
               _paymentBlock(payment, color),
             ],
             // Bloc scan
-            if (scan != null) ...[const SizedBox(height: 8), _scanBlock(scan)],
+            if (scan != null) ...[
+              const SizedBox(height: 8),
+              _scanBlock(context, scan),
+            ],
           ],
         ),
       ),
@@ -811,21 +843,23 @@ class _CostLineCard extends StatelessWidget {
     );
   }
 
-  Widget _scanBlock(Map<String, dynamic> scan) {
+  Widget _scanBlock(BuildContext context, Map<String, dynamic> scan) {
     final qrUrl = (scan['qr_url'] ?? '').toString();
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: AppTheme.infoLight,
+        color: AppTheme.getInfoLight(context),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppTheme.infoColor.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: AppTheme.getInfo(context).withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.qr_code, size: 18, color: AppTheme.infoColor),
+              Icon(Icons.qr_code, size: 18, color: AppTheme.getInfo(context)),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -833,7 +867,7 @@ class _CostLineCard extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
-                    color: AppTheme.infoColor,
+                    color: AppTheme.getInfo(context),
                   ),
                 ),
               ),
@@ -853,7 +887,10 @@ class _CostLineCard extends StatelessWidget {
           if (qrUrl.isNotEmpty)
             Text(
               qrUrl,
-              style: const TextStyle(fontSize: 10, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 10,
+                color: AppTheme.getTextSecondary(context),
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

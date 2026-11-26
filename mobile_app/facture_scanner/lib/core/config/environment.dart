@@ -121,8 +121,8 @@ class AppConfig {
   //
   // 3.5.2 : le résultat d'un scan (doublon, facture créée, erreur) est
   // affiché AVANT de proposer un nouveau scan ; corrections d'ergonomie.
-  static const String appVersion = '3.6.4';
-  static const int buildNumber = 16;
+  static const String appVersion = '3.6.5';
+  static const int buildNumber = 17;
 
   // Nom de l'application
   static const String appName = 'Facture Scanner';

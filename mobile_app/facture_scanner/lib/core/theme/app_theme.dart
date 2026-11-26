@@ -75,10 +75,13 @@ class AppTheme {
 
   static const String fontFamily = 'Roboto';
 
+  // Les styles de titre et de texte courant ne fixent PAS de couleur : ils
+  // prennent celle du thème (sombre sur fond clair, claire sur fond sombre).
+  // Une couleur noire figée ici rendait les titres des fenêtres illisibles
+  // en mode sombre.
   static const TextStyle headingLarge = TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.w700,
-    color: textDark,
     letterSpacing: -0.5,
     height: 1.2,
   );
@@ -86,7 +89,6 @@ class AppTheme {
   static const TextStyle headingMedium = TextStyle(
     fontSize: 24,
     fontWeight: FontWeight.w600,
-    color: textDark,
     letterSpacing: -0.3,
     height: 1.3,
   );
@@ -94,28 +96,24 @@ class AppTheme {
   static const TextStyle headingSmall = TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
-    color: textDark,
     height: 1.3,
   );
 
   static const TextStyle titleLarge = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w600,
-    color: textDark,
     height: 1.4,
   );
 
   static const TextStyle titleMedium = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
-    color: textDark,
     height: 1.4,
   );
 
   static const TextStyle bodyLarge = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w400,
-    color: textDark,
     height: 1.5,
   );
 
@@ -136,7 +134,6 @@ class AppTheme {
   static const TextStyle labelLarge = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w600,
-    color: textDark,
     letterSpacing: 0.5,
   );
 
@@ -511,22 +508,34 @@ class AppTheme {
   static const Color darkSurface = Color(0xFF121212);
   static const Color darkSurfaceElevated = Color(0xFF1E1E1E);
   static const Color darkSurfaceHigher = Color(0xFF2C2C2C);
-  static const Color darkDivider = Color(0xFF3C3C3C);
+  static const Color darkDivider = Color(0xFF4A4A4A);
 
-  // Texte en mode sombre
-  static const Color darkTextPrimary = Color(0xFFE1E1E1);
-  static const Color darkTextSecondary = Color(0xFFB0B0B0);
-  static const Color darkTextMuted = Color(0xFF808080);
+  // Texte en mode sombre.
+  //
+  // Contraste mesuré sur la surface des cartes (#1E1E1E), la plus claire
+  // des deux fonds : principal 14,9:1, secondaire 10,4:1, discret 6,7:1.
+  // L'ancien « discret » (#808080) tombait à 4,2:1 : les dates, légendes et
+  // libellés de second rang se lisaient mal.
+  static const Color darkTextPrimary = Color(0xFFF2F2F2);
+  static const Color darkTextSecondary = Color(0xFFCFCFCF);
+  static const Color darkTextMuted = Color(0xFFA6A6A6);
 
-  // Couleurs sémantiques adaptées au mode sombre
-  static const Color darkSuccessColor = Color(0xFF4CAF50);
-  static const Color darkSuccessLight = Color(0xFF1B3D1B);
-  static const Color darkErrorColor = Color(0xFFEF5350);
-  static const Color darkErrorLight = Color(0xFF3D1B1B);
-  static const Color darkWarningColor = Color(0xFFFFB74D);
-  static const Color darkWarningLight = Color(0xFF3D3018);
-  static const Color darkInfoColor = Color(0xFF29B6F6);
-  static const Color darkInfoLight = Color(0xFF18303D);
+  // Couleurs sémantiques du mode sombre : versions CLAIRES des couleurs du
+  // thème clair, lisibles en texte et en icône sur fond sombre (toutes
+  // au-dessus de 7:1 sur #1E1E1E). Les couleurs du thème clair (bleu
+  // #1565C0, vert #2E7D32, rouge #C62828, sarcelle #00897B) y descendaient
+  // entre 3:1 et 4:1.
+  static const Color darkPrimaryColor = Color(0xFF82B1FF);
+  static const Color darkPrimarySurface = Color(0xFF1B2B45);
+  static const Color darkAccentColor = Color(0xFF64D8CB);
+  static const Color darkSuccessColor = Color(0xFF81C784);
+  static const Color darkSuccessLight = Color(0xFF1E3A22);
+  static const Color darkErrorColor = Color(0xFFFF8A80);
+  static const Color darkErrorLight = Color(0xFF45201F);
+  static const Color darkWarningColor = Color(0xFFFFC46B);
+  static const Color darkWarningLight = Color(0xFF40311A);
+  static const Color darkInfoColor = Color(0xFF6FD0FF);
+  static const Color darkInfoLight = Color(0xFF17323F);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // THÈME SOMBRE COMPLET
@@ -800,6 +809,22 @@ class AppTheme {
     ),
 
     // Chips sombres
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? darkPrimaryColor
+              : Colors.transparent,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFF10151C)
+              : darkTextPrimary,
+        ),
+        side: const WidgetStatePropertyAll(BorderSide(color: darkDivider)),
+      ),
+    ),
+
     chipTheme: ChipThemeData(
       backgroundColor: darkSurfaceHigher,
       labelStyle: const TextStyle(
@@ -807,8 +832,17 @@ class AppTheme {
         fontSize: 13,
         fontWeight: FontWeight.w500,
       ),
-      selectedColor: primaryDark,
-      secondarySelectedColor: primaryDark,
+      // Pastille choisie : fond bleu clair, texte foncé (10:1). L'ancien
+      // fond bleu nuit sous un texte gris se lisait mal.
+      selectedColor: darkPrimaryColor,
+      secondarySelectedColor: darkPrimaryColor,
+      secondaryLabelStyle: const TextStyle(
+        color: Color(0xFF10151C),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
+      checkmarkColor: const Color(0xFF10151C),
+      side: const BorderSide(color: darkDivider),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(radiusSmall),
@@ -1066,7 +1100,54 @@ class AppTheme {
 
   /// Couleur primaire adaptée au thème
   static Color getPrimary(BuildContext context) {
-    return isDark(context) ? primaryLight : primaryColor;
+    return isDark(context) ? darkPrimaryColor : primaryColor;
+  }
+
+  /// Fond teinté de la couleur primaire, adapté au thème
+  static Color getPrimarySurface(BuildContext context) {
+    return isDark(context) ? darkPrimarySurface : primarySurface;
+  }
+
+  /// Violet « traité » adapté au thème (indigo sur clair, lavande sur sombre)
+  static Color getProcessed(BuildContext context) {
+    return isDark(context) ? const Color(0xFFB3BCF5) : const Color(0xFF5C6BC0);
+  }
+
+  /// Orange « à traiter » adapté au thème
+  static Color getPending(BuildContext context) {
+    return isDark(context) ? darkWarningColor : const Color(0xFFFF8F00);
+  }
+
+  /// Couleur d'accent (sarcelle) adaptée au thème
+  static Color getAccent(BuildContext context) {
+    return isDark(context) ? darkAccentColor : accentColor;
+  }
+
+  /// Fond d'une barre de titre ou d'un bandeau portant un texte BLANC : bleu
+  /// soutenu dans les deux thèmes (blanc dessus : 5,9:1). La couleur primaire
+  /// du mode sombre, claire, est faite pour le texte, pas pour ce rôle.
+  static Color getHeader(BuildContext context) {
+    return isDark(context) ? primaryColor : primaryColor;
+  }
+
+  /// Rend [color] lisible comme texte ou icône sur le fond du thème : en
+  /// mode sombre, une couleur trop foncée (violet, rouge, bleu profond) est
+  /// éclaircie. En mode clair, elle est rendue telle quelle.
+  static Color readable(BuildContext context, Color color) {
+    if (!isDark(context) || color.computeLuminance() >= 0.32) return color;
+    return Color.lerp(color, Colors.white, 0.5)!;
+  }
+
+  /// Couleur de texte à poser SUR [background] : sombre sur un fond clair,
+  /// blanche sur un fond foncé. À utiliser pour un bouton ou une pastille
+  /// dont le fond suit le thème.
+  static Color onColor(Color background) {
+    // Celui des deux, sombre ou blanc, qui contraste le plus avec le fond.
+    const dark = Color(0xFF10151C);
+    final l = background.computeLuminance();
+    final withWhite = 1.05 / (l + 0.05);
+    final withDark = (l + 0.05) / (dark.computeLuminance() + 0.05);
+    return withDark > withWhite ? dark : Colors.white;
   }
 
   /// Décoration de carte adaptée au thème

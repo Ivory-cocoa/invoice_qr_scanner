@@ -180,10 +180,10 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ],
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.qr_code_scanner_rounded,
                 size: 70,
-                color: AppTheme.primaryDark,
+                color: AppTheme.getPrimary(context),
               ),
             ),
           ),

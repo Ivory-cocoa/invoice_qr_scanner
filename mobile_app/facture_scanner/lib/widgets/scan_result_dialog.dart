@@ -711,7 +711,7 @@ class ScanResultDialog extends StatelessWidget {
               onPressed: () => Navigator.of(context).pop('manual_entry'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.getWarning(context),
-                foregroundColor: Colors.white,
+                foregroundColor: AppTheme.onColor(AppTheme.getWarning(context)),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

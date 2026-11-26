@@ -194,7 +194,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Saisie manuelle'),
-        backgroundColor: AppTheme.getPrimary(context),
+        backgroundColor: AppTheme.getHeader(context),
         foregroundColor: Colors.white,
       ),
       body: SafeArea(
@@ -212,18 +212,20 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? AppTheme.warningColor.withValues(alpha: 0.2)
-                          : AppTheme.warningLight,
+                          ? AppTheme.getWarning(context).withValues(alpha: 0.2)
+                          : AppTheme.getWarningLight(context),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppTheme.warningColor.withValues(alpha: 0.3),
+                        color: AppTheme.getWarning(
+                          context,
+                        ).withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           Icons.timer_off_rounded,
-                          color: AppTheme.warningColor,
+                          color: AppTheme.getWarning(context),
                           size: 24,
                         ),
                         const SizedBox(width: 12),
@@ -247,18 +249,18 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? AppTheme.infoColor.withValues(alpha: 0.2)
-                          : AppTheme.infoLight,
+                          ? AppTheme.getInfo(context).withValues(alpha: 0.2)
+                          : AppTheme.getInfoLight(context),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: AppTheme.infoColor.withValues(alpha: 0.3),
+                        color: AppTheme.getInfo(context).withValues(alpha: 0.3),
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
                           Icons.info_outline_rounded,
-                          color: AppTheme.infoColor,
+                          color: AppTheme.getInfo(context),
                           size: 24,
                         ),
                         const SizedBox(width: 12),
@@ -296,7 +298,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                         children: [
                           Icon(
                             Icons.link_rounded,
-                            color: Colors.blue.shade700,
+                            color: AppTheme.getInfo(context),
                             size: 22,
                           ),
                           const SizedBox(width: 8),
@@ -317,8 +319,12 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                         child: OutlinedButton.icon(
                           onPressed: _openDgiLink,
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.blue.shade700,
-                            side: BorderSide(color: Colors.blue.shade300),
+                            foregroundColor: AppTheme.getInfo(context),
+                            side: BorderSide(
+                              color: AppTheme.getInfo(
+                                context,
+                              ).withValues(alpha: 0.5),
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -662,8 +668,8 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
               Icon(
                 hasCodes ? Icons.verified_rounded : Icons.info_outline_rounded,
                 color: hasCodes
-                    ? Colors.green.shade700
-                    : Colors.orange.shade700,
+                    ? AppTheme.getSuccess(context)
+                    : AppTheme.getWarning(context),
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -742,7 +748,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     return Row(
       children: [
         const SizedBox(width: 30),
-        Icon(Icons.tag_rounded, size: 16, color: Colors.green.shade600),
+        Icon(Icons.tag_rounded, size: 16, color: AppTheme.getSuccess(context)),
         const SizedBox(width: 6),
         Text(
           '$label : ',

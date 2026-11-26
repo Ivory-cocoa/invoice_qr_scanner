@@ -95,8 +95,8 @@ class _ConnectivityBannerState extends State<ConnectivityBanner>
                 BoxShadow(
                   color:
                       (connectivity.isOnline
-                              ? AppTheme.successColor
-                              : AppTheme.warningColor)
+                              ? AppTheme.getSuccess(context)
+                              : AppTheme.getWarning(context))
                           .withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
