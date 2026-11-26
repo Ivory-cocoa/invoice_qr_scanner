@@ -639,6 +639,12 @@ class InvoiceScanRecord(models.Model):
         sélection de cinquante scans dont trois seulement pouvaient être
         traités, l'utilisateur repartait convaincu d'avoir soldé son lot.
         """
+        # Même numéro de facture déjà enregistré : demander avant d'agir.
+        if not self.env.context.get('same_number_confirmed'):
+            twins = self._needs_same_number_confirmation()
+            if twins:
+                return self.env['invoice.scan.same.number.confirm']._open_for(
+                    self, twins)
         entries = self._bulk_mark_processed()
         counters = self._bulk_counters(entries)
         if not counters['done']:

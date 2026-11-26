@@ -441,10 +441,17 @@ class ApiService {
   }
 
   /// Mark a scan record as processed (traité)
-  Future<ApiResponse<Map<String, dynamic>>> markProcessed(int recordId) async {
+  ///
+  /// Une facture dont le numéro est déjà porté par une autre facture
+  /// enregistrée est refusée (`SAME_NUMBER_CONFIRMATION`) tant que
+  /// [confirmSameNumber] n'est pas vrai.
+  Future<ApiResponse<Map<String, dynamic>>> markProcessed(
+    int recordId, {
+    bool confirmSameNumber = false,
+  }) async {
     return await _post<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/mark-processed/$recordId',
-      {},
+      {if (confirmSameNumber) 'confirm_same_number': true},
     );
   }
 
@@ -475,10 +482,13 @@ class ApiService {
   // ============ Traiteur-specific endpoints ============
 
   /// Scan QR to find and process an existing invoice (Traiteur flow)
-  Future<ApiResponse<Map<String, dynamic>>> scanToProcess(String qrUrl) async {
+  Future<ApiResponse<Map<String, dynamic>>> scanToProcess(
+    String qrUrl, {
+    bool confirmSameNumber = false,
+  }) async {
     return await _post<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/scan-to-process',
-      {'qr_url': qrUrl},
+      {'qr_url': qrUrl, if (confirmSameNumber) 'confirm_same_number': true},
     );
   }
 

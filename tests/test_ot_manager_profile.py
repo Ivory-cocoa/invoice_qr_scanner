@@ -231,3 +231,59 @@ class TestOtManagerProfile(HttpCase):
         self.assertEqual(record['same_number_count'], 1)
         self.assertIn('même numéro', record['same_number_warning'])
         self.assertTrue(record['same_number_refs'])
+
+    def test_processing_a_same_number_invoice_needs_a_confirmation(self):
+        """API du Traiteur : 409 tant que ce n'est pas confirmé, sur les
+        trois routes, et rien n'est modifié entre-temps."""
+        twin_uuid = '01a1fd85-6adb-7dd8-b0ee-55c5d0738888'
+        twin = self.env['invoice.scan.record'].create({
+            'qr_uuid': twin_uuid,
+            'qr_url': 'https://www.services.fne.dgi.gouv.ci/fr/verification/' + twin_uuid,
+            'supplier_name': 'QUINCAILLERIE EXEMPLE',
+            'invoice_number_dgi': '2603236T26000000174',
+            'invoice_date': fields.Date.today(),
+            'amount_ttc': 2183000, 'state': 'done',
+        })
+        secretary = self._user(
+            'secretary_api', 'group_invoice_scanner_verificateur',
+            'group_invoice_scanner_traiteur')
+        token, _data = self._token(secretary)
+
+        for path, body in (
+                ('/scan-to-process', {'qr_url': URL}),
+                ('/mark-processed/%s' % self.scan.id, {}),
+                # Une valeur approximative ne vaut pas confirmation.
+                ('/mark-processed/%s' % self.scan.id, {'confirm_same_number': 'oui'})):
+            status, payload = self._post(token, path, body)
+            self.assertEqual(status, 409, path)
+            self.assertEqual(payload['error']['code'], 'SAME_NUMBER_CONFIRMATION')
+            self.assertTrue(payload['data']['confirmation_required'])
+            self.assertIn('même numéro', payload['error']['message'])
+            self.assertEqual(payload['data']['record']['id'], self.scan.id)
+            self.scan.invalidate_recordset()
+            self.assertEqual(self.scan.state, 'done', path)
+
+        status, payload = self._post(
+            token, '/bulk-mark-processed', {'record_ids': [self.scan.id, twin.id]})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload['data']['summary']['needs_confirmation'], 2)
+        self.assertEqual(payload['data']['summary']['successful'], 0)
+        self.assertTrue(all(r['needs_confirmation'] for r in payload['data']['results']))
+
+        status, payload = self._post(
+            token, '/scan-to-process',
+            {'qr_url': URL, 'confirm_same_number': True})
+        self.assertEqual(status, 200)
+        self.scan.invalidate_recordset()
+        self.assertEqual(self.scan.state, 'processed')
+        self.assertEqual(self.scan.processed_by, secretary)
+
+        # L'autre n'a plus de double « à traiter » ? Si : la première reste
+        # enregistrée, la confirmation est donc encore demandée.
+        status, payload = self._post(token, '/mark-processed/%s' % twin.id, {})
+        self.assertEqual(status, 409)
+        status, payload = self._post(
+            token, '/mark-processed/%s' % twin.id, {'confirm_same_number': True})
+        self.assertEqual(status, 200)
+        twin.invalidate_recordset()
+        self.assertEqual(twin.state, 'processed')

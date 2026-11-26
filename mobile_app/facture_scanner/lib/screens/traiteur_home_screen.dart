@@ -16,6 +16,7 @@ import '../core/models/scan_record.dart';
 import '../core/ot_link_flow.dart';
 import '../widgets/connectivity_banner.dart';
 import '../widgets/scan_progress_dialog.dart';
+import '../widgets/same_number_confirm_dialog.dart';
 import '../widgets/scan_result_dialog.dart';
 import 'scanner_screen.dart';
 
@@ -113,7 +114,32 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
     } finally {
       progress.close();
     }
-    if (!mounted || scan.state == ScanState.idle) return false;
+    if (!mounted) return false;
+
+    // Même numéro de facture déjà enregistré : rien n'a été modifié, le
+    // serveur attend une confirmation explicite.
+    final warning = scan.sameNumberConfirmation;
+    if (warning != null) {
+      final confirmed = await showSameNumberConfirmDialog(context, warning);
+      if (!mounted) return false;
+      if (!confirmed) {
+        scan.resetState();
+        return false;
+      }
+      final again = ScanProgress.show(context, 'Traitement de la facture...');
+      try {
+        await scan.processQrCodeAsTraiteur(result, confirmSameNumber: true);
+      } finally {
+        again.close();
+      }
+      if (!mounted) return false;
+      // Toujours pas tranché (cas limite) : ne rien afficher de trompeur.
+      if (scan.sameNumberConfirmation != null) {
+        scan.resetState();
+        return false;
+      }
+    }
+    if (scan.state == ScanState.idle) return false;
 
     final state = scan.state;
     final record = scan.lastScanResult;
@@ -1013,20 +1039,30 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
 
   /// Exécuter le traitement manuel
   Future<void> _executeManualProcess(ScanRecord record) async {
-    // Afficher un indicateur de chargement
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.successColor),
-      ),
-    );
-
     final scan = context.read<ScanProvider>();
-    final success = await scan.markAsProcessed(record.id);
-
-    // Fermer l'indicateur de chargement
-    if (mounted) Navigator.of(context).pop();
+    // Si une autre facture enregistrée porte le même numéro, le serveur
+    // demande une confirmation : elle est posée ici, puis l'appel repart.
+    final success = await markProcessedAskingIfSameNumber(
+      context,
+      record.id,
+      whileWaiting: (call) async {
+        // Indicateur de chargement, le temps de chaque appel au serveur.
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(color: AppTheme.successColor),
+          ),
+        );
+        try {
+          return await call();
+        } finally {
+          if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        }
+      },
+    );
+    // Confirmation refusée : la facture reste « à traiter », sans erreur.
+    final declined = !success && scan.sameNumberConfirmation != null;
 
     if (success && mounted) {
       // Rafraîchir les données
@@ -1060,7 +1096,7 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
           margin: const EdgeInsets.all(16),
         ),
       );
-    } else if (mounted) {
+    } else if (mounted && !declined) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Row(

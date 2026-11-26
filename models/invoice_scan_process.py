@@ -134,7 +134,8 @@ class InvoiceScanRecordProcess(models.Model):
             release_scan_slot()
 
     @api.model
-    def _process_qr_treatment(self, user, qr_uuid, origin_label):
+    def _process_qr_treatment(self, user, qr_uuid, origin_label,
+                              confirm_same_number=False):
         """Marquer « traitée » la facture d'un QR-code (profil Traiteur).
 
         Cœur commun à l'application mobile (`scan-to-process`) et au poste de
@@ -142,7 +143,12 @@ class InvoiceScanRecordProcess(models.Model):
 
         Returns:
             dict: ``{'ok': True, 'record': …}`` ou ``{'ok': False,
-            'error_code': 'NOT_FOUND' | 'ALREADY_PROCESSED', 'record': …}``.
+            'error_code': 'NOT_FOUND' | 'ALREADY_PROCESSED' |
+            'SAME_NUMBER_CONFIRMATION', 'record': …}``.
+
+        ``SAME_NUMBER_CONFIRMATION`` : une autre facture enregistrée porte le
+        même numéro ; rien n'est modifié tant que l'appelant ne rappelle pas
+        avec ``confirm_same_number=True``.
         """
         existing = self.search([
             ('qr_uuid', '=', self._normalize_qr_uuid(qr_uuid)),
@@ -168,14 +174,22 @@ class InvoiceScanRecordProcess(models.Model):
             return {'ok': False, 'error_code': 'ALREADY_PROCESSED',
                     'record': existing}
 
+        # Second filet avant le paiement : même numéro déjà enregistré.
+        same_number = bool(existing.same_number_count)
+        if same_number and not confirm_same_number:
+            return {'ok': False, 'error_code': 'SAME_NUMBER_CONFIRMATION',
+                    'record': existing}
+
         # Marquer comme traité
         existing.write({
             'state': 'processed',
             'processed_by': user.id,
             'processed_date': fields.Datetime.now(),
         })
-        existing.message_post(
-            body=f"Facture traitée par {user.name} (profil Traiteur, {origin_label})",
-            message_type='notification'
-        )
+        body = f"Facture traitée par {user.name} (profil Traiteur, {origin_label})"
+        if same_number:
+            body += (f". Traitée MALGRÉ un même numéro de facture déjà "
+                     f"enregistré ({existing.same_number_refs or '?'}) : "
+                     f"confirmé par {user.name}.")
+        existing.message_post(body=body, message_type='notification')
         return {'ok': True, 'record': existing}

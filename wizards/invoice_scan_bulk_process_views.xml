@@ -28,6 +28,20 @@
                                    class="d-inline ms-1"/>
                         </div>
 
+                        <div class="alert alert-danger" role="alert"
+                             invisible="count_same_number == 0">
+                            <strong><i class="fa fa-files-o" title="Même numéro"/>
+                            Même numéro de facture</strong> —
+                            <field name="count_same_number" readonly="1" class="fw-bold"/>
+                            facture(s) de la sélection portent un numéro déjà
+                            enregistré pour le même fournisseur. Elles seront
+                            laissées de côté, sauf si vous cochez :
+                            <div class="mt-2">
+                                <field name="confirm_same_number" nolabel="1"/>
+                                <label for="confirm_same_number" class="ms-1"/>
+                            </div>
+                        </div>
+
                         <group string="Ventilation de la sélection" col="4">
                             <field name="count_total"/>
                             <field name="count_eligible"/>

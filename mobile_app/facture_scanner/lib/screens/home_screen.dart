@@ -567,6 +567,9 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) {
         if (result != null) {
           final count = result['successful'] ?? 0;
+          // Factures de même numéro : jamais traitées en masse, elles
+          // demandent une confirmation une à une.
+          final waiting = (result['needs_confirmation'] as num?)?.toInt() ?? 0;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
@@ -577,7 +580,15 @@ class _HomeScreenState extends State<HomeScreen>
                     size: 20,
                   ),
                   const SizedBox(width: 12),
-                  Text('$count scan(s) marqué(s) comme traité(s)'),
+                  Expanded(
+                    child: Text(
+                      waiting > 0
+                          ? '$count scan(s) marqué(s) comme traité(s). '
+                                '$waiting de même numéro laissé(s) de côté : '
+                                'à traiter un par un.'
+                          : '$count scan(s) marqué(s) comme traité(s)',
+                    ),
+                  ),
                 ],
               ),
               backgroundColor: const Color(0xFF6C63FF),

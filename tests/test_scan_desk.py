@@ -293,6 +293,40 @@ class TestScanDesk(TransactionCase):
         self.assertEqual(record.state, 'done')
         self.assertTrue(record.invoice_id)
 
+    def test_processing_a_same_number_invoice_needs_a_confirmation(self):
+        """Au poste de scan : la carte attend la décision, rien n'est fait
+        avant ; la confirmation relit le QR-code et vérifie le profil."""
+        self.ScanRecord.create({
+            'qr_uuid': '019bd62c-467e-7000-82ac-45c8389c0002',
+            'qr_url': URL[:-4] + '0002',
+            'supplier_name': 'TRANSITAIRE EXEMPLE',
+            'supplier_code_dgi': FNE_PAYLOAD['company']['ncc'],
+            'invoice_number_dgi': '2502298K26000000003',
+            'amount_ttc': 1000, 'state': 'done',
+        })
+        self._scan(URL)
+        record = self._records()
+        card, _get = self._scan(URL, user=self.processor)
+        self.assertEqual(card['status'], 'pending', card)
+        self.assertEqual(card['title'], "Confirmation requise")
+        self.assertIn('même numéro', card['warnings'][0])
+        self.assertTrue(card['form'])
+        self.assertEqual(card['form']['fields'], [])
+        self.assertEqual(record.state, 'done')
+
+        # Un profil sans droit de traitement ne peut pas confirmer.
+        refused = self.Desk.with_user(self.verifier).desk_submit(
+            'dgi', card['form']['payload'], {})
+        self.assertTrue(refused.get('error'))
+        self.assertEqual(record.state, 'done')
+
+        result = self.Desk.with_user(self.processor).desk_submit(
+            'dgi', card['form']['payload'], {})
+        self.assertFalse(result.get('error'), result)
+        self.assertEqual(result['card']['status'], 'success')
+        self.assertEqual(record.state, 'processed')
+        self.assertEqual(record.processed_by, self.processor)
+
     def test_ot_manager_cannot_submit_a_manual_entry(self):
         from odoo.exceptions import UserError
         with self.assertRaises(UserError):

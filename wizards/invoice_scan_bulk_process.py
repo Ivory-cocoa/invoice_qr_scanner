@@ -54,6 +54,16 @@ class InvoiceScanBulkProcess(models.TransientModel):
         string="Concernés par l'opération", compute='_compute_eligibility')
     eligibility_message = fields.Char(compute='_compute_eligibility')
 
+    # Même numéro de facture déjà enregistré : ces scans ne sont marqués
+    # « traités » que si l'utilisateur le demande explicitement.
+    count_same_number = fields.Integer(
+        string="Même n° de facture", compute='_compute_count_same_number')
+    confirm_same_number = fields.Boolean(
+        string="Transmettre aussi les factures de même numéro",
+        help="Ces factures portent un numéro déjà enregistré pour le même "
+             "fournisseur. Sans cette case, elles sont laissées de côté et "
+             "le compte-rendu le dit.")
+
     # --- Compte-rendu (après exécution) -----------------------------------
     line_ids = fields.One2many(
         'invoice.scan.bulk.process.line', 'wizard_id',
@@ -123,6 +133,13 @@ class InvoiceScanBulkProcess(models.TransientModel):
             return scans
         return scans
 
+    @api.depends('scan_ids.state', 'operation')
+    def _compute_count_same_number(self):
+        for wiz in self:
+            wiz.count_same_number = len(
+                wiz.scan_ids._needs_same_number_confirmation()
+            ) if wiz.operation == 'mark_processed' else 0
+
     @api.depends('scan_ids.state', 'scan_ids.invoice_id', 'operation')
     def _compute_eligibility(self):
         for wiz in self:
@@ -157,7 +174,9 @@ class InvoiceScanBulkProcess(models.TransientModel):
         self.ensure_one()
         scans = self.scan_ids
         if self.operation == 'mark_processed':
-            return scans._bulk_mark_processed(origin=_("assistant"))
+            return scans._bulk_mark_processed(
+                origin=_("assistant"),
+                confirm_same_number=self.confirm_same_number)
         if self.operation == 'mark_unprocessed':
             return scans._bulk_mark_unprocessed(origin=_("assistant"))
         if self.operation == 'create_invoice':

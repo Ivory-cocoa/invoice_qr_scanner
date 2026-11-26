@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_invoice_scan_same_number_confirm_form" model="ir.ui.view">
+            <field name="name">invoice.scan.same.number.confirm.form</field>
+            <field name="model">invoice.scan.same.number.confirm</field>
+            <field name="arch" type="xml">
+                <form string="Même numéro de facture déjà enregistré">
+                    <field name="twin_count" invisible="1"/>
+                    <field name="other_count" invisible="1"/>
+                    <div class="alert alert-danger" role="alert">
+                        <strong><i class="fa fa-files-o"/> MÊME NUMÉRO DE FACTURE</strong> —
+                        <field name="twin_count" readonly="1" class="fw-bold"/>
+                        facture(s) de votre sélection portent un numéro déjà
+                        enregistré dans Odoo pour le même fournisseur.
+                        Les marquer « traitées », c'est les transmettre à la
+                        comptabilité pour paiement : vérifiez qu'il ne s'agit
+                        pas de la même facture.
+                    </div>
+                    <field name="twin_ids" nolabel="1" colspan="2">
+                        <tree create="0" delete="0" edit="0" no_open="1">
+                            <field name="reference"/>
+                            <field name="supplier_name" string="Fournisseur"/>
+                            <field name="invoice_number_dgi" string="N° Facture DGI"/>
+                            <field name="amount_signed" string="Montant"/>
+                            <field name="currency_id" column_invisible="1"/>
+                            <field name="same_number_refs" string="Déjà enregistrée sous"/>
+                        </tree>
+                    </field>
+                    <footer>
+                        <button name="action_only_others" type="object"
+                                string="Traiter seulement les autres" class="btn-primary"
+                                invisible="other_count == 0"/>
+                        <button string="Annuler" special="cancel"
+                                class="btn-primary" invisible="other_count != 0"/>
+                        <button name="action_confirm_all" type="object"
+                                string="Transmettre quand même" class="btn-danger"
+                                confirm="Confirmer : ces factures portent un numéro déjà enregistré et seront transmises à la comptabilité."/>
+                        <button string="Annuler" special="cancel"
+                                class="btn-secondary" invisible="other_count == 0"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

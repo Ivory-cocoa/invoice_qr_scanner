@@ -90,8 +90,22 @@ class InvoiceScanRecordBulk(models.Model):
     # =========================================================================
     # OPÉRATION — MARQUER TRAITÉ
     # =========================================================================
-    def _bulk_mark_processed(self, user=None, origin=None):
+    def _needs_same_number_confirmation(self):
+        """Scans à l'état « Facture créée » dont le numéro est déjà porté par
+        une autre facture enregistrée : les marquer « traités » (donc les
+        transmettre à la comptabilité) demande une confirmation explicite."""
+        return self.filtered(
+            lambda r: r.state == 'done' and r.same_number_count > 0)
+
+    def _bulk_mark_processed(self, user=None, origin=None,
+                             confirm_same_number=False):
         """Marquer en lot les scans comme traités.
+
+        Second filet avant le paiement : un scan dont le numéro de facture
+        est déjà porté par une autre facture enregistrée n'est marqué traité
+        que sur confirmation (`confirm_same_number`, ou la clé de contexte
+        `same_number_confirmed`). Sans elle, il est laissé tel quel et le
+        compte-rendu le dit (`needs_confirmation`).
 
         Args:
             user: utilisateur à inscrire comme traiteur (défaut : l'utilisateur
@@ -106,9 +120,18 @@ class InvoiceScanRecordBulk(models.Model):
         user = user or self.env.user
         results = {}
         todo = self.browse()
+        confirmed = bool(
+            confirm_same_number or self.env.context.get('same_number_confirmed'))
+        twins = self._needs_same_number_confirmation()
+        waiting = self.browse() if confirmed else twins
 
         for record in self:
-            if record.state == 'processed':
+            if record in waiting:
+                results[record.id] = (BULK_SKIPPED, _(
+                    "Confirmation requise : même numéro de facture que "
+                    "%(refs)s. Rien n'a été modifié.",
+                    refs=record.same_number_refs or _("un autre scan")))
+            elif record.state == 'processed':
                 results[record.id] = (BULK_SKIPPED, _(
                     "Déjà traité par %(user)s.",
                     user=record.processed_by.name or _("un utilisateur"),
@@ -133,11 +156,22 @@ class InvoiceScanRecordBulk(models.Model):
             # `_message_log_batch` écrit les N messages en une passe : un
             # `message_post` par enregistrement rendait le marquage d'un lot
             # de 200 lignes perceptiblement lent.
-            todo._message_log_batch(bodies={r.id: body for r in todo})
+            bodies = {}
+            for record in todo:
+                bodies[record.id] = body
+                if record in twins:
+                    bodies[record.id] += ' ' + _(
+                        "Traité MALGRÉ un même numéro de facture déjà "
+                        "enregistré (%(refs)s) : confirmé par %(user)s.",
+                        refs=record.same_number_refs or '?', user=user.name)
+            todo._message_log_batch(bodies=bodies)
             for record in todo:
                 results[record.id] = (BULK_DONE, _("Marqué comme traité."))
 
-        return self._bulk_result(results)
+        entries = self._bulk_result(results)
+        for entry in entries:
+            entry['needs_confirmation'] = entry['scan_id'] in waiting.ids
+        return entries
 
     # =========================================================================
     # OPÉRATION — REMETTRE NON TRAITÉ
