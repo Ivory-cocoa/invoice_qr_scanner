@@ -143,7 +143,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
       builder: (ctx) => AlertDialog(
         icon: Icon(
           Icons.search_off_rounded,
-          color: AppTheme.warningColor,
+          color: AppTheme.getWarning(context),
           size: 40,
         ),
         title: Text(
@@ -253,7 +253,9 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
   Widget build(BuildContext context) {
     final isDark = AppTheme.isDark(context);
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.surfaceLight,
+      backgroundColor: isDark
+          ? AppTheme.darkSurface
+          : AppTheme.getSurfaceLight(context),
       appBar: AppBar(
         elevation: 0,
         flexibleSpace: Container(
@@ -367,7 +369,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                         title: 'Vérifier une facture',
                         subtitle:
                             'Scanner une facture pour savoir si elle est liée à un OT, puis la lier',
-                        color: AppTheme.primaryColor,
+                        color: AppTheme.getPrimary(context),
                         onTap: _scanAndCheck,
                       ),
                       const SizedBox(height: 12),
@@ -376,7 +378,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                         title: 'Rechercher une facture',
                         subtitle:
                             'Par numéro, fournisseur ou OT, puis la lier à un ou plusieurs OTs',
-                        color: AppTheme.accentColor,
+                        color: AppTheme.getAccent(context),
                         onTap: () => _openInvoices(InvoiceLinkFilter.all),
                       ),
                       const SizedBox(height: 12),
@@ -385,7 +387,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                         title: 'Factures liées à des OT',
                         subtitle:
                             'Consulter la liste des factures déjà rattachées et leurs OT',
-                        color: AppTheme.successColor,
+                        color: AppTheme.getSuccess(context),
                         onTap: () => _openInvoices(InvoiceLinkFilter.linked),
                       ),
                       const SizedBox(height: 12),
@@ -394,7 +396,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                         title: 'Rechercher un OT',
                         subtitle:
                             'Scanner le QR-code d\'un OT ou le rechercher pour voir ses coûts et paiements',
-                        color: AppTheme.infoColor,
+                        color: AppTheme.getInfo(context),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const OtCostScansScreen(),
@@ -561,7 +563,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 icon: Icons.link_rounded,
                 label: 'Mes liaisons',
                 value: '$myLinks',
-                color: AppTheme.primaryColor,
+                color: AppTheme.getPrimary(context),
               ),
             ),
             const SizedBox(width: 10),
@@ -570,7 +572,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 icon: Icons.payments_rounded,
                 label: 'Montant lié',
                 value: _formatAmount(myAmount, currency),
-                color: AppTheme.successColor,
+                color: AppTheme.getSuccess(context),
                 small: true,
               ),
             ),
@@ -584,7 +586,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 icon: Icons.receipt_long_rounded,
                 label: 'Factures à lier',
                 value: '$unlinked',
-                color: AppTheme.warningColor,
+                color: AppTheme.getWarning(context),
               ),
             ),
             const SizedBox(width: 10),
@@ -593,7 +595,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                 icon: Icons.local_shipping_rounded,
                 label: 'OTs ouverts',
                 value: '$otsOpen',
-                color: AppTheme.accentColor,
+                color: AppTheme.getAccent(context),
               ),
             ),
           ],
@@ -602,7 +604,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
           const SizedBox(height: 10),
           Text(
             _statsError!,
-            style: TextStyle(color: AppTheme.errorColor, fontSize: 12),
+            style: TextStyle(color: AppTheme.getError(context), fontSize: 12),
           ),
         ],
       ],
@@ -680,12 +682,12 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: AppTheme.primaryColor.withValues(alpha: 0.12),
+            color: AppTheme.getPrimary(context).withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.list_alt_rounded,
-            color: AppTheme.primaryColor,
+            color: AppTheme.getPrimary(context),
           ),
         ),
         title: const Text(

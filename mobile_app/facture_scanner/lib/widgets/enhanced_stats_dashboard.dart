@@ -185,8 +185,8 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
           ),
           child: Text(
             value.toInt().toString(),
-            style: const TextStyle(
-              color: AppTheme.primaryColor,
+            style: TextStyle(
+              color: AppTheme.getPrimary(context),
               fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
@@ -204,7 +204,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             value: success,
             label: 'Réussis',
             icon: Icons.check_circle_rounded,
-            color: AppTheme.successColor,
+            color: AppTheme.getSuccess(context),
           ),
         ),
         const SizedBox(width: 8),
@@ -213,7 +213,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             value: duplicates,
             label: 'Doublons',
             icon: Icons.content_copy_rounded,
-            color: AppTheme.warningColor,
+            color: AppTheme.getWarning(context),
           ),
         ),
         const SizedBox(width: 8),
@@ -222,7 +222,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
             value: errors,
             label: 'Erreurs',
             icon: Icons.error_rounded,
-            color: AppTheme.errorColor,
+            color: AppTheme.getError(context),
           ),
         ),
       ],
@@ -246,7 +246,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                 label: 'Scans réussis',
                 subtitle: 'Factures créées',
                 icon: Icons.check_circle_rounded,
-                color: AppTheme.successColor,
+                color: AppTheme.getSuccess(context),
               ),
             ),
             const SizedBox(width: 12),
@@ -257,7 +257,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                 label: 'Doublons',
                 subtitle: 'Déjà enregistrés',
                 icon: Icons.content_copy_rounded,
-                color: AppTheme.warningColor,
+                color: AppTheme.getWarning(context),
               ),
             ),
           ],
@@ -269,7 +269,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
           label: 'Erreurs',
           subtitle: 'Scans échoués',
           icon: Icons.error_outline_rounded,
-          color: AppTheme.errorColor,
+          color: AppTheme.getError(context),
           fullWidth: true,
         ),
       ],
@@ -420,6 +420,13 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                       duplicates: duplicates,
                       errors: errors,
                       progress: progress,
+                      // Un peintre n'a pas de contexte : les couleurs du
+                      // thème lui sont données.
+                      successColor: AppTheme.getSuccess(context),
+                      duplicatesColor: AppTheme.getWarning(context),
+                      errorsColor: AppTheme.getError(context),
+                      centerColor: AppTheme.getSurfaceElevated(context),
+                      textColor: AppTheme.getTextPrimary(context),
                     ),
                   );
                 },
@@ -438,7 +445,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                   'Réussis',
                   success,
                   total,
-                  AppTheme.successColor,
+                  AppTheme.getSuccess(context),
                 ),
                 const SizedBox(height: 10),
                 _buildLegendItem(
@@ -446,7 +453,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                   'Doublons',
                   duplicates,
                   total,
-                  AppTheme.warningColor,
+                  AppTheme.getWarning(context),
                 ),
                 const SizedBox(height: 10),
                 _buildLegendItem(
@@ -454,7 +461,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                   'Erreurs',
                   errors,
                   total,
-                  AppTheme.errorColor,
+                  AppTheme.getError(context),
                 ),
               ],
             ),
@@ -526,7 +533,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.accentColor.withValues(alpha: 0.3),
+                  color: AppTheme.getAccent(context).withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -564,7 +571,7 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
                       style: TextStyle(
                         color: value < 0
                             ? AppTheme.getError(context)
-                            : AppTheme.accentColor,
+                            : AppTheme.getAccent(context),
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                       ),
@@ -667,9 +674,9 @@ class _EnhancedStatsDashboardState extends State<EnhancedStatsDashboard>
   }
 
   Color _getRateColor(double rate) {
-    if (rate >= 80) return AppTheme.successColor;
-    if (rate >= 50) return AppTheme.warningColor;
-    return AppTheme.errorColor;
+    if (rate >= 80) return AppTheme.getSuccess(context);
+    if (rate >= 50) return AppTheme.getWarning(context);
+    return AppTheme.getError(context);
   }
 
   Widget _buildLoadingSkeleton(BuildContext context) {
@@ -762,12 +769,22 @@ class _PieChartPainter extends CustomPainter {
   final int duplicates;
   final int errors;
   final double progress;
+  final Color successColor;
+  final Color duplicatesColor;
+  final Color errorsColor;
+  final Color centerColor;
+  final Color textColor;
 
   _PieChartPainter({
     required this.success,
     required this.duplicates,
     required this.errors,
     required this.progress,
+    required this.successColor,
+    required this.duplicatesColor,
+    required this.errorsColor,
+    required this.centerColor,
+    required this.textColor,
   });
 
   @override
@@ -795,25 +812,25 @@ class _PieChartPainter extends CustomPainter {
     double currentAngle = startAngle;
 
     if (success > 0) {
-      paint.color = AppTheme.successColor;
+      paint.color = successColor;
       canvas.drawArc(rect, currentAngle, successAngle, false, paint);
       currentAngle += successAngle;
     }
 
     if (duplicates > 0) {
-      paint.color = AppTheme.warningColor;
+      paint.color = duplicatesColor;
       canvas.drawArc(rect, currentAngle, duplicatesAngle, false, paint);
       currentAngle += duplicatesAngle;
     }
 
     if (errors > 0) {
-      paint.color = AppTheme.errorColor;
+      paint.color = errorsColor;
       canvas.drawArc(rect, currentAngle, errorsAngle, false, paint);
     }
 
     // Cercle central
     final centerPaint = Paint()
-      ..color = Colors.white
+      ..color = centerColor
       ..style = PaintingStyle.fill;
     canvas.drawCircle(center, radius - strokeWidth * 0.6, centerPaint);
 
@@ -821,8 +838,8 @@ class _PieChartPainter extends CustomPainter {
     final textPainter = TextPainter(
       text: TextSpan(
         text: total.toString(),
-        style: const TextStyle(
-          color: AppTheme.textPrimary,
+        style: TextStyle(
+          color: textColor,
           fontSize: 22,
           fontWeight: FontWeight.w800,
         ),
@@ -844,6 +861,9 @@ class _PieChartPainter extends CustomPainter {
     return oldDelegate.progress != progress ||
         oldDelegate.success != success ||
         oldDelegate.duplicates != duplicates ||
-        oldDelegate.errors != errors;
+        oldDelegate.errors != errors ||
+        oldDelegate.successColor != successColor ||
+        oldDelegate.centerColor != centerColor ||
+        oldDelegate.textColor != textColor;
   }
 }

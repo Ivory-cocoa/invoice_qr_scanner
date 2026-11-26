@@ -477,11 +477,10 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primary = AppTheme.getPrimary(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lier à des OTs'),
-        backgroundColor: primary,
+        backgroundColor: AppTheme.getHeader(context),
         foregroundColor: Colors.white,
       ),
       body: SafeArea(
@@ -1191,7 +1190,9 @@ class _LinkToOtScreenState extends State<LinkToOtScreen> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.getPrimary(context),
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppTheme.onColor(
+                      AppTheme.getPrimary(context),
+                    ),
                     disabledBackgroundColor: Colors.grey.shade400,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,

@@ -109,7 +109,7 @@ class StatsCard extends StatelessWidget {
                             label: 'Traités',
                             value: '${stats['processed_scans'] ?? 0}',
                             icon: Icons.verified_rounded,
-                            color: const Color(0xFF5C6BC0),
+                            color: AppTheme.getProcessed(context),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -119,7 +119,7 @@ class StatsCard extends StatelessWidget {
                             label: 'Non traités',
                             value: '${stats['unprocessed_scans'] ?? 0}',
                             icon: Icons.pending_actions_rounded,
-                            color: const Color(0xFFFF8F00),
+                            color: AppTheme.getPending(context),
                           ),
                         ),
                       ],
@@ -232,14 +232,14 @@ class StatsCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF5C6BC0,
+                          color: AppTheme.getProcessed(
+                            context,
                           ).withValues(alpha: isDark ? 0.2 : 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.timer_rounded,
-                          color: Color(0xFF5C6BC0),
+                          color: AppTheme.getProcessed(context),
                           size: 24,
                         ),
                       ),
@@ -261,8 +261,8 @@ class StatsCard extends StatelessWidget {
                               _formatDuration(
                                 stats['avg_verification_duration'],
                               ),
-                              style: const TextStyle(
-                                color: Color(0xFF5C6BC0),
+                              style: TextStyle(
+                                color: AppTheme.getProcessed(context),
                                 fontSize: 22,
                                 fontWeight: FontWeight.w700,
                               ),

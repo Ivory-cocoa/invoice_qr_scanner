@@ -558,7 +558,7 @@ class _ScannerScreenState extends State<ScannerScreen>
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                color: AppTheme.getPrimary(context).withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(

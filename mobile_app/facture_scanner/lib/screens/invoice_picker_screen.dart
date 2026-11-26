@@ -371,8 +371,8 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
         final linkedCount = _linkedCount(s);
         final otRefs = (s['linked_ot_refs'] ?? '').toString();
         final linkColor = linkedCount > 0
-            ? AppTheme.successColor
-            : AppTheme.warningColor;
+            ? AppTheme.getSuccess(context)
+            : AppTheme.getWarning(context);
 
         return Material(
           color: Theme.of(context).cardColor,
@@ -409,20 +409,28 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                             fontWeight: FontWeight.w700,
                             fontSize: 15,
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          invoiceNum.isNotEmpty
-                              ? 'Facture $invoiceNum'
-                              : (ref.isNotEmpty ? ref : '—'),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppTheme.getTextSecondary(context),
+                        const SizedBox(height: 3),
+                        // Le numéro de facture n'est jamais coupé : c'est lui
+                        // que l'on compare au papier. Il rétrécit au besoin.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            invoiceNum.isNotEmpty
+                                ? 'N° $invoiceNum'
+                                : (ref.isNotEmpty ? ref : '—'),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                              color: AppTheme.getTextPrimary(context),
+                            ),
+                            maxLines: 1,
+                            softWrap: false,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Row(
@@ -430,14 +438,27 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                             Icon(
                               Icons.event_rounded,
                               size: 13,
-                              color: AppTheme.getTextMuted(context),
+                              color: AppTheme.getTextSecondary(context),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               date.isNotEmpty ? date : '—',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppTheme.getTextMuted(context),
+                                color: AppTheme.getTextSecondary(context),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _formatAmount(amount, currency),
+                                textAlign: TextAlign.end,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -476,23 +497,10 @@ class _InvoicePickerScreenState extends State<InvoicePickerScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        _formatAmount(amount, currency),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppTheme.getTextMuted(context),
-                      ),
-                    ],
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.getTextMuted(context),
                   ),
                 ],
               ),

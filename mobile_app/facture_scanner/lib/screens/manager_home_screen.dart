@@ -60,16 +60,22 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
       children: [
         // Écran actif selon le mode
         if (_mode == ManagerMode.verificateur)
-          const HomeScreen()
+          const HomeScreen(embedded: true)
         else
-          const TraiteurHomeScreen(),
+          const TraiteurHomeScreen(embedded: true),
 
         // Sélecteur de mode flottant en haut
+        // À GAUCHE, sur la place du titre : centré, il recouvrait les
+        // boutons de la barre du haut (actualiser, compte) sur un téléphone
+        // étroit. `Material` : sans lui, le texte n'a pas de style par
+        // défaut et s'affiche souligné de jaune.
         Positioned(
-          top: MediaQuery.of(context).padding.top + 4,
-          left: 0,
-          right: 0,
-          child: Center(child: _buildModeToggle()),
+          top: MediaQuery.of(context).padding.top + 6,
+          left: 10,
+          child: Material(
+            type: MaterialType.transparency,
+            child: _buildModeToggle(),
+          ),
         ),
       ],
     );
@@ -102,7 +108,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
             mode: ManagerMode.traiteur,
             label: 'Traiteur',
             icon: Icons.assignment_turned_in_rounded,
-            color: AppTheme.accentColor,
+            color: AppTheme.getAccent(context),
           ),
         ],
       ),
@@ -126,7 +132,7 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
             color: isActive ? color : Colors.transparent,
             borderRadius: BorderRadius.circular(22),
@@ -137,7 +143,9 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
               Icon(
                 icon,
                 size: 18,
-                color: isActive ? Colors.white : AppTheme.getTextMuted(context),
+                color: isActive
+                    ? AppTheme.onColor(color)
+                    : AppTheme.getTextSecondary(context),
               ),
               const SizedBox(width: 6),
               Text(
@@ -146,8 +154,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: isActive
-                      ? Colors.white
-                      : AppTheme.getTextMuted(context),
+                      ? AppTheme.onColor(color)
+                      : AppTheme.getTextSecondary(context),
                 ),
               ),
             ],

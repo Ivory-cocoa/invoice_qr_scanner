@@ -178,17 +178,17 @@ class _InvoiceStatusSheet extends StatelessWidget {
     switch (kase) {
       case _Case.unlinked:
         icon = Icons.add_link_rounded;
-        color = AppTheme.warningColor;
+        color = AppTheme.getWarning(context);
         title = 'Facture non liée';
         break;
       case _Case.fullyLinked:
         icon = Icons.check_circle_rounded;
-        color = AppTheme.successColor;
+        color = AppTheme.getSuccess(context);
         title = 'Facture entièrement liée';
         break;
       case _Case.partiallyLinked:
         icon = Icons.pie_chart_rounded;
-        color = AppTheme.infoColor;
+        color = AppTheme.getInfo(context);
         title = 'Facture partiellement liée';
         break;
     }
@@ -273,13 +273,13 @@ class _InvoiceStatusSheet extends StatelessWidget {
     final Color barColor;
     switch (kase) {
       case _Case.unlinked:
-        barColor = AppTheme.warningColor;
+        barColor = AppTheme.getWarning(context);
         break;
       case _Case.fullyLinked:
-        barColor = AppTheme.successColor;
+        barColor = AppTheme.getSuccess(context);
         break;
       case _Case.partiallyLinked:
-        barColor = AppTheme.infoColor;
+        barColor = AppTheme.getInfo(context);
         break;
     }
 
@@ -314,8 +314,8 @@ class _InvoiceStatusSheet extends StatelessWidget {
             currency,
             bold: true,
             color: remaining.abs() > 0.0001
-                ? AppTheme.warningColor
-                : AppTheme.successColor,
+                ? AppTheme.getWarning(context)
+                : AppTheme.getSuccess(context),
           ),
           const SizedBox(height: 10),
           ClipRRect(
@@ -377,13 +377,13 @@ class _InvoiceStatusSheet extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppTheme.primarySurface,
+              color: AppTheme.getPrimarySurface(context),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.local_shipping_outlined,
               size: 18,
-              color: AppTheme.primaryColor,
+              color: AppTheme.getPrimary(context),
             ),
           ),
           const SizedBox(width: 12),

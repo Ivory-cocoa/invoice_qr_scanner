@@ -26,7 +26,12 @@ import 'invoice_picker_screen.dart';
 import 'ot_cost_scans_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.embedded = false});
+
+  /// Affiché dans l'écran à deux profils (Vérificateur / Traiteur) : le
+  /// sélecteur de profil occupe alors la place du titre, qui n'est pas
+  /// affiché (il se retrouvait coupé derrière le sélecteur).
+  final bool embedded;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -702,7 +707,9 @@ class _HomeScreenState extends State<HomeScreen>
     final isDark = AppTheme.isDark(context);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.surfaceLight,
+      backgroundColor: isDark
+          ? AppTheme.darkSurface
+          : AppTheme.getSurfaceLight(context),
       appBar: _buildAppBar(),
       body: SafeArea(
         bottom: true,
@@ -739,14 +746,16 @@ class _HomeScreenState extends State<HomeScreen>
           gradient: isDark ? AppTheme.darkGradient : AppTheme.primaryGradient,
         ),
       ),
-      title: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.qr_code_scanner, size: 24),
-          SizedBox(width: 10),
-          Text('Facture Scanner'),
-        ],
-      ),
+      title: widget.embedded
+          ? null
+          : const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.qr_code_scanner, size: 24),
+                SizedBox(width: 10),
+                Text('Facture Scanner'),
+              ],
+            ),
       actions: [
         // Bouton sync avec badge
         Consumer<ScanProvider>(
@@ -1157,7 +1166,7 @@ class _HomeScreenState extends State<HomeScreen>
                           label: const Text('Mes liaisons'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppTheme.onColor(primary),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -1366,7 +1375,7 @@ class _HomeScreenState extends State<HomeScreen>
                 icon: Icons.qr_code_scanner_rounded,
                 title: 'Scanner',
                 subtitle: 'Nouvelle facture',
-                color: AppTheme.primaryColor,
+                color: AppTheme.getPrimary(context),
                 onTap: _openScanner,
               ),
             ),
@@ -1376,7 +1385,7 @@ class _HomeScreenState extends State<HomeScreen>
                 icon: Icons.history_rounded,
                 title: 'Historique',
                 subtitle: 'Voir les scans',
-                color: AppTheme.accentColor,
+                color: AppTheme.getAccent(context),
                 onTap: () => _tabController.animateTo(1),
               ),
             ),
@@ -1393,7 +1402,7 @@ class _HomeScreenState extends State<HomeScreen>
                     icon: Icons.error_outline_rounded,
                     title: 'Erreurs',
                     subtitle: '$errorCount en erreur',
-                    color: AppTheme.errorColor,
+                    color: AppTheme.getError(context),
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ErrorsScreen()),
@@ -1413,7 +1422,7 @@ class _HomeScreenState extends State<HomeScreen>
                     icon: Icons.copy_rounded,
                     title: 'Doublons',
                     subtitle: '$duplicateAttempts tentatives',
-                    color: AppTheme.warningColor,
+                    color: AppTheme.getWarning(context),
                     onTap: () => _tabController.animateTo(1),
                     badge: duplicateAttempts > 0 ? duplicateAttempts : null,
                   );
@@ -1435,7 +1444,7 @@ class _HomeScreenState extends State<HomeScreen>
                         ? '${scan.pendingScansCount} en attente'
                         : 'Tout est à jour',
                     color: scan.hasPendingScans
-                        ? const Color(0xFF6C63FF)
+                        ? AppTheme.getProcessed(context)
                         : Colors.grey,
                     onTap: scan.hasPendingScans && connectivity.isOnline
                         ? _syncPendingScans
@@ -1465,7 +1474,7 @@ class _HomeScreenState extends State<HomeScreen>
                 icon: Icons.local_shipping_rounded,
                 title: 'Consulter un OT',
                 subtitle: 'Scanner / rechercher',
-                color: AppTheme.infoColor,
+                color: AppTheme.getInfo(context),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const OtCostScansScreen()),
@@ -1489,6 +1498,9 @@ class _HomeScreenState extends State<HomeScreen>
     int? badge,
   }) {
     final isDark = AppTheme.isDark(context);
+    // Une couleur foncée (gris-bleu des paramètres…) est éclaircie en mode
+    // sombre pour rester lisible en icône.
+    final tone = AppTheme.readable(context, color);
 
     return Material(
       color: isDark ? AppTheme.darkSurfaceElevated : Colors.white,
@@ -1508,10 +1520,10 @@ class _HomeScreenState extends State<HomeScreen>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                      color: tone.withValues(alpha: isDark ? 0.2 : 0.12),
                       borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                     ),
-                    child: Icon(icon, color: color, size: 26),
+                    child: Icon(icon, color: tone, size: 26),
                   ),
                   if (badge != null && badge > 0) ...[
                     const Spacer(),
@@ -1521,13 +1533,13 @@ class _HomeScreenState extends State<HomeScreen>
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: color,
+                        color: tone,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         badge > 99 ? '99+' : badge.toString(),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: AppTheme.onColor(tone),
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),

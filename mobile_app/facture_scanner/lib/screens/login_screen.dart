@@ -206,10 +206,10 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ],
           ),
-          child: const Icon(
+          child: Icon(
             Icons.qr_code_scanner_rounded,
             size: 50,
-            color: AppTheme.primaryDark,
+            color: AppTheme.getPrimary(context),
           ),
         ),
 
@@ -509,8 +509,8 @@ class _LoginScreenState extends State<LoginScreen>
       onFieldSubmitted: onFieldSubmitted,
       inputFormatters: inputFormatters,
       validator: validator,
-      style: const TextStyle(
-        color: AppTheme.primaryDark, // TEXTE BLEU FONCÉ
+      style: TextStyle(
+        color: AppTheme.getPrimary(context), // TEXTE BLEU FONCÉ
         fontSize: 16,
         fontWeight: FontWeight.w500,
       ),
@@ -545,7 +545,7 @@ class _LoginScreenState extends State<LoginScreen>
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
           borderSide: BorderSide(
-            color: AppTheme.dividerColor.withValues(alpha: 0.5),
+            color: AppTheme.getDivider(context).withValues(alpha: 0.5),
             width: 1,
           ),
         ),
@@ -657,7 +657,7 @@ class _LoginScreenState extends State<LoginScreen>
                 : (awaitingOtp ? _verifyOtp : _requestOtp),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.getPrimary(context),
-              foregroundColor: Colors.white,
+              foregroundColor: AppTheme.onColor(AppTheme.getPrimary(context)),
               disabledBackgroundColor: AppTheme.getPrimary(
                 context,
               ).withValues(alpha: 0.6),

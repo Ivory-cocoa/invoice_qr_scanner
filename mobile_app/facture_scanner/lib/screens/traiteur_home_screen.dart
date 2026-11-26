@@ -21,7 +21,12 @@ import '../widgets/scan_result_dialog.dart';
 import 'scanner_screen.dart';
 
 class TraiteurHomeScreen extends StatefulWidget {
-  const TraiteurHomeScreen({super.key});
+  const TraiteurHomeScreen({super.key, this.embedded = false});
+
+  /// Affiché dans l'écran à deux profils (Vérificateur / Traiteur) : le
+  /// sélecteur de profil occupe alors la place du titre, qui n'est pas
+  /// affiché (il se retrouvait coupé derrière le sélecteur).
+  final bool embedded;
 
   @override
   State<TraiteurHomeScreen> createState() => _TraiteurHomeScreenState();
@@ -215,7 +220,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
     final isDark = AppTheme.isDark(context);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.surfaceLight,
+      backgroundColor: isDark
+          ? AppTheme.darkSurface
+          : AppTheme.getSurfaceLight(context),
       appBar: _buildAppBar(),
       body: SafeArea(
         bottom: true,
@@ -257,14 +264,16 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
                 ),
         ),
       ),
-      title: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.verified_rounded, size: 24),
-          SizedBox(width: 10),
-          Text('Traiteur - Factures'),
-        ],
-      ),
+      title: widget.embedded
+          ? null
+          : const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.verified_rounded, size: 24),
+                SizedBox(width: 10),
+                Text('Traiteur - Factures'),
+              ],
+            ),
       bottom: TabBar(
         controller: _tabController,
         indicatorColor: Colors.white,
@@ -495,19 +504,19 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
                 AppTheme.getPrimary(context),
                 AppTheme.isDark(context)
                     ? AppTheme.getPrimary(context).withValues(alpha: 0.15)
-                    : AppTheme.primarySurface,
+                    : AppTheme.getPrimarySurface(context),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _buildKpiCard(
                 'Taux traitement',
-                '${(stats?['processing_rate'] ?? 0).toStringAsFixed(0)}%',
+                '${_processingRate(stats).toStringAsFixed(0)}%',
                 null,
                 Icons.speed_rounded,
-                AppTheme.accentColor,
+                AppTheme.getAccent(context),
                 AppTheme.isDark(context)
-                    ? AppTheme.accentColor.withValues(alpha: 0.15)
+                    ? AppTheme.getAccent(context).withValues(alpha: 0.15)
                     : const Color(0xFFE0F2F1),
               ),
             ),
@@ -574,8 +583,23 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
     );
   }
 
+  /// Part des factures traitées, en pourcentage.
+  ///
+  /// Le serveur ne publie pas ce taux : il donne les factures traitées
+  /// (`all_processed_count`) et celles en attente (`pending_count`). L'écran
+  /// affichait donc « 0 % » en permanence. Calculé ici ; un taux fourni par
+  /// le serveur garderait la priorité.
+  static double _processingRate(Map<String, dynamic>? stats) {
+    final given = stats?['processing_rate'];
+    if (given is num) return given.toDouble().clamp(0, 100).toDouble();
+    final processed = (stats?['all_processed_count'] as num?)?.toDouble() ?? 0;
+    final pending = (stats?['pending_count'] as num?)?.toDouble() ?? 0;
+    final total = processed + pending;
+    return total <= 0 ? 0 : (processed / total * 100).clamp(0, 100).toDouble();
+  }
+
   Widget _buildProcessingRateCard(Map<String, dynamic>? stats) {
-    final rate = (stats?['processing_rate'] ?? 0.0).toDouble();
+    final rate = _processingRate(stats);
     final color = rate >= 75
         ? AppTheme.getSuccess(context)
         : rate >= 50
@@ -590,9 +614,9 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.bar_chart_rounded,
-                color: AppTheme.accentColor,
+                color: AppTheme.getAccent(context),
                 size: 22,
               ),
               const SizedBox(width: 10),
@@ -745,18 +769,21 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
             color: AppTheme.successColor.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Aucune facture en attente',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: AppTheme.textMedium,
+              color: AppTheme.getTextSecondary(context),
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Toutes les factures ont été traitées !',
-            style: TextStyle(fontSize: 14, color: AppTheme.textLight),
+            style: TextStyle(
+              fontSize: 14,
+              color: AppTheme.getTextMuted(context),
+            ),
           ),
         ],
       ),
@@ -1050,8 +1077,10 @@ class _TraiteurHomeScreenState extends State<TraiteurHomeScreen>
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(color: AppTheme.successColor),
+          builder: (context) => Center(
+            child: CircularProgressIndicator(
+              color: AppTheme.getSuccess(context),
+            ),
           ),
         );
         try {

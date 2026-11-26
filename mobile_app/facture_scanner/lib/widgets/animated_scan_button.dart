@@ -146,13 +146,17 @@ class _AnimatedScanButtonState extends State<AnimatedScanButton>
             boxShadow: widget.isEnabled
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                      color: AppTheme.getPrimary(
+                        context,
+                      ).withValues(alpha: 0.4),
                       blurRadius: 20,
                       spreadRadius: 2,
                       offset: const Offset(0, 8),
                     ),
                     BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      color: AppTheme.getPrimary(
+                        context,
+                      ).withValues(alpha: 0.2),
                       blurRadius: 40,
                       spreadRadius: 4,
                       offset: const Offset(0, 16),
@@ -274,7 +278,9 @@ class MiniScanButton extends StatelessWidget {
             boxShadow: isEnabled
                 ? [
                     BoxShadow(
-                      color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                      color: AppTheme.getPrimary(
+                        context,
+                      ).withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
