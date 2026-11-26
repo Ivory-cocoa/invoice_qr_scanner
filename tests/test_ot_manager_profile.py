@@ -137,6 +137,10 @@ class TestOtManagerProfile(HttpCase):
         self.assertFalse(payload['data']['found'])
         self.assertEqual(payload['data']['reason'], 'not_scanned')
         self.assertNotIn('record', payload['data'])
+        # Le message dit que la facture n'existe pas et oriente vers le
+        # secrétariat, qui la vérifiera.
+        self.assertIn("n'existe pas encore", payload['message'])
+        self.assertIn('secrétariat', payload['message'])
         self.assertEqual(self.env['invoice.scan.record'].search_count([]), before)
 
     def test_lookup_of_a_scan_in_error(self):
@@ -146,6 +150,9 @@ class TestOtManagerProfile(HttpCase):
         self.assertEqual(status, 200)
         self.assertFalse(payload['data']['found'])
         self.assertEqual(payload['data']['reason'], 'not_ready')
+        self.assertIn('secrétariat', payload['message'])
+        self.scan.invalidate_recordset()
+        self.assertEqual(self.scan.state, 'error')
 
     def test_lookup_rejects_other_contents(self):
         token, _data = self._token(self.ot_manager)
