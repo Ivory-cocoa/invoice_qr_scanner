@@ -1,12 +1,15 @@
 /// OT Manager Home Screen — Tableau de bord dédié au profil Gestionnaire OT.
 ///
 /// Cet écran remplace le tableau de bord scanner classique pour les utilisateurs
-/// dont le rôle principal est `ot_manager`. Il met en avant les deux flux
-/// principaux :
-///   1. "Scanner et lier" — scanner une nouvelle facture puis la rattacher à
-///      un ou plusieurs OTs.
-///   2. "Lier une facture déjà scannée" — choisir une facture parmi
-///      l'historique pour la rattacher à un ou plusieurs OTs.
+/// dont le rôle principal est `ot_manager`.
+///
+/// Le Gestionnaire OT ne vérifie PAS les factures (pas de création de scan,
+/// pas de contrôle de doublon) et ne les traite pas. Il peut :
+///   1. "Vérifier une facture" — scanner une facture DÉJÀ scannée par un
+///      Vérificateur pour savoir si elle est liée à un OT, puis la lier ;
+///   2. "Rechercher une facture" — par numéro, fournisseur ou OT ;
+///   3. "Factures liées à des OT" — consulter la liste ;
+///   4. "Rechercher un OT" — voir ses coûts et paiements.
 ///
 /// Y figurent également un compteur de liaisons effectuées et un accès direct
 /// à la liste détaillée "Mes liaisons OT".
@@ -19,13 +22,11 @@ import '../core/models/api_response.dart';
 import '../core/models/scan_record.dart';
 import '../core/providers/auth_provider.dart';
 import '../core/providers/connectivity_provider.dart';
-import '../core/providers/scan_provider.dart';
 import '../core/services/api_service.dart';
 import '../core/ot_link_flow.dart';
 import '../core/theme/app_theme.dart';
 import '../widgets/connectivity_banner.dart';
 import 'invoice_picker_screen.dart';
-import 'manual_entry_screen.dart';
 import 'my_ot_links_screen.dart';
 import 'ot_cost_scans_screen.dart';
 import 'scanner_screen.dart';
@@ -72,108 +73,88 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
     });
   }
 
-  Future<void> _scanAndLink() async {
+  /// Scanner une facture pour savoir si elle est liée à un OT.
+  ///
+  /// Lecture seule : le Gestionnaire OT ne vérifie pas les factures. Rien
+  /// n'est créé, la DGI n'est pas interrogée et aucun doublon n'est compté.
+  /// La facture doit avoir été scannée auparavant par un Vérificateur.
+  Future<void> _scanAndCheck() async {
     final connectivity = context.read<ConnectivityProvider>();
-    final scan = context.read<ScanProvider>();
+    if (!connectivity.isOnline) {
+      _toast('Connexion requise pour vérifier une facture', isError: true);
+      return;
+    }
 
     final qrContent = await Navigator.of(
       context,
     ).push<String>(MaterialPageRoute(builder: (_) => const ScannerScreen()));
     if (qrContent == null || !mounted) return;
 
-    // Process QR (extraction DGI côté client) avec un loader bloquant.
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _ProcessingDialog(),
     );
-
-    final manualEntryNeeded = await scan.processQrCodeWithExtraction(
-      qrContent,
-      isOnline: connectivity.isOnline,
-    );
-
+    final resp = await _api.lookupScan(qrContent);
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pop(); // close loader
 
-    final ScanRecord? record = scan.lastScanResult;
-    final state = scan.state;
-
-    if (manualEntryNeeded || state == ScanState.manualEntry) {
-      // Le serveur DGI n'a pas répondu — on bascule sur la saisie manuelle.
+    final data = resp.data;
+    if (!resp.success || data == null) {
       _toast(
-        'Vérification DGI indisponible. Saisie manuelle requise.',
-        isError: false,
+        resp.errorMessage ?? 'Impossible de vérifier cette facture',
+        isError: true,
       );
-      final qrUrl = scan.pendingQrUrl ?? qrContent;
-      // `ManualEntryScreen` renvoie DEUX choses selon le chemin emprunté :
-      //   - `true` si sa nouvelle tentative auprès de la DGI a réussi et que
-      //     la pièce a déjà été créée côté serveur ;
-      //   - un `ManualEntryResult` si l'utilisateur a saisi les données, qu'il
-      //     reste alors à soumettre.
-      // L'écran l'attendait typé `bool` : soumettre le formulaire levait une
-      // erreur de type et la saisie manuelle était en pratique inaccessible
-      // aux gestionnaires OT.
-      final result = await Navigator.of(context).push<Object?>(
-        MaterialPageRoute<Object?>(
-          builder: (_) => ManualEntryScreen(
-            qrUrl: qrUrl,
-            prefillData: scan.extractedDgiData,
-            verificationDuration: scan.lastVerificationDuration,
-            timedOut: true,
-          ),
-        ),
-      );
-      if (!mounted) return;
-
-      if (result is ManualEntryResult) {
-        await scan.submitManualEntry(
-          qrUrl: qrUrl,
-          supplierName: result.supplierName,
-          supplierCodeDgi: result.supplierCodeDgi,
-          customerName: result.customerName,
-          customerCodeDgi: result.customerCodeDgi,
-          invoiceNumberDgi: result.invoiceNumberDgi,
-          invoiceDate: result.invoiceDate,
-          amountTtc: result.amountTtc,
-          documentType: result.documentType,
-          verificationDuration: result.verificationDuration,
-        );
-        if (!mounted) return;
-        if (scan.state != ScanState.success) {
-          _toast(scan.message ?? 'Enregistrement impossible', isError: true);
-        }
-      }
-
-      if (result == true || result is ManualEntryResult) {
-        final r = scan.lastScanResult;
-        if (r != null && r.id > 0) {
-          await _pushLinkToOt(r);
-        }
-      }
-      scan.resetState();
-      _loadStats();
       return;
     }
 
-    if ((state == ScanState.success || state == ScanState.duplicate) &&
-        record != null &&
-        record.id > 0) {
-      if (state == ScanState.duplicate) {
-        _toast(
-          'Cette facture est déjà scannée. Vous pouvez la lier à un OT.',
-          isError: false,
-        );
+    final recordJson = data['record'];
+    if (data['found'] == true && recordJson is Map<String, dynamic>) {
+      final ScanRecord record;
+      try {
+        record = ScanRecord.fromJson(recordJson);
+      } catch (_) {
+        _toast('Réponse du serveur illisible', isError: true);
+        return;
       }
-      scan.resetState();
+      // Statut OT (liée, partiellement liée, non liée) puis liaison.
       await _pushLinkToOt(record);
       return;
     }
 
-    // Erreur
-    final msg = scan.message ?? 'Impossible de traiter ce QR code';
-    scan.resetState();
-    _toast(msg, isError: true);
+    await _showNotScannedDialog(notReady: data['reason'] == 'not_ready');
+  }
+
+  Future<void> _showNotScannedDialog({required bool notReady}) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(
+          Icons.search_off_rounded,
+          color: AppTheme.warningColor,
+          size: 40,
+        ),
+        title: const Text('Facture introuvable'),
+        content: Text(
+          notReady
+              ? 'Cette facture a été scannée mais son enregistrement n\'est '
+                    'pas terminé (scan en erreur ou en attente). Elle ne '
+                    'peut pas encore être liée à un OT.\n\n'
+                    'Signalez-la à un Vérificateur.'
+              : 'Cette facture n\'a pas encore été scannée par un '
+                    'Vérificateur : elle n\'est donc liée à aucun OT et ne '
+                    'peut pas encore l\'être.\n\n'
+                    'Remettez-la à un Vérificateur, puis scannez-la de '
+                    'nouveau.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Compris'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pushLinkToOt(ScanRecord record) async {
@@ -182,15 +163,19 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
     if (mounted) _loadStats();
   }
 
-  Future<void> _pickAndLink() async {
+  /// Liste des factures scannées : toutes (recherche d'une facture), ou
+  /// seulement celles liées à des OT.
+  Future<void> _openInvoices(InvoiceLinkFilter filter) async {
     final connectivity = context.read<ConnectivityProvider>();
     if (!connectivity.isOnline) {
       _toast('Connexion requise pour parcourir les factures', isError: true);
       return;
     }
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const InvoicePickerScreen()));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InvoicePickerScreen(initialFilter: filter),
+      ),
+    );
     if (mounted) _loadStats();
   }
 
@@ -359,25 +344,34 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                       const SizedBox(height: 10),
                       _buildPrimaryAction(
                         icon: Icons.qr_code_scanner_rounded,
-                        title: 'Scanner et lier',
+                        title: 'Vérifier une facture',
                         subtitle:
-                            'Scanner une nouvelle facture puis la rattacher à un ou plusieurs OTs',
+                            'Scanner une facture pour savoir si elle est liée à un OT, puis la lier',
                         color: AppTheme.primaryColor,
-                        onTap: _scanAndLink,
+                        onTap: _scanAndCheck,
                       ),
                       const SizedBox(height: 12),
                       _buildPrimaryAction(
-                        icon: Icons.folder_open_rounded,
-                        title: 'Lier une facture déjà scannée',
+                        icon: Icons.manage_search_rounded,
+                        title: 'Rechercher une facture',
                         subtitle:
-                            'Choisir une facture dans l\'historique et la lier à un ou plusieurs OTs',
+                            'Par numéro, fournisseur ou OT, puis la lier à un ou plusieurs OTs',
                         color: AppTheme.accentColor,
-                        onTap: _pickAndLink,
+                        onTap: () => _openInvoices(InvoiceLinkFilter.all),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPrimaryAction(
+                        icon: Icons.link_rounded,
+                        title: 'Factures liées à des OT',
+                        subtitle:
+                            'Consulter la liste des factures déjà rattachées et leurs OT',
+                        color: AppTheme.successColor,
+                        onTap: () => _openInvoices(InvoiceLinkFilter.linked),
                       ),
                       const SizedBox(height: 12),
                       _buildPrimaryAction(
                         icon: Icons.local_shipping_rounded,
-                        title: 'Consulter un OT',
+                        title: 'Rechercher un OT',
                         subtitle:
                             'Scanner le QR-code d\'un OT ou le rechercher pour voir ses coûts et paiements',
                         color: AppTheme.infoColor,
@@ -440,7 +434,7 @@ class _OtManagerHomeScreenState extends State<OtManagerHomeScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Gestionnaire OT • Rattachez vos factures aux OTs',
+                      'Gestionnaire OT • Factures liées aux OT',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.9),
                         fontSize: 13,
@@ -718,27 +712,20 @@ class _ProcessingDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-        child: Consumer<ScanProvider>(
-          builder: (context, scan, _) {
-            final progress =
-                scan.extractionProgress ??
-                'Vérification de la facture en cours...';
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: AppTheme.getPrimary(context)),
-                const SizedBox(height: 16),
-                Text(
-                  progress,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.getTextSecondary(context),
-                  ),
-                ),
-              ],
-            );
-          },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppTheme.getPrimary(context)),
+            const SizedBox(height: 16),
+            Text(
+              'Recherche de la facture…',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppTheme.getTextSecondary(context),
+              ),
+            ),
+          ],
         ),
       ),
     );

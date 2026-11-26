@@ -590,18 +590,37 @@ class ApiService {
   }
 
   /// Liste paginée des scans liables à un OT (factures déjà scannées avec succès)
+  ///
+  /// [linkState] : `linked` (factures liées à au moins un OT), `unlinked`
+  /// (aucun OT) ou `all`. Un serveur ancien ignore ce filtre : l'écran
+  /// l'applique alors lui-même sur `linked_ot_count`.
   Future<ApiResponse<Map<String, dynamic>>> getLinkableScans({
     String? search,
     int page = 1,
     int limit = 20,
+    String linkState = 'all',
   }) async {
     final params = <String, String>{'page': '$page', 'limit': '$limit'};
+    if (linkState != 'all') params['link_state'] = linkState;
     if (search != null && search.trim().isNotEmpty) {
       params['search'] = search.trim();
     }
     return await _get<Map<String, dynamic>>(
       '/api/v1/invoice-scanner/ot/scans-linkable',
       queryParams: params,
+    );
+  }
+
+  /// Retrouver une facture DÉJÀ scannée à partir de son QR-code, sans rien
+  /// créer : ni scan, ni facture, ni tentative de doublon. C'est le geste du
+  /// Gestionnaire OT, qui veut savoir si la facture est liée à un OT.
+  ///
+  /// Réponse : `{ found: bool, record?: {...}, reason?: 'not_scanned' |
+  /// 'not_ready' }`.
+  Future<ApiResponse<Map<String, dynamic>>> lookupScan(String qrUrl) async {
+    return await _post<Map<String, dynamic>>(
+      '/api/v1/invoice-scanner/scan/lookup',
+      {'qr_url': qrUrl},
     );
   }
 

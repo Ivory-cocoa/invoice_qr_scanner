@@ -52,6 +52,7 @@ L'URL de base est un paramètre système, modifiable sans redéploiement.
 
 import logging
 from datetime import datetime
+from urllib.parse import urlsplit
 
 import requests
 
@@ -108,6 +109,25 @@ class FneApiClient(models.AbstractModel):
     def _get_base_url(self):
         base = self.env['ir.config_parameter'].sudo().get_param(PARAM_BASE_URL) or DEFAULT_BASE_URL
         return base.rstrip('/')
+
+    @api.model
+    def _get_public_site_url(self):
+        """Racine du site public de la DGI (``https://hôte``), pour l'aperçu.
+
+        Déduite de l'adresse de l'API : si la DGI change de domaine, le
+        paramètre système suffit à faire suivre l'aperçu. Une adresse qui
+        n'est pas en HTTPS ou sans hôte n'est jamais renvoyée : on retombe sur
+        le site connu plutôt que d'afficher une page non sûre dans Odoo.
+        """
+        for base in (self._get_base_url(), DEFAULT_BASE_URL):
+            try:
+                parts = urlsplit(base)
+                hostname, port = parts.hostname, parts.port
+            except ValueError:
+                continue
+            if parts.scheme == 'https' and hostname and not parts.username:
+                return 'https://%s%s' % (hostname, ':%s' % port if port else '')
+        return False
 
     # ------------------------------------------------------------------
     # Appel réseau

@@ -1,0 +1,55 @@
+// Liste des scans : doublons en couleur vive, et cadre de l'aperçu.
+//
+// Couleurs : uniquement les variables de thème d'Odoo (elles suivent le
+// thème, mode sombre compris) — aucune couleur en dur. Odoo publie les
+// variables Bootstrap SANS le préfixe « bs- » (« --warning-rgb ») : on passe
+// donc par $variable-prefix, comme le fait Odoo lui-même.
+//
+// Les valeurs sont écrites par interpolation : le compilateur d'Odoo
+// (libsass) refuse rgba() avec une variable CSS et min() avec deux unités.
+
+$o-scan-duplicate-bg: "rgba(var(--#{$variable-prefix}warning-rgb), 0.6)";
+$o-scan-duplicate-mark: "var(--#{$variable-prefix}danger)";
+
+.o_list_renderer .o_data_row.o_scan_row_duplicate {
+    > td {
+        font-weight: 600;
+    }
+
+    // Une ligne cochée garde la couleur de sélection d'Odoo.
+    &:not(.o_data_row_selected) > td {
+        background-color: #{$o-scan-duplicate-bg} !important;
+    }
+
+    // Repère à gauche, visible même sur une ligne cochée.
+    > td:first-child {
+        box-shadow: inset 6px 0 0 #{$o-scan-duplicate-mark} !important;
+    }
+}
+
+.o_kanban_record.o_scan_kanban_duplicate {
+    background-color: #{$o-scan-duplicate-bg};
+    border-left: 6px solid #{$o-scan-duplicate-mark};
+}
+
+// Le champ occupe toute la largeur de la fenêtre d'aperçu.
+.o_field_widget.o_field_dgi_invoice_preview {
+    display: block;
+    width: 100%;
+}
+
+.o_dgi_preview {
+    .o_dgi_preview_frame {
+        // La page de la DGI est toujours claire : fond clair sous le cadre,
+        // quel que soit le thème, pour éviter un éclair sombre au chargement.
+        background-color: #fff;
+        overflow: hidden;
+    }
+
+    iframe {
+        display: block;
+        width: 100%;
+        height: #{"min(70vh, 680px)"};
+        border: 0;
+    }
+}
