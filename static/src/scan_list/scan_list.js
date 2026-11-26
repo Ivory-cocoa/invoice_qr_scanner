@@ -14,9 +14,12 @@ import { listView } from "@web/views/list/list_view";
 export class InvoiceScanListRenderer extends ListRenderer {
     getRowClass(record) {
         const classNames = super.getRowClass(record);
-        return (record.data.duplicate_count || 0) > 0
-            ? `${classNames} o_scan_row_duplicate`
-            : classNames;
+        // Doublon : même QR-code présenté de nouveau, OU autre facture
+        // enregistrée avec le même numéro.
+        const duplicate =
+            (record.data.duplicate_count || 0) > 0 ||
+            (record.data.same_number_count || 0) > 0;
+        return duplicate ? `${classNames} o_scan_row_duplicate` : classNames;
     }
 }
 

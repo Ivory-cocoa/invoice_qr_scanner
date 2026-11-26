@@ -81,6 +81,7 @@ class TestOtManagerProfile(HttpCase):
     def test_role_sent_to_the_application(self):
         _token, data = self._token(self.ot_manager)
         self.assertEqual(data['user']['role'], 'ot_manager')
+        self.assertEqual(data['user']['role_label'], 'Gestionnaire OT')
         _token, data = self._token(self.both)
         self.assertEqual(data['user']['role'], 'verificateur')
         self.assertTrue(data['user']['is_ot_manager'])
@@ -141,6 +142,18 @@ class TestOtManagerProfile(HttpCase):
         # secrétariat, qui la vérifiera.
         self.assertIn("n'existe pas encore", payload['message'])
         self.assertIn('secrétariat', payload['message'])
+        # Le secrétariat est prévenu : une ligne, et une seule, l'attend.
+        self.assertTrue(payload['data']['secretariat_notified'])
+        Pending = self.env['invoice.scan.pending.invoice']
+        other_uuid = OTHER_URL.rsplit('/', 1)[1]
+        pending = Pending.search([('qr_uuid', '=', other_uuid)])
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending.requested_by, self.ot_manager)
+        self.assertEqual(pending.origin, 'app')
+        self._post(token, '/scan/lookup', {'qr_url': OTHER_URL})
+        pending.invalidate_recordset()
+        self.assertEqual(Pending.search_count([('qr_uuid', '=', other_uuid)]), 1)
+        self.assertEqual(pending.request_count, 2)
         self.assertEqual(self.env['invoice.scan.record'].search_count([]), before)
 
     def test_lookup_of_a_scan_in_error(self):
@@ -153,6 +166,10 @@ class TestOtManagerProfile(HttpCase):
         self.assertIn('secrétariat', payload['message'])
         self.scan.invalidate_recordset()
         self.assertEqual(self.scan.state, 'error')
+        # Le secrétariat l'a déjà entre les mains : pas de nouvelle demande.
+        self.assertFalse(payload['data']['secretariat_notified'])
+        self.assertFalse(self.env['invoice.scan.pending.invoice'].search(
+            [('qr_uuid', '=', UUID)]))
 
     def test_lookup_rejects_other_contents(self):
         token, _data = self._token(self.ot_manager)
@@ -181,3 +198,15 @@ class TestOtManagerProfile(HttpCase):
         status, payload = self._post(token, '/check', {'qr_url': URL})
         self.assertEqual(status, 200)
         self.assertTrue(payload['data']['exists'])
+
+    def test_secretariat_label(self):
+        """Vérifie ET traite, sans être Responsable : c'est le secrétariat."""
+        secretary = self._user(
+            'secretary', 'group_invoice_scanner_verificateur',
+            'group_invoice_scanner_traiteur')
+        _token, data = self._token(secretary)
+        self.assertEqual(data['user']['role'], 'manager')
+        self.assertEqual(data['user']['role_label'], 'Secrétariat')
+        boss = self._user('boss', 'group_invoice_scanner_manager')
+        _token, data = self._token(boss)
+        self.assertEqual(data['user']['role_label'], 'Responsable')
