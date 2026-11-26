@@ -265,16 +265,17 @@ class InvoiceScanDesk(models.AbstractModel):
         """Gestes permis sur une facture DGI, comme dans l'application.
 
         * ``create`` — enregistrer la facture : profils qui créent un scan
-          (Vérificateur, Responsable) et Gestionnaire OT, qui scanne pour
-          rattacher ensuite la facture à un OT ;
+          (Vérificateur, Responsable) ;
         * ``process`` — marquer « traitée » une facture déjà scannée :
-          profil Traiteur.
+          profil Traiteur ;
+        * ``lookup`` — savoir si une facture déjà enregistrée est liée à un
+          OT : profil Gestionnaire OT. Ce geste ne crée JAMAIS de facture :
+          une facture inconnue est renvoyée vers le secrétariat.
         """
         user = self.env.user
         modes = []
         if self.env['invoice.scan.record'].check_access_rights(
-                'create', raise_exception=False) or user.has_group(
-                'invoice_qr_scanner.group_invoice_scanner_ot_manager'):
+                'create', raise_exception=False):
             modes.append({
                 'key': 'create',
                 'label': _("Enregistrer la facture"),
@@ -286,6 +287,14 @@ class InvoiceScanDesk(models.AbstractModel):
                 'key': 'process',
                 'label': _("Marquer comme traitée"),
                 'hint': _("La facture déjà scannée passe à « Traitée »."),
+            })
+        if user.has_group('invoice_qr_scanner.group_invoice_scanner_ot_manager'):
+            modes.append({
+                'key': 'lookup',
+                'label': _("Vérifier le lien avec un OT"),
+                'hint': _("Dit si la facture est liée à un OT. Rien n'est "
+                          "créé : une facture inconnue est à transmettre au "
+                          "secrétariat."),
             })
         return modes
 
@@ -304,6 +313,8 @@ class InvoiceScanDesk(models.AbstractModel):
         warnings = [KEYBOARD_LAYOUT_WARNING] if parsed['layout_fixed'] else []
         if mode == 'process':
             return self._desk_dgi_process(parsed, warnings)
+        if mode == 'lookup':
+            return self._desk_dgi_lookup(parsed, warnings)
         qr_uuid = parsed['qr_uuid']
         FneApi = self.env['fne.api.client'].sudo()
         outcome = self.env['invoice.scan.record'].sudo()._process_qr_scan(
@@ -400,6 +411,55 @@ class InvoiceScanDesk(models.AbstractModel):
                 count=record.reprocess_attempt_count),
             lines=self._desk_dgi_lines(record), warnings=warnings,
             actions=self._desk_dgi_actions(record))
+
+    @api.model
+    def _desk_dgi_lookup(self, parsed, warnings):
+        """Geste du Gestionnaire OT : la facture est-elle liée à un OT ?
+
+        Lecture seule sur les scans : rien n'est créé, la DGI n'est pas
+        interrogée, aucun doublon n'est compté. Une facture inconnue est
+        notée dans « Factures à vérifier » pour le secrétariat.
+        """
+        Scan = self.env['invoice.scan.record'].sudo()
+        records = Scan.search([
+            ('qr_uuid', '=', parsed['qr_uuid']),
+            ('company_id', '=', self.env.company.id),
+        ], order='id desc')
+        record = records.filtered(
+            lambda r: r.state in ('done', 'processed'))[:1]
+        if record:
+            lines = self._desk_dgi_lines(record)
+            # Champ apporté par potting_management, s'il est installé.
+            if 'transit_order_refs' in record._fields:
+                refs = record.transit_order_refs
+                lines.append((_("OT liés"), refs or _("Aucun")))
+                title = _("Facture liée à un OT") if refs else _(
+                    "Facture non liée à un OT")
+            else:
+                title = _("Facture enregistrée")
+            return self._desk_card(
+                'dgi', 'success', title, lines=lines, warnings=warnings,
+                actions=self._desk_dgi_actions(record))
+        if records:
+            return self._desk_card(
+                'dgi', 'pending', _("Vérification non terminée"),
+                message=_(
+                    "Cette facture a été présentée au secrétariat mais son "
+                    "enregistrement n'est pas terminé. Transmettez-la au "
+                    "secrétariat pour qu'il termine sa vérification."),
+                warnings=warnings)
+        notified = self.env['invoice.scan.pending.invoice']._register_request(
+            self.env.user, parsed['qr_uuid'], origin='douchette')
+        message = _(
+            "Rien n'a été créé. Transmettez-la au secrétariat pour "
+            "vérification : elle y sera créée, ou signalée comme doublon si "
+            "elle existe déjà.")
+        if notified:
+            message += ' ' + _(
+                "Le secrétariat est prévenu (Scans ▸ Factures à vérifier).")
+        return self._desk_card(
+            'dgi', 'pending', _("Cette facture n'existe pas encore"),
+            message=message, warnings=warnings)
 
     # -- Saisie manuelle (DGI injoignable) -------------------------------
 

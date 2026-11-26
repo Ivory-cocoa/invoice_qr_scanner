@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Factures présentées par un Gestionnaire OT et qui n'existent pas
+             encore dans Odoo : à vérifier par le secrétariat. La ligne se
+             referme seule dès que la facture est vérifiée. -->
+        <record id="view_invoice_scan_pending_invoice_tree" model="ir.ui.view">
+            <field name="name">invoice.scan.pending.invoice.tree</field>
+            <field name="model">invoice.scan.pending.invoice</field>
+            <field name="arch" type="xml">
+                <tree string="Factures à vérifier" create="0" edit="0" delete="0"
+                      decoration-bf="state == 'pending'"
+                      decoration-muted="state != 'pending'">
+                    <field name="last_request_date" string="Demandée le"/>
+                    <field name="requested_by"/>
+                    <field name="origin" optional="show"/>
+                    <field name="request_count" optional="show"/>
+                    <field name="qr_uuid" optional="show"/>
+                    <field name="dgi_preview_url" column_invisible="1"/>
+                    <field name="state" widget="badge"
+                           decoration-warning="state == 'pending'"
+                           decoration-success="state == 'done'"
+                           decoration-muted="state == 'cancelled'"/>
+                    <field name="scan_record_id" optional="show"/>
+                    <field name="verified_date" optional="hide"/>
+                    <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+                    <button name="action_open_dgi_page" type="object"
+                            icon="fa-eye" string="Voir la facture (DGI)"
+                            title="Ouvrir la facture sur le site de la DGI"
+                            invisible="not dgi_preview_url"
+                            class="btn-link"/>
+                    <button name="action_view_scan" type="object"
+                            icon="fa-file-text-o" string="Ouvrir le scan"
+                            invisible="not scan_record_id"
+                            class="btn-link"/>
+                    <button name="action_cancel" type="object"
+                            icon="fa-times" string="Sans suite"
+                            invisible="state != 'pending'"
+                            confirm="Classer cette demande sans suite ? La facture ne sera plus attendue."
+                            class="btn-link text-muted"/>
+                    <button name="action_reopen" type="object"
+                            icon="fa-undo" string="Rouvrir"
+                            invisible="state != 'cancelled'"
+                            class="btn-link"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_invoice_scan_pending_invoice_search" model="ir.ui.view">
+            <field name="name">invoice.scan.pending.invoice.search</field>
+            <field name="model">invoice.scan.pending.invoice</field>
+            <field name="arch" type="xml">
+                <search string="Factures à vérifier">
+                    <field name="qr_uuid"/>
+                    <field name="requested_by"/>
+                    <filter string="À vérifier" name="filter_pending"
+                            domain="[('state', '=', 'pending')]"/>
+                    <filter string="Vérifiées" name="filter_done"
+                            domain="[('state', '=', 'done')]"/>
+                    <filter string="Sans suite" name="filter_cancelled"
+                            domain="[('state', '=', 'cancelled')]"/>
+                    <group expand="0" string="Regrouper par">
+                        <filter string="Demandée par" name="group_requester"
+                                context="{'group_by': 'requested_by'}"/>
+                        <filter string="État" name="group_state"
+                                context="{'group_by': 'state'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_invoice_scan_pending_invoice" model="ir.actions.act_window">
+            <field name="name">Factures à vérifier</field>
+            <field name="res_model">invoice.scan.pending.invoice</field>
+            <field name="view_mode">tree</field>
+            <field name="search_view_id" ref="view_invoice_scan_pending_invoice_search"/>
+            <field name="context">{'search_default_filter_pending': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Aucune facture en attente de vérification
+                </p>
+                <p>
+                    Quand un Gestionnaire OT scanne une facture qui n'existe
+                    pas encore dans Odoo, elle apparaît ici. Vérifiez-la à sa
+                    réception (application mobile ou poste de scan) : la ligne
+                    se referme toute seule.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>
