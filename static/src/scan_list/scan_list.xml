@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="invoice_qr_scanner.DgiInvoicePreview">
+        <div class="o_dgi_preview w-100">
+            <t t-if="url">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <span class="text-muted">
+                        <i class="fa fa-shield me-1"/>Facture certifiée, telle que la DGI l'affiche
+                    </span>
+                    <a t-att-href="url" target="_blank" rel="noopener noreferrer"
+                       class="btn btn-secondary btn-sm o_dgi_preview_open">
+                        <i class="fa fa-external-link me-1"/>Ouvrir dans un nouvel onglet
+                    </a>
+                </div>
+                <div class="o_dgi_preview_frame border rounded position-relative">
+                    <div t-if="state.loading"
+                         class="o_dgi_preview_loading position-absolute top-0 start-0 w-100 p-3 text-center text-muted">
+                        <i class="fa fa-spinner fa-spin me-1"/>Chargement de la page de la DGI…
+                    </div>
+                    <iframe t-att-src="url"
+                            title="Facture certifiée sur le site de la DGI"
+                            sandbox="allow-scripts allow-same-origin allow-downloads allow-popups"
+                            referrerpolicy="no-referrer"
+                            t-on-load="onLoaded"/>
+                </div>
+                <div class="text-muted small mt-1">
+                    Si le cadre reste vide (connexion coupée, site de la DGI
+                    indisponible), utilisez « Ouvrir dans un nouvel onglet ».
+                </div>
+            </t>
+            <div t-else="" class="alert alert-info mb-0 o_dgi_preview_unavailable" role="alert">
+                <i class="fa fa-info-circle me-1"/>
+                La page de la DGI ne peut pas être affichée pour ce scan
+                (identifiant de vérification absent ou invalide). Les données
+                enregistrées lors du scan figurent ci-dessus.
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -9,7 +9,10 @@
             <field name="name">invoice.scan.record.tree</field>
             <field name="model">invoice.scan.record</field>
             <field name="arch" type="xml">
-                <tree string="Scans de factures" decoration-success="state=='done'" 
+                <!-- js_class : met en couleur vive les lignes en doublon
+                     (static/src/scan_list). -->
+                <tree string="Scans de factures" js_class="invoice_scan_list"
+                      decoration-success="state=='done'" 
                       decoration-danger="state=='error'" decoration-muted="state=='draft'"
                       decoration-bf="state=='processed'"
                       decoration-warning="document_type=='refund'">
@@ -27,6 +30,10 @@
                                 string="⚙ Traitement groupé…"
                                 class="btn-secondary"/>
                     </header>
+                    <!-- Aperçu de la facture scannée, sans quitter la liste -->
+                    <button name="action_preview_scan" type="object"
+                            icon="fa-eye" title="Aperçu de la facture scannée"
+                            class="btn-link o_scan_preview_button"/>
                     <!-- Identification -->
                     <field name="reference"/>
                     <field name="scan_date" string="Date scan" widget="date"/>
@@ -54,14 +61,17 @@
                            decoration-danger="state == 'error'"
                            decoration-info="state == 'draft'"
                            decoration-warning="state == 'processed'"/>
+                    <!-- Doublons : colonne NON masquable (pas d'attribut
+                         « optional ») : chaque utilisateur la voit, sans
+                         réglage. La ligne entière passe en couleur vive. -->
+                    <field name="duplicate_count" string="Doublons"
+                           decoration-danger="duplicate_count &gt; 0"
+                           decoration-bf="duplicate_count &gt; 0"/>
                     <field name="is_processed" column_invisible="1"/>
                     <field name="processed_by" string="Traité par" optional="show"/>
                     <field name="processed_date" string="Traité le" widget="date" optional="hide"/>
                     <!-- Liens & Infos complémentaires -->
                     <field name="invoice_id" string="Facture Odoo" optional="show"/>
-                    <field name="duplicate_count" string="Doublons" 
-                           decoration-warning="duplicate_count > 0"
-                           optional="hide"/>
                     <field name="scanned_by" string="Scanné par" optional="hide"/>
                     <field name="is_manual_entry" string="Saisie manuelle" widget="boolean" optional="hide"/>
                     <!-- Actions par ligne -->
@@ -99,6 +109,8 @@
                         <button name="action_retry_create_invoice" string="Réessayer création facture"
                                 type="object" class="btn-primary"
                                 invisible="state != 'error' or invoice_id"/>
+                        <button name="action_preview_scan" string="Aperçu de la facture"
+                                type="object" class="btn-secondary" icon="fa-eye"/>
                         <button name="action_view_invoice" string="Voir la pièce comptable"
                                 type="object" class="btn-secondary"
                                 invisible="not invoice_id"/>
@@ -234,6 +246,78 @@
         </record>
 
         <!-- ============================================================ -->
+        <!-- APERÇU (fenêtre ouverte par le bouton « œil » de la liste)   -->
+        <!-- ============================================================ -->
+        <record id="view_invoice_scan_record_preview_form" model="ir.ui.view">
+            <field name="name">invoice.scan.record.preview.form</field>
+            <field name="model">invoice.scan.record</field>
+            <!-- Jamais la fiche par défaut : seulement sur demande. -->
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+                <form string="Aperçu de la facture scannée"
+                      create="0" edit="0" delete="0" duplicate="0">
+                    <div class="alert alert-danger o_scan_preview_duplicate" role="alert"
+                         invisible="duplicate_count == 0">
+                        <strong><i class="fa fa-copy"/> DOUBLON</strong> —
+                        cette facture a été présentée de nouveau
+                        <field name="duplicate_count" readonly="1" class="fw-bold"/>
+                        fois après son premier scan
+                        <span invisible="not last_duplicate_attempt">
+                            (dernière tentative le
+                            <field name="last_duplicate_attempt" readonly="1"/>
+                            <span invisible="not last_duplicate_user_id">
+                                par <field name="last_duplicate_user_id" readonly="1"
+                                           options="{'no_open': True}"/></span>)</span>.
+                        Vérifiez qu'elle n'est pas payée deux fois.
+                    </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="document_type != 'refund'">
+                        <strong><i class="fa fa-undo"/> AVOIR FOURNISSEUR</strong> —
+                        créance sur le fournisseur, et non une dette.
+                    </div>
+                    <group>
+                        <group string="Facture">
+                            <field name="invoice_number_dgi" readonly="1"/>
+                            <field name="supplier_name" readonly="1"/>
+                            <field name="invoice_date" readonly="1"/>
+                            <field name="amount_signed" readonly="1" string="Montant TTC"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="document_type" readonly="1"/>
+                            <field name="origin_invoice_number_dgi" readonly="1"
+                                   invisible="document_type != 'refund'"/>
+                        </group>
+                        <group string="Scan">
+                            <field name="reference" readonly="1"/>
+                            <field name="state" readonly="1" widget="badge"
+                                   decoration-success="state == 'done'"
+                                   decoration-danger="state == 'error'"
+                                   decoration-info="state == 'draft'"
+                                   decoration-warning="state == 'processed'"/>
+                            <field name="scan_date" readonly="1"/>
+                            <field name="scanned_by" readonly="1" options="{'no_open': True}"/>
+                            <field name="processed_by" readonly="1" options="{'no_open': True}"
+                                   invisible="not processed_by"/>
+                            <field name="is_manual_entry" readonly="1"
+                                   invisible="not is_manual_entry"/>
+                            <field name="invoice_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <field name="dgi_preview_url" widget="dgi_invoice_preview"
+                           nolabel="1" readonly="1"/>
+                    <footer>
+                        <button string="Fermer" special="cancel" class="btn-primary"
+                                data-hotkey="x"/>
+                        <button name="action_open_scan_form" type="object"
+                                string="Ouvrir la fiche du scan" class="btn-secondary"/>
+                        <button name="action_view_invoice" type="object"
+                                string="Voir la pièce comptable" class="btn-secondary"
+                                invisible="not invoice_id"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- ============================================================ -->
         <!-- SEARCH VIEW -->
         <!-- ============================================================ -->
         <record id="view_invoice_scan_record_search" model="ir.ui.view">
@@ -241,6 +325,12 @@
             <field name="model">invoice.scan.record</field>
             <field name="arch" type="xml">
                 <search string="Rechercher un scan">
+                    <!-- Premier champ = recherche par défaut : taper un numéro
+                         (même partiel) puis Entrée suffit. Il couvre la
+                         référence du scan, le numéro DGI, la facture d'origine
+                         d'un avoir, l'identifiant de vérification et la pièce
+                         comptable. -->
+                    <field name="number_search" string="Numéro (facture, scan, pièce)"/>
                     <field name="reference"/>
                     <field name="supplier_name"/>
                     <field name="invoice_number_dgi"/>
@@ -311,7 +401,7 @@
                     <field name="scanned_by"/>
                     <templates>
                         <t t-name="kanban-box">
-                            <div class="oe_kanban_global_click">
+                            <div t-attf-class="oe_kanban_global_click #{record.duplicate_count.raw_value > 0 ? 'o_scan_kanban_duplicate' : ''}">
                                 <div class="o_kanban_record_top mb-2">
                                     <div class="o_kanban_record_headings">
                                         <strong class="o_kanban_record_title">
@@ -339,8 +429,15 @@
                                     <div t-if="record.is_manual_entry.raw_value" class="text-info mt-1">
                                         <i class="fa fa-keyboard-o"/> Saisie manuelle
                                     </div>
-                                    <div t-if="record.duplicate_count.raw_value > 0" class="text-warning mt-1">
-                                        <i class="fa fa-copy" title="Icône"/> <field name="duplicate_count"/> doublons
+                                    <div t-if="record.duplicate_count.raw_value > 0" class="mt-1">
+                                        <span class="badge text-bg-danger">
+                                            <i class="fa fa-copy" title="Doublon"/> Doublon × <field name="duplicate_count"/>
+                                        </span>
+                                    </div>
+                                    <div class="mt-1">
+                                        <a type="object" name="action_preview_scan" role="button">
+                                            <i class="fa fa-eye"/> Aperçu
+                                        </a>
                                     </div>
                                 </div>
                                 <div class="o_kanban_record_bottom mt-2">
@@ -398,11 +495,16 @@
             <field name="context">{'search_default_filter_today': 1}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
-                    Aucun scan de facture pour le moment
+                    Aucun scan de facture à afficher
                 </p>
                 <p>
-                    Utilisez l'application mobile pour scanner des QR-codes de factures DGI
-                    et créer automatiquement les factures fournisseur.
+                    Vous cherchez un numéro ? Retirez le filtre « Aujourd'hui »
+                    de la barre de recherche : la recherche porte alors sur
+                    tout l'historique.
+                </p>
+                <p>
+                    Les scans arrivent de l'application mobile ou du poste de
+                    scan à la douchette.
                 </p>
             </field>
         </record>

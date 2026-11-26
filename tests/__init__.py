@@ -12,3 +12,4 @@ from . import test_supplier_resolution
 from . import test_otp_delivery
 from . import test_bulk_process
 from . import test_scan_desk
+from . import test_scan_list

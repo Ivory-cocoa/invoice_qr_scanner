@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.osv import expression
 
 _logger = logging.getLogger(__name__)
 
@@ -26,6 +27,9 @@ class InvoiceScanRecord(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
     _rec_name = 'reference'
+    # Dans un champ de sélection, un scan se retrouve aussi par le numéro de
+    # la facture : c'est le seul que l'utilisateur lit sur le papier.
+    _rec_names_search = ['reference', 'invoice_number_dgi']
 
 
     # Champs d'identification
@@ -309,6 +313,28 @@ class InvoiceScanRecord(models.Model):
         readonly=True,
         tracking=True,
         help="Indique si les données ont été saisies manuellement par l'utilisateur"
+    )
+
+    # ------------------------------------------------------------------
+    # Recherche par numéro et aperçu
+    # ------------------------------------------------------------------
+    number_search = fields.Char(
+        string="Numéro",
+        compute='_compute_number_search',
+        search='_search_number_search',
+        help="Recherche un scan par n'importe lequel de ses numéros : "
+             "référence du scan, numéro de facture DGI, facture d'origine "
+             "d'un avoir, identifiant de vérification, numéro de la pièce "
+             "comptable. Une partie du numéro suffit ; plusieurs numéros "
+             "peuvent être séparés par une virgule ou un espace."
+    )
+
+    dgi_preview_url = fields.Char(
+        string="Page de vérification DGI",
+        compute='_compute_dgi_preview_url',
+        help="Adresse de la page publique de la DGI qui affiche la facture "
+             "certifiée. Reconstruite à partir de l'identifiant du QR-code : "
+             "jamais une adresse arbitraire."
     )
 
     _sql_constraints = [
@@ -931,6 +957,134 @@ class InvoiceScanRecord(models.Model):
                     'error_message': str(e)
                 })
                 raise UserError(_("Erreur: %s") % str(e))
+
+    # ------------------------------------------------------------------
+    # Recherche par numéro
+    # ------------------------------------------------------------------
+    # Au-delà, la saisie n'est plus une liste de numéros : on borne le domaine.
+    NUMBER_SEARCH_MAX_TERMS = 50
+    # Séparateurs qu'un utilisateur ajoute en recopiant un numéro, absents des
+    # numéros enregistrés (les numéros DGI n'en contiennent aucun).
+    _NUMBER_SEPARATORS = re.compile(r'[\s./_-]+')
+
+    @api.depends('invoice_number_dgi', 'reference')
+    def _compute_number_search(self):
+        for record in self:
+            record.number_search = record.invoice_number_dgi or record.reference
+
+    @api.model
+    def _number_search_fields(self):
+        """Champs dans lesquels un numéro est recherché."""
+        names = ['reference', 'invoice_number_dgi', 'origin_invoice_number_dgi',
+                 'verification_id', 'qr_uuid']
+        # Le numéro de la pièce comptable n'est proposé qu'à qui peut lire les
+        # pièces : sinon toute la recherche serait refusée (vérificateur…).
+        if self.env['account.move'].check_access_rights('read', raise_exception=False):
+            names.append('invoice_id.name')
+        return names
+
+    @api.model
+    def _search_number_search(self, operator, value):
+        """Un seul champ de recherche pour tous les numéros d'un scan.
+
+        - une partie du numéro suffit (les derniers chiffres, par exemple) ;
+        - majuscules et minuscules sont confondues ;
+        - plusieurs numéros séparés par une virgule, un point-virgule ou un
+          espace : un scan est retenu dès qu'il correspond à l'un d'eux ;
+        - un numéro recopié avec des tirets, des points ou des barres est aussi
+          cherché sans ces séparateurs dans les numéros de facture.
+        """
+        negative = operator in expression.NEGATIVE_TERM_OPERATORS
+        if isinstance(value, (list, tuple)):
+            raw_terms = [str(v) for v in value if v not in (None, False)]
+        else:
+            raw_terms = re.split(r'[,;\s]+', str(value or ''))
+        terms = []
+        for term in raw_terms:
+            term = term.strip()
+            if term and term not in terms:
+                terms.append(term)
+        if not terms:
+            # Rien de saisi : « contient rien » est vrai partout.
+            return expression.FALSE_DOMAIN if negative else expression.TRUE_DOMAIN
+        terms = terms[:self.NUMBER_SEARCH_MAX_TERMS]
+
+        exact = operator in ('=', '!=', 'in', 'not in', '=ilike', '=like')
+        leaf_operator = '=ilike' if exact else 'ilike'
+
+        def escaped(text):
+            # '=ilike' interprète % et _ : un numéro les contient au sens propre.
+            if not exact:
+                return text
+            return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+        names = self._number_search_fields()
+        domains = []
+        for term in terms:
+            domains += [[(name, leaf_operator, escaped(term))] for name in names]
+            compact = self._NUMBER_SEPARATORS.sub('', term)
+            if compact and compact != term:
+                domains += [
+                    [(name, leaf_operator, escaped(compact))]
+                    for name in ('invoice_number_dgi', 'origin_invoice_number_dgi')
+                ]
+        domain = expression.OR(domains)
+        if negative:
+            # Pas de simple négation du domaine : en SQL, « NON (vide = x) »
+            # est indéterminé, et un scan sans facture d'origine disparaîtrait
+            # du résultat. On exclut donc les scans trouvés.
+            return [('id', 'not in', self._search(domain))]
+        return domain
+
+    # ------------------------------------------------------------------
+    # Aperçu de la facture scannée
+    # ------------------------------------------------------------------
+    _UUID_PATTERN = re.compile(
+        r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+
+    @api.depends('qr_uuid')
+    def _compute_dgi_preview_url(self):
+        """Page publique de la DGI qui affiche la facture certifiée.
+
+        L'adresse est RECONSTRUITE (site de la DGI + identifiant contrôlé) et
+        non reprise de `qr_url` : ce dernier vient du QR-code lu, donc du
+        papier présenté. L'aperçu ne doit jamais afficher autre chose que le
+        site de la DGI.
+        """
+        site = self.env['fne.api.client']._get_public_site_url()
+        for record in self:
+            uuid = (record.qr_uuid or '').strip().lower()
+            if site and self._UUID_PATTERN.fullmatch(uuid):
+                record.dgi_preview_url = '%s/fr/verification/%s' % (site, uuid)
+            else:
+                record.dgi_preview_url = False
+
+    def action_preview_scan(self):
+        """Aperçu de la facture scannée, sans quitter la liste."""
+        self.ensure_one()
+        view = self.env.ref('invoice_qr_scanner.view_invoice_scan_record_preview_form')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Aperçu — %s", self.invoice_number_dgi or self.reference),
+            'res_model': 'invoice.scan.record',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'views': [(view.id, 'form')],
+            'target': 'new',
+        }
+
+    def action_open_scan_form(self):
+        """Depuis l'aperçu : ouvrir la fiche complète du scan."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.reference,
+            'res_model': 'invoice.scan.record',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'current',
+        }
 
     def action_view_invoice(self):
         """Ouvrir la facture associée."""
